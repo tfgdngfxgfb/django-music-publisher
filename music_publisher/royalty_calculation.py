@@ -466,7 +466,17 @@ class RoyaltyCalculationView(PermissionRequiredMixin, FormView):
         rc = RoyaltyCalculation(form)
         path = rc.out_file_path
         f = open(path, "rb")
+        close_file = f.close
+
+        def close_and_remove():
+            close_file()
+            if os.path.exists(path):
+                os.remove(path)
+
+        # FileResponse owns the stream. Windows cannot unlink an open file.
+        f.close = close_and_remove
         try:
             return FileResponse(f, filename=rc.filename, as_attachment=False)
-        finally:
-            os.remove(path)
+        except Exception:
+            f.close()
+            raise

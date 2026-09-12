@@ -1,0 +1,19 @@
+# Optional local development PostgreSQL; SQLite needs no Docker.
+services:
+  db:
+    image: postgres:17.11
+    environment:
+      POSTGRES_DB: rights
+      POSTGRES_USER: rights
+      POSTGRES_PASSWORD: local-development-only
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - rights_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rights -d rights"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+volumes:
+  rights_db:

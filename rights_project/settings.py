@@ -1,0 +1,62 @@
+"""Combined development host. Environment overrides .env; SQLite by default."""
+
+import os
+from pathlib import Path
+
+from django.core.exceptions import ImproperlyConfigured
+from dotenv import load_dotenv
+
+PROJECT_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(PROJECT_DIR / ".env")
+
+# Keep DMP's publishing configuration and defaults in its upstream component.
+from dmp_project.settings import *  # noqa: E402,F403
+
+
+def env_bool(name, default=False):
+    value = os.getenv(name, str(default)).lower()
+    if value not in {"true", "false", "1", "0", "yes", "no"}:
+        raise ImproperlyConfigured(f"{name} must be true or false")
+    return value in {"true", "1", "yes"}
+
+
+DEBUG = env_bool("DEBUG", True)
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    if not DEBUG:
+        raise ImproperlyConfigured("SECRET_KEY is required when DEBUG=false")
+    SECRET_KEY = "development-only-p7-rights-do-not-use-on-a-server"
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "127.0.0.1,localhost,[::1]").split(
+    ","
+)
+INSTALLED_APPS = [*INSTALLED_APPS, "rights_core", "parties", "catalogue"]
+ROOT_URLCONF = "rights_project.urls"
+WSGI_APPLICATION = "rights_project.wsgi.application"
+TEMPLATES[0]["DIRS"] = [PROJECT_DIR / "rights_project" / "templates"]
+DATABASES = {
+    "default": dj_database_url.config(
+        default="sqlite:///" + (PROJECT_DIR / "db.sqlite3").as_posix(),
+        conn_max_age=0,
+    )
+}
+if DATABASES["default"]["ENGINE"] == "django.db.backends.sqlite3":
+    DATABASES["default"]["ENGINE"] = "rights_project.db.backends.sqlite3"
+elif DATABASES["default"]["ENGINE"] != "django.db.backends.postgresql":
+    raise ImproperlyConfigured("Supported databases are SQLite and PostgreSQL")
+
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT", not DEBUG)
+SECURE_HSTS_SECONDS = 0 if DEBUG else 300
+LOGIN_URL = "/admin/login/"
+OPTION_FILES = env_bool("OPTION_FILES", True)
+MEDIA_URL = "/media/"
+MEDIA_ROOT = Path(os.getenv("MEDIA_ROOT", PROJECT_DIR / "media"))
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {
+        "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"
+    },
+}
+if S3_ENABLED:
+    STORAGES["default"]["BACKEND"] = "storages.backends.s3.S3Storage"

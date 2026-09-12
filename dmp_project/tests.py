@@ -1,11 +1,12 @@
 """Summary"""
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.apps import apps
 from django.urls import reverse
 from django.conf import settings
 
 
+@override_settings(ROOT_URLCONF="dmp_project.urls")
 class DMPTestCase(TestCase):
     """Tests that go beyond music_publisher app tests."""
 

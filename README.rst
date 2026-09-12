@@ -1,6 +1,106 @@
 Django-Music-Publisher - Free music publishing software
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
+Running P7 Rights locally
+=========================
+
+This fork now contains a runnable master catalogue alongside Django Music
+Publisher. The master catalogue accepts a recording with only a title; no
+musical work, artist, ISRC or rights owner is required. DMP remains available
+for publishing Works, Writers and CWR.
+
+Use **Python 3.13** (tested on Windows). No Node.js or database installation is
+needed for the default SQLite development setup. Until this feature is merged,
+check out its branch explicitly:
+
+.. code-block:: powershell
+
+   git clone --branch feature/master-catalogue-foundation https://github.com/tfgdngfxgfb/django-music-publisher.git
+   cd django-music-publisher
+   python -m venv .venv
+   .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+   Copy-Item .env.example .env
+   .\.venv\Scripts\python.exe manage.py migrate
+   .\.venv\Scripts\python.exe manage.py createsuperuser
+   .\.venv\Scripts\python.exe manage.py runserver
+
+Using the virtual environment's Python directly avoids PowerShell activation
+policy problems. If you prefer activation, run ``.\.venv\Scripts\Activate.ps1``
+and then use ordinary ``python`` commands. The optional ``.env`` loads
+automatically; existing environment variables take precedence. Do not overwrite
+an existing local ``.env`` when updating your checkout.
+
+Open http://127.0.0.1:8000/ and choose **Master catalogue**. Log in with the
+superuser you just created. Choose **Catalogue → Recordings → Add recording**,
+enter a title, leave the other fields as they are, and click **Save**. Click
+the saved title to reopen and edit it. Administration is at
+http://127.0.0.1:8000/admin/ .
+
+To add an ISRC later, reopen the recording, choose **Add another External
+identifier**, keep scheme **ISRC**, enter the code and save. The recording UUID
+does not change. Add parties through **Parties**, then add credits through the
+recording's **Recording contributions** inline. Credits never establish rights.
+
+Publishing is available from the landing page or
+http://127.0.0.1:8000/admin/music_publisher/ . Its separate recording models are
+still publishing records; use **Catalogue → Recordings** for canonical masters.
+DMP's existing auxiliary endpoints now live under ``/publishing/``.
+
+Stop the server with Ctrl+C. Restart with the final command above. Development
+data is stored in the ignored ``db.sqlite3`` file. No default login is shipped.
+
+Optional PostgreSQL development
+-------------------------------
+
+PostgreSQL is the intended deployment database. If Docker Desktop is available,
+the supplied Compose file starts a local PostgreSQL 17 instance automatically:
+
+.. code-block:: powershell
+
+   docker compose up -d --wait db
+   $env:DATABASE_URL = 'postgresql://rights:local-development-only@127.0.0.1:5433/rights'
+   .\.venv\Scripts\python.exe manage.py migrate
+   .\.venv\Scripts\python.exe manage.py createsuperuser
+   .\.venv\Scripts\python.exe manage.py runserver
+
+Alternatively uncomment ``DATABASE_URL`` in ``.env``. This is a separate
+database: switching backends does not transfer records. Remove the environment
+variable with ``Remove-Item Env:DATABASE_URL`` and comment it out in ``.env``
+to return to SQLite. Compose credentials are local development values only.
+``docker compose stop`` preserves the database volume.
+
+Verification
+------------
+
+.. code-block:: powershell
+
+   .\.venv\Scripts\python.exe -m pip check
+   .\.venv\Scripts\python.exe manage.py check
+   .\.venv\Scripts\python.exe manage.py makemigrations rights_core parties catalogue --check --dry-run
+   .\.venv\Scripts\python.exe manage.py test
+   .\.venv\Scripts\python.exe scripts/smoke_admin.py
+
+The test suite uses the selected database backend. The HTTP smoke test always
+creates its own temporary SQLite database and administrator, starts a real
+server on a free loopback port, exercises login/save/reopen/edit, then removes
+its test data. It does not touch your development catalogue.
+
+``requirements-dev.txt`` locks the tested checkout runtime. Use it rather than
+``pip install .``: upstream ``setup.py`` still describes the older standalone
+DMP package and is not the combined application installation path. The root
+``manage.py`` now selects ``rights_project.settings``. Existing deployments
+must review this host change before switching; explicitly selecting
+``--settings=dmp_project.settings`` retains the old host configuration but does
+not include the SQLite compatibility adapter.
+
+See `IMPLEMENTATION_STATUS.md <IMPLEMENTATION_STATUS.md>`_ for the exact test
+results, compatibility fixes, limitations and Phase 2. The approved long-term
+baseline is `ARCHITECTURE.md <ARCHITECTURE.md>`_; this phase intentionally
+implements only the runnable catalogue foundation, not the full rights model.
+
+Original Django Music Publisher documentation
+=============================================
+
 .. image:: https://img.shields.io/github/actions/workflow/status/matijakolaric-com/django-music-publisher/build.yml
     :target: https://github.com/matijakolaric-com/django-music-publisher/actions/workflows/build.yml
     :alt: Build Status

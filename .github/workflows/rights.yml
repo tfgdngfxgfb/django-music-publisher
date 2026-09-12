@@ -1,0 +1,36 @@
+name: P7 Rights foundation
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        database: [sqlite, postgres]
+    services:
+      postgres:
+        image: postgres:17.11
+        env:
+          POSTGRES_USER: rights
+          POSTGRES_PASSWORD: local-test-only
+          POSTGRES_DB: rights
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U rights -d rights"
+          --health-interval 2s --health-timeout 5s --health-retries 30
+    env:
+      DEBUG: "true"
+      DATABASE_URL: ${{ matrix.database == 'postgres' && 'postgresql://rights:local-test-only@127.0.0.1:5432/rights' || 'sqlite:///ci.sqlite3' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: python -m pip install -r requirements-dev.txt
+      - run: python -m pip check
+      - run: python manage.py check
+      - run: python manage.py migrate --noinput
+      - run: python manage.py makemigrations rights_core parties catalogue --check --dry-run
+      - run: python manage.py test
+      - run: python scripts/smoke_admin.py

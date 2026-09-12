@@ -10,3 +10,4 @@ Pillow==11.2.1
 psycopg2-binary==2.9.10
 waitress==3.0.2
 whitenoise==6.9.0
+python-dotenv==1.2.3
