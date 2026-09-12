@@ -13,6 +13,7 @@ Status: implemented and locally verified on Windows, 12 September 2026.
 - Original entered ISRC plus normalized value, validation, unique global assignment and one current ISRC per recording.
 - `.env.example`, pinned checkout dependencies, optional PostgreSQL Compose service and two-backend CI.
 - Reproducible HTTP smoke script with an isolated database, temporary admin and real CSRF-protected login/form submissions.
+- One-command Windows launcher (`run-p7.cmd`) that prepares the environment, installs changed dependencies, migrates, checks Django, prepares the local test login and starts the server.
 
 ## Decisions within this phase
 

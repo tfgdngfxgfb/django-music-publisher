@@ -4,6 +4,21 @@ Django-Music-Publisher - Free music publishing software
 Running P7 Rights locally
 =========================
 
+Quick start on Windows
+----------------------
+
+Double-click ``run-p7.cmd`` in the project folder, or run this in PowerShell::
+
+   .\run-p7.cmd
+
+The script creates the virtual environment and ``.env`` file when needed,
+installs or updates dependencies, migrates the database, prepares the local
+test administrator and starts the application. Open ``http://127.0.0.1:8000/``
+and sign in to the admin with username ``admin`` and password ``123``.
+
+The credentials are only intended for local testing. Stop the application with
+``Ctrl+C``. The longer manual setup remains available below.
+
 This fork now contains a runnable master catalogue alongside Django Music
 Publisher. The master catalogue accepts a recording with only a title; no
 musical work, artist, ISRC or rights owner is required. DMP remains available
