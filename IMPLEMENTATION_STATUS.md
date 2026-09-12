@@ -65,10 +65,15 @@ Commands below use `.venv\Scripts\python.exe` on Windows; no activation is requi
 | Unscoped migration drift check | Existing DMP choice-field drift, documented above; not changed in this phase |
 | `python scripts/smoke_admin.py` | PASS; real server, login, title-only save, reopen, Unicode edit, later ISRC, same UUID and zero DMP records |
 | Interactive browser at `http://127.0.0.1:8000/` | Landing → admin login → Catalogue → Add recording → title-only Save → reopen → edit/save all succeeded |
+| Clean checkout of commit `7824eeb`, brand-new virtual environment, pinned dependency install and copied `.env.example` | Install and `pip check` passed; empty database migrated; system check passed; real-server smoke passed; all 99 tests passed |
+| Final committed identifier partial-update regression on PostgreSQL | All 18 new/compatibility tests passed |
+| GitHub Actions: P7 Rights foundation on `7824eeb` | Both SQLite and PostgreSQL jobs passed on Linux |
 
 Browser verification used UUID `c87581ba-6f02-4b33-8948-dd5af329b111`; the title edit retained that UUID and incremented revision from 1 to 2. Disposable HTTP verification independently exercised ISRC normalization and checked no Work, Writer, DMP Recording or CWRExport was created. The smoke script starts a server on a free loopback port, so its printed port changes per run. Windows child-process cleanup requires normal permission to stop the process tree; it was verified outside the agent's restrictive sandbox after sandboxed cleanup was denied.
 
 The full suite comprises 80 original DMP app tests, one original host test and 18 new domain/admin/compatibility tests. Tests cover independent masters, all Party kinds, optional contributions, Unicode, stable UUIDs, ISRC format and uniqueness at database level, mismatched artist identity, canonical/DMP deletion isolation, admin form behavior, authentication and the final migrated legacy index.
+
+The clean checkout was a detached worktree of the same repository, with no reused virtual environment or database. Commands executed there were `python -m venv .venv`, `.venv\Scripts\python -m pip install -r requirements-dev.txt`, `Copy-Item .env.example .env`, then `pip check`, `manage.py migrate --noinput`, `manage.py check`, `scripts/smoke_admin.py` and `manage.py test`. Browser verification data and the temporary superuser were removed after testing; create your own administrator with `manage.py createsuperuser`.
 
 ## Current limits and next phase
 
