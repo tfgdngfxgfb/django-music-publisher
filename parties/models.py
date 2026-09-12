@@ -1,7 +1,7 @@
 from django.core.exceptions import ValidationError
 from django.db import models
 
-from rights_core.models import CanonicalModel
+from rights_core.models import CanonicalModel, validate_not_blank
 
 
 class Party(CanonicalModel):
@@ -12,6 +12,7 @@ class Party(CanonicalModel):
 
     name = models.CharField(
         max_length=255,
+        validators=[validate_not_blank],
         help_text="Person, organization or group name; not a rights ownership assertion.",
     )
     kind = models.CharField(max_length=20, choices=Kind.choices)
@@ -21,13 +22,12 @@ class Party(CanonicalModel):
         ordering = ("name", "id")
         constraints = [
             models.CheckConstraint(
-                condition=models.Q(
-                    kind__in=["person", "organization", "group"]
-                ),
+                condition=models.Q(kind__in=["person", "organization", "group"]),
                 name="party_valid_kind",
             ),
             models.CheckConstraint(
-                condition=~models.Q(name=""), name="party_nonempty_name"
+                condition=models.Q(name__regex=r".*\S.*"),
+                name="party_nonblank_name",
             ),
         ]
 
@@ -39,15 +39,15 @@ class ArtistIdentity(CanonicalModel):
     party = models.ForeignKey(
         Party, on_delete=models.PROTECT, related_name="artist_identities"
     )
-    display_name = models.CharField(max_length=255)
+    display_name = models.CharField(max_length=255, validators=[validate_not_blank])
 
     class Meta:
         verbose_name_plural = "Artist identities"
         ordering = ("display_name", "id")
         constraints = [
             models.CheckConstraint(
-                condition=~models.Q(display_name=""),
-                name="artist_nonempty_name",
+                condition=models.Q(display_name__regex=r".*\S.*"),
+                name="artist_nonblank_name",
             )
         ]
 

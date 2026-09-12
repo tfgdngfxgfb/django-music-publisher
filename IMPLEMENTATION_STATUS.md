@@ -36,6 +36,7 @@ The checkout installation path intentionally bypasses old `setup.py` package req
 
 - `parties/0001_initial`: Party and ArtistIdentity, UUIDs, references and checks.
 - `catalogue/0001_initial`: Recording, RecordingContribution, ExternalIdentifier, UUIDs, checks and unique constraints.
+- `catalogue/0002` and `parties/0002`: reject whitespace-only canonical recording titles, party names and artist display names in both model validation and the database.
 - `rights_core` is abstract infrastructure and needs no tables/migrations yet.
 - No file in `music_publisher/migrations/` changed. No migrations were faked, renamed, replaced or rewritten.
 - Fresh SQLite and PostgreSQL databases migrated successfully with both DMP and canonical tables present. `makemigrations rights_core parties catalogue --check --dry-run` reports no changes in the new apps.
@@ -57,13 +58,13 @@ Commands below use `.venv\Scripts\python.exe` on Windows; no activation is requi
 | --- | --- |
 | `python manage.py test music_publisher` before domain additions, with isolated compatibility fixes | 80 passed on SQLite |
 | `python manage.py test music_publisher` after implementation, PostgreSQL | 80 passed |
-| `python manage.py test` combined, SQLite | 99 passed |
-| `python manage.py test` combined, PostgreSQL 17.11 | 99 passed |
+| `python manage.py test` combined, SQLite | 100 passed |
+| `python manage.py test` combined, PostgreSQL 17.11 | 100 passed |
 | `python manage.py migrate --noinput` against empty SQLite and PostgreSQL | All migrations applied |
 | `python manage.py check` | No issues |
 | `python manage.py makemigrations rights_core parties catalogue --check --dry-run` | No changes detected in the new apps |
 | Unscoped migration drift check | Existing DMP choice-field drift, documented above; not changed in this phase |
-| `python scripts/smoke_admin.py` | PASS; real server, login, title-only save, reopen, Unicode edit, later ISRC, same UUID and zero DMP records |
+| `python scripts/smoke_admin.py` | PASS; real server, login, title-only save, reopen, Unicode edit, later ISRC, same UUID, zero DMP records and reliable Windows server cleanup |
 | Interactive browser at `http://127.0.0.1:8000/` | Landing → admin login → Catalogue → Add recording → title-only Save → reopen → edit/save all succeeded |
 | Clean checkout of commit `7824eeb`, brand-new virtual environment, pinned dependency install and copied `.env.example` | Install and `pip check` passed; empty database migrated; system check passed; real-server smoke passed; all 99 tests passed |
 | Final committed identifier partial-update regression on PostgreSQL | All 18 new/compatibility tests passed |
@@ -71,7 +72,9 @@ Commands below use `.venv\Scripts\python.exe` on Windows; no activation is requi
 
 Browser verification used UUID `c87581ba-6f02-4b33-8948-dd5af329b111`; the title edit retained that UUID and incremented revision from 1 to 2. Disposable HTTP verification independently exercised ISRC normalization and checked no Work, Writer, DMP Recording or CWRExport was created. The smoke script starts a server on a free loopback port, so its printed port changes per run. Windows child-process cleanup requires normal permission to stop the process tree; it was verified outside the agent's restrictive sandbox after sandboxed cleanup was denied.
 
-The full suite comprises 80 original DMP app tests, one original host test and 18 new domain/admin/compatibility tests. Tests cover independent masters, all Party kinds, optional contributions, Unicode, stable UUIDs, ISRC format and uniqueness at database level, mismatched artist identity, canonical/DMP deletion isolation, admin form behavior, authentication and the final migrated legacy index.
+The full suite comprises 80 original DMP app tests, one original host test and 19 new domain/admin/compatibility tests. Tests cover independent masters, all Party kinds, optional contributions, Unicode, stable UUIDs, ISRC format and uniqueness at database level, nonblank canonical names at model and database level, mismatched artist identity, canonical/DMP deletion isolation, admin form behavior, authentication and the final migrated legacy index.
+
+The September code audit also ran Ruff across application code, `git diff --check`, dependency checks, Django system checks, migration drift checks, bytecode compilation and the full suite on both database backends. It removed unused imports and variables from the upstream-derived app without changing its models, migrations or publishing behavior.
 
 The clean checkout was a detached worktree of the same repository, with no reused virtual environment or database. Commands executed there were `python -m venv .venv`, `.venv\Scripts\python -m pip install -r requirements-dev.txt`, `Copy-Item .env.example .env`, then `pip check`, `manage.py migrate --noinput`, `manage.py check`, `scripts/smoke_admin.py` and `manage.py test`. Browser verification data and the temporary superuser were removed after testing; create your own administrator with `manage.py createsuperuser`.
 

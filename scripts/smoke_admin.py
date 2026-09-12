@@ -22,6 +22,11 @@ import urllib.request
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def require(condition, message):
+    if not condition:
+        raise RuntimeError(message)
+
+
 def main():
     with tempfile.TemporaryDirectory(prefix="rights-smoke-") as directory:
         folder = Path(directory)
@@ -89,22 +94,22 @@ def main():
                     )
                     req = urllib.request.Request(base + path, data=payload)
                     with opener.open(req, timeout=15) as response:
-                        assert response.status == 200
+                        require(response.status == 200, f"HTTP {response.status}")
                         return response.read().decode("utf-8"), response.url
 
-                for attempt in range(60):
+                for _ in range(60):
                     try:
                         html, _ = request("/")
                         break
-                    except urllib.error.URLError:
+                    except urllib.error.URLError as error:
                         if server.poll() is not None:
                             raise RuntimeError(
                                 "Development server exited before becoming ready"
-                            )
+                            ) from error
                         time.sleep(0.25)
                 else:
                     raise RuntimeError("Development server did not start")
-                assert "P7 Rights" in html
+                require("P7 Rights" in html, "Landing page is missing its title")
                 html, _ = request("/admin/login/")
 
                 def csrf(html):
@@ -121,9 +126,15 @@ def main():
                         "next": "/admin/",
                     },
                 )
-                assert url.endswith("/admin/") and "Catalogue" in html
+                require(
+                    url.endswith("/admin/") and "Catalogue" in html,
+                    "Admin login failed",
+                )
                 html, _ = request("/admin/catalogue/recording/add/")
-                assert 'name="work"' not in html
+                require(
+                    'name="work"' not in html,
+                    "Canonical recording form unexpectedly contains a work field",
+                )
                 data = {
                     "csrfmiddlewaretoken": csrf(html),
                     "title": "Example recording",
@@ -140,17 +151,18 @@ def main():
                         }
                     )
                 html, url = request("/admin/catalogue/recording/add/", data)
-                assert url.endswith("/admin/catalogue/recording/"), html
+                require(url.endswith("/admin/catalogue/recording/"), html)
                 match = re.search(
                     r"/admin/catalogue/recording/([0-9a-f-]{36})/change/", html
                 )
-                assert match, "Saved recording missing from list"
+                require(match, "Saved recording missing from list")
                 recording_id = match.group(1)
-                change_url = (
-                    f"/admin/catalogue/recording/{recording_id}/change/"
-                )
+                change_url = f"/admin/catalogue/recording/{recording_id}/change/"
                 html, _ = request(change_url)
-                assert "Example recording" in html and recording_id in html
+                require(
+                    "Example recording" in html and recording_id in html,
+                    "Saved recording could not be reopened",
+                )
                 data.update(
                     {
                         "csrfmiddlewaretoken": csrf(html),
@@ -161,18 +173,24 @@ def main():
                     }
                 )
                 html, url = request(change_url, data)
-                assert url.endswith("/admin/catalogue/recording/"), html
+                require(url.endswith("/admin/catalogue/recording/"), html)
                 html, _ = request(change_url)
-                assert (
-                    "NOABC2600001" in html and "Blåbær / 東京 — edited" in html
+                require(
+                    "NOABC2600001" in html and "Blåbær / 東京 — edited" in html,
+                    "Edited recording metadata was not persisted",
                 )
-                assert recording_id in html
+                require(recording_id in html, "Recording UUID changed after edit")
                 html, _ = request("/admin/music_publisher/work/")
-                assert "Musical work" in html or "Musical Work" in html
+                require(
+                    "Musical work" in html or "Musical Work" in html,
+                    "DMP work administration is unavailable",
+                )
                 manage(
                     "shell",
                     "-c",
-                    "from music_publisher.models import Work, Writer, Recording, CWRExport; assert all(m.objects.count() == 0 for m in (Work, Writer, Recording, CWRExport))",
+                    "from music_publisher.models import Work, Writer, Recording, CWRExport; "
+                    "models = (Work, Writer, Recording, CWRExport); "
+                    "raise SystemExit(0 if all(m.objects.count() == 0 for m in models) else 1)",
                 )
                 print(
                     json.dumps(
@@ -206,9 +224,13 @@ def main():
                         capture_output=True,
                         creationflags=flags,
                     )
-                else:
+                if server.poll() is None:
                     server.terminate()
-                server.wait(timeout=15)
+                try:
+                    server.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    server.kill()
+                    server.wait(timeout=10)
 
 
 if __name__ == "__main__":

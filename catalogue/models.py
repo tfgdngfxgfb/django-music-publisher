@@ -2,7 +2,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 
 from parties.models import ArtistIdentity, Party
-from rights_core.models import CanonicalModel
+from rights_core.models import CanonicalModel, validate_not_blank
 from .validators import normalize_isrc, validate_language
 
 
@@ -15,11 +15,9 @@ class Recording(CanonicalModel):
         DRAFT = "draft", "Draft"
         REVIEWED = "reviewed", "Metadata reviewed"
 
-    title = models.CharField(max_length=500)
+    title = models.CharField(max_length=500, validators=[validate_not_blank])
     version_designation = models.CharField(max_length=255, blank=True)
-    recording_kind = models.CharField(
-        max_length=20, choices=Kind.choices, blank=True
-    )
+    recording_kind = models.CharField(max_length=20, choices=Kind.choices, blank=True)
     duration_ms = models.PositiveBigIntegerField(
         "Duration (milliseconds)", null=True, blank=True
     )
@@ -40,7 +38,8 @@ class Recording(CanonicalModel):
         ordering = ("title", "id")
         constraints = [
             models.CheckConstraint(
-                condition=~models.Q(title=""), name="recording_nonempty_title"
+                condition=models.Q(title__regex=r".*\S.*"),
+                name="recording_nonblank_title",
             ),
             models.CheckConstraint(
                 condition=models.Q(metadata_status__in=["draft", "reviewed"]),
@@ -102,13 +101,18 @@ class RecordingContribution(CanonicalModel):
 
     def clean(self):
         super().clean()
-        if self.artist_identity_id and self.party_id:
-            if self.artist_identity.party_id != self.party_id:
-                raise ValidationError(
-                    {
-                        "artist_identity": "Artist identity must belong to the selected party."
-                    }
-                )
+        if (
+            self.artist_identity_id
+            and self.party_id
+            and self.artist_identity.party_id != self.party_id
+        ):
+            raise ValidationError(
+                {
+                    "artist_identity": (
+                        "Artist identity must belong to the selected party."
+                    )
+                }
+            )
 
     def __str__(self):
         return f"{self.party} — {self.get_role_display()} — {self.recording}"

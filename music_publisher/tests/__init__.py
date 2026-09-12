@@ -15,4 +15,4 @@ The folder includes these files:
 Actual tests are in :mod:`music_publisher.tests.tests`.
 """
 
-from .tests import *
+from .tests import *  # noqa: F403

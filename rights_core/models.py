@@ -6,6 +6,12 @@ from django.core.exceptions import ValidationError
 from django.db import models, router, transaction
 
 
+def validate_not_blank(value):
+    """Reject empty or whitespace-only canonical names and titles."""
+    if not value or not value.strip():
+        raise ValidationError("This value cannot be blank or whitespace only.")
+
+
 class CanonicalQuerySet(models.QuerySet):
     def update(self, **kwargs):
         raise TypeError(
@@ -16,9 +22,7 @@ class CanonicalQuerySet(models.QuerySet):
         raise TypeError("Canonical changes must use instance.save().")
 
     def bulk_create(self, *args, **kwargs):
-        raise TypeError(
-            "Canonical creation must use instance.save() for validation."
-        )
+        raise TypeError("Canonical creation must use instance.save() for validation.")
 
 
 class CanonicalModel(models.Model):
@@ -41,16 +45,11 @@ class CanonicalModel(models.Model):
     def save(self, *args, **kwargs):
         if getattr(self, "_saved_pk", self.pk) != self.pk:
             raise ValidationError("Canonical UUIDs cannot be changed.")
-        using = kwargs.get("using") or router.db_for_write(
-            type(self), instance=self
-        )
+        using = kwargs.get("using") or router.db_for_write(type(self), instance=self)
         with transaction.atomic(using=using):
             if not self._state.adding:
                 current = (
-                    type(self)
-                    .objects.using(using)
-                    .select_for_update()
-                    .get(pk=self.pk)
+                    type(self).objects.using(using).select_for_update().get(pk=self.pk)
                 )
                 self.revision = current.revision + 1
             self.full_clean()
