@@ -4,6 +4,8 @@
 
 Det nye `workbench`-laget gir innloggede katalogbrukere en felles norsk programramme med lyst/mørkt tema og arbeidsflater for Musikkarkiv, Forvaltet musikk, Utgivelser, Artister/personer, Kontroll, Filer og Hjelp. Menyer, handlinger og direkte adresser bruker eksisterende Django-tillatelser på serversiden. Django-admin og musikkforlaget er fortsatt tilgjengelig etter tilgang.
 
+Programrammen bruker en fast, ikonbasert arbeidsmeny på større skjermer og en tastaturvennlig uttrekksmeny på mobil. Kort, tabeller, skjemaer, detaljfaner og statusmerker deler samme visuelle system i lyst og mørkt tema. Dette er et rent grensesnittlag; katalogmodellene og domenereglene er uendret.
+
 Musikkarkiv, forvaltning og utgivelser har paginerte søke-/filterlister. Innspillingsdetaljen samler **Oversikt · Radio · Utgivelser · Medvirkende · Filer · Kilder og historikk**. Søk og sidevalg kan returneres til etter detaljarbeid. Utgivelsesdetaljen prioriterer sporlisten og registrerer opptil fem utfylte spor atomisk gjennom fase-2-tjenesten. Innspillingssøk lastes dynamisk og begrenses til 20 treff; hele katalogen legges ikke i skjemaet.
 
 Forvaltet musikk bruker fortsatt samme Recording og MusicLibraryEntry. Registreringen krever uttrykkelig administratorhandling og vises som **Registrert i Forvaltet musikk**. Den uttrykker ikke eierskap.

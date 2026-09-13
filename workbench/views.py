@@ -70,7 +70,22 @@ def _safe_return(request, default):
 
 
 def _page_context(section, title, **extra):
-    return {"section": section, "title": title, **extra}
+    labels = {
+        "home": "Arbeidsoversikt",
+        "library": "Musikkarkiv",
+        "managed": "Forvaltet musikk",
+        "releases": "Utgivelser",
+        "parties": "Artister og personer",
+        "control": "Kvalitetskontroll",
+        "files": "Filregister",
+        "help": "Brukerhjelp",
+    }
+    return {
+        "section": section,
+        "section_label": labels.get(section, "Katalogarbeid"),
+        "title": title,
+        **extra,
+    }
 
 
 def _paginate(request, queryset, per_page=30):
