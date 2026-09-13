@@ -101,7 +101,7 @@ def main():
 
                 for _ in range(60):
                     try:
-                        html, _ = request("/")
+                        html, url = request("/")
                         break
                     except urllib.error.URLError as error:
                         if server.poll() is not None:
@@ -111,17 +111,17 @@ def main():
                         time.sleep(0.25)
                 else:
                     raise RuntimeError("Development server did not start")
+                parsed = urllib.parse.urlparse(url)
                 require(
-                    "P7 Arkiv og rettigheter" in html,
-                    "Forsiden mangler riktig tittel",
+                    parsed.path == "/admin/login/"
+                    and urllib.parse.parse_qs(parsed.query).get("next") == ["/"],
+                    "Startadressen videresendte ikke til innlogging med riktig returadresse",
                 )
                 help_html, _ = request("/hjelp/")
                 require(
                     "Work ≠ Recording ≠ Release ≠ Track ≠ lydfil" in help_html,
                     "Hjelpesiden mangler domeneforklaringen",
                 )
-                html, _ = request("/admin/login/")
-
                 def csrf(html):
                     return re.search(
                         r'name="csrfmiddlewaretoken" value="([^"]+)"', html
@@ -133,13 +133,26 @@ def main():
                         "csrfmiddlewaretoken": csrf(html),
                         "username": "smoke-admin",
                         "password": password,
-                        "next": "/admin/",
+                        "next": "/",
                     },
                 )
                 require(
-                    url.endswith("/admin/") and "Katalog" in html,
-                    "Admin login failed",
+                    urllib.parse.urlparse(url).path == "/"
+                    and "Startside" in html
+                    and all(
+                        label in html
+                        for label in (
+                            "Musikkarkiv",
+                            "Forvaltet musikk",
+                            "Utgivelser",
+                            "Kontroll",
+                            "Hjelp",
+                        )
+                    ),
+                    "Innlogging returnerte ikke til den integrerte startsiden",
                 )
+                html, _ = request("/admin/")
+                require("Katalog" in html, "Administrasjonen er ikke tilgjengelig")
                 html, _ = request("/admin/catalogue/recording/add/")
                 require(
                     'name="work"' not in html,
@@ -234,8 +247,9 @@ def main():
                             "checks": [
                                 "migrate",
                                 "system check",
-                                "landing HTTP 200",
-                                "CSRF login",
+                                "start redirects to login with next",
+                                "CSRF login returns to integrated home",
+                                "permission-aware integrated navigation",
                                 "admin",
                                 "title-only save",
                                 "reopen",

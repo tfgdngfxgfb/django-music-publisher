@@ -2,6 +2,8 @@ from django.contrib import admin
 from django.urls import include, path
 from django.views.generic import TemplateView
 
+from .views import home
+
 admin.site.site_header = "P7 Arkiv og rettigheter"
 admin.site.site_title = "P7 Arkiv og rettigheter"
 admin.site.site_url = "/"
@@ -9,7 +11,7 @@ admin.site.site_url = "/"
 urlpatterns = [
     path(
         "",
-        TemplateView.as_view(template_name="rights_project/home.html"),
+        admin.site.admin_view(home),
         name="home",
     ),
     path(

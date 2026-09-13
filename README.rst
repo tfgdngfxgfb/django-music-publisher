@@ -31,7 +31,7 @@ check out its branch explicitly:
 
 .. code-block:: powershell
 
-   git clone --branch feature/foundation-stabilization https://github.com/tfgdngfxgfb/django-music-publisher.git
+   git clone --branch feature/operational-catalogue https://github.com/tfgdngfxgfb/django-music-publisher.git
    cd django-music-publisher
    python -m venv .venv
    .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
@@ -46,10 +46,12 @@ and then use ordinary ``python`` commands. The optional ``.env`` loads
 automatically; existing environment variables take precedence. Do not overwrite
 an existing local ``.env`` when updating your checkout.
 
-Open http://127.0.0.1:8000/ and choose **Masterkatalog**. Log in with the
-administrator you just created. Choose **Katalog → Innspillinger → Legg til innspilling**,
-enter a title, leave the other fields as they are, and click **Save**. Click
-the saved title to reopen and edit it. Administration is at
+Open http://127.0.0.1:8000/ . If necessary, the application asks you to log in
+and then returns you to its integrated start page. The page uses the same
+navigation and access rules as the administration interface. Choose
+**Katalog → Innspillinger → Legg til innspilling**, enter a title, leave the
+other fields as they are, and click **Save**. Click the saved title to reopen
+and edit it. Administration is also available directly at
 http://127.0.0.1:8000/admin/ .
 
 To add an ISRC later, reopen the recording, choose **Legg til ny ekstern
@@ -58,7 +60,7 @@ does not change. Add people or organizations through **Personer og
 organisasjoner**, then add credits through **Medvirkende** on the recording.
 Credits never establish rights.
 
-Publishing is available from the landing page or
+Publishing is available through the administration navigation or directly at
 http://127.0.0.1:8000/admin/music_publisher/ . Its separate recording models are
 still publishing records; use **Katalog → Innspillinger** for canonical masters.
 DMP's existing auxiliary endpoints now live under ``/publishing/``.

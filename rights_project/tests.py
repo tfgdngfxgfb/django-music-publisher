@@ -3,14 +3,106 @@ from decimal import Decimal
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlparse
 
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.db import connection
 from django.test import SimpleTestCase, TestCase
+from django.urls import reverse
 
+from catalogue.models import Release
 from music_publisher.royalty_calculation import (
     RoyaltyCalculation,
     RoyaltyCalculationView,
 )
+
+
+class IntegratedHomeTests(TestCase):
+    password = "test-password"
+
+    def create_user(self, username, **extra):
+        return get_user_model().objects.create_user(
+            username=username,
+            password=self.password,
+            **extra,
+        )
+
+    def test_anonymous_start_redirects_to_login_and_preserves_destination(self):
+        response = self.client.get(reverse("home"))
+
+        self.assertEqual(response.status_code, 302)
+        parsed = urlparse(response.url)
+        self.assertEqual(parsed.path, reverse("admin:login"))
+        self.assertEqual(parse_qs(parsed.query)["next"], [reverse("home")])
+
+    def test_logged_in_administrator_sees_integrated_navigation(self):
+        user = self.create_user("administrator", is_staff=True, is_superuser=True)
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Startside")
+        self.assertContains(response, 'id="nav-sidebar"', html=False)
+        for label in (
+            "Musikkarkiv",
+            "Forvaltet musikk",
+            "Utgivelser",
+            "Kontroll",
+            "Hjelp",
+        ):
+            self.assertContains(response, label)
+
+    def test_start_navigation_respects_model_permissions(self):
+        user = self.create_user("release-reader", is_staff=True)
+        permission = Permission.objects.get(
+            content_type__app_label="catalogue",
+            codename="view_release",
+        )
+        user.user_permissions.add(permission)
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Utgivelser")
+        self.assertContains(response, "Hjelp")
+        self.assertNotContains(response, "Åpne Musikkarkiv")
+        self.assertNotContains(response, "Åpne Forvaltet musikk")
+        self.assertNotContains(response, "Mulige dubletter")
+        self.assertNotContains(response, "Kilder og verifikasjon")
+
+    def test_non_staff_user_cannot_open_internal_start(self):
+        user = self.create_user("ordinary-user")
+        self.client.force_login(user)
+
+        response = self.client.get(reverse("home"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(urlparse(response.url).path, reverse("admin:login"))
+
+    def test_login_returns_user_to_requested_record(self):
+        user = self.create_user("deep-link-admin", is_staff=True, is_superuser=True)
+        release = Release.objects.create(title="Direkte utgivelse")
+        change_url = reverse("admin:catalogue_release_change", args=(release.pk,))
+
+        response = self.client.get(change_url)
+        parsed = urlparse(response.url)
+        self.assertEqual(parsed.path, reverse("admin:login"))
+        self.assertEqual(parse_qs(parsed.query)["next"], [change_url])
+
+        response = self.client.post(
+            reverse("admin:login"),
+            {
+                "username": user.username,
+                "password": self.password,
+                "next": change_url,
+            },
+        )
+        self.assertRedirects(response, change_url, fetch_redirect_response=False)
+        response = self.client.get(change_url)
+        self.assertContains(response, "Direkte utgivelse")
 
 
 class DownloadCompatibilityTests(SimpleTestCase):

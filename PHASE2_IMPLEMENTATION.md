@@ -18,6 +18,8 @@ På en utgivelse åpner **Registrer spor** en transaksjonsbeskyttet flyt som ent
 
 Forvaltet musikk har et eget administratorskjema. Det gjenbruker eller oppretter Recording, sørger for MusicLibraryEntry og oppretter ManagedRecording i én transaksjon. Kildepåstander kan bekreftes, bestrides, avvises eller erstattes via loggførte avgjørelser.
 
+Startadressen krever innlogging og åpner en integrert startside i samme Django-adminlayout. Innganger til Musikkarkiv, Forvaltet musikk, Utgivelser og Kontroll vises bare når brukeren har visningstilgang til de underliggende modellene. Direkte lenker returnerer til den forespurte siden etter innlogging.
+
 ## FLAC/Vorbis-mapping for senere synkronisering
 
 | Tag | Kanonisk kilde |
