@@ -756,7 +756,7 @@ meter {
 .ingest-intro > p { color: var(--muted); }
 .ingest-summary {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
   gap: .7rem;
   margin-bottom: .8rem;
 }
@@ -783,12 +783,15 @@ meter {
 .ingest-preview td > small { display: block; }
 .ingest-preview td > small { margin-top: .2rem; color: var(--muted); }
 .ingest-warning { margin-bottom: .25rem; color: var(--warning); font-size: .7rem; }
+.ingest-select { display: grid; place-items: center; min-width: 1.5rem; }
+.ingest-select input { width: 1rem; height: 1rem; accent-color: var(--accent); }
 .review-warnings { margin-bottom: 1rem; padding: .75rem; background: var(--surface-muted); border: 1px solid var(--line); border-radius: var(--radius); }
 .raw-tag-list { display: grid; grid-template-columns: minmax(7rem, auto) 1fr; gap: .35rem .75rem; font-size: .75rem; }
 .raw-tag-list dt { color: var(--muted); }
 .raw-tag-list dd { margin: 0; overflow-wrap: anywhere; }
 .status-new, .status-matched, .status-synced { color: var(--success); }
-.status-conflict, .status-pending { color: var(--warning); }
+.status-updated { color: var(--accent-strong); }
+.status-conflict, .status-pending, .status-retry { color: var(--warning); }
 .status-invalid, .status-failed, .status-missing { color: var(--danger); }
 
 .radio-metadata-form { max-width: 980px; padding: 0; overflow: hidden; }

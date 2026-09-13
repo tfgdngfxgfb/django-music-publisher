@@ -7,6 +7,7 @@ import re
 import unicodedata
 from uuid import UUID
 
+from mutagen import MutagenError
 from mutagen.flac import FLAC, FLACNoHeaderError
 
 TAG_ADAPTER_VERSION = 2
@@ -215,7 +216,7 @@ def read_flac(path):
     path = Path(path)
     try:
         audio = FLAC(path)
-    except (FLACNoHeaderError, OSError, ValueError) as error:
+    except (FLACNoHeaderError, MutagenError, OSError, TypeError, ValueError) as error:
         raise FlacReadError(f"Kunne ikke lese FLAC-filen: {error}") from error
     raw_tags = {
         str(key): [str(value) for value in values]
@@ -236,6 +237,10 @@ def read_flac(path):
             "target_audiences",
         }:
             parsed[field] = _multi_values(values)
+        elif field == "genre":
+            genre_values = _multi_values(values)
+            parsed["genre_values"] = genre_values
+            parsed[field] = "; ".join(genre_values)
         elif field in {"track_number", "disc_number"}:
             parsed[field] = _position(_first(values))
         elif field == "energy":
@@ -263,17 +268,22 @@ def read_flac(path):
         except ValueError:
             parsed["p7uuid_invalid"] = p7uuid
             parsed.pop("p7uuid", None)
-    info = audio.info
-    technical = {
-        "tag_adapter_version": TAG_ADAPTER_VERSION,
-        "container": "FLAC",
-        "codec": "FLAC",
-        "sample_rate": info.sample_rate,
-        "bits_per_sample": info.bits_per_sample,
-        "channels": info.channels,
-        "length_seconds": round(info.length, 6),
-        "duration_ms": round(info.length * 1000),
-    }
+    try:
+        info = audio.info
+        technical = {
+            "tag_adapter_version": TAG_ADAPTER_VERSION,
+            "container": "FLAC",
+            "codec": "FLAC",
+            "sample_rate": info.sample_rate,
+            "bits_per_sample": info.bits_per_sample,
+            "channels": info.channels,
+            "length_seconds": round(info.length, 6),
+            "duration_ms": round(info.length * 1000),
+        }
+    except (AttributeError, TypeError, ValueError) as error:
+        raise FlacReadError(
+            f"FLAC-filen mangler gyldige tekniske lydopplysninger: {error}"
+        ) from error
     return FlacSnapshot(raw_tags=raw_tags, parsed=parsed, technical=technical)
 
 

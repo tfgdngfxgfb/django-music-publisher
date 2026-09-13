@@ -20,6 +20,11 @@ urlpatterns = [
         name="flac_ingest_apply",
     ),
     path(
+        "musikkarkiv/les-inn/<uuid:pk>/skann-pa-nytt/",
+        views.flac_ingest_rescan,
+        name="flac_ingest_rescan",
+    ),
+    path(
         "musikkarkiv/les-inn/<uuid:pk>/kontroller/<uuid:item_pk>/",
         views.flac_ingest_review,
         name="flac_ingest_review",
@@ -90,6 +95,11 @@ urlpatterns = [
     path("artister/ny-part/", views.party_add, name="party_add"),
     path("artister/ny-identitet/", views.artist_add, name="artist_add"),
     path("kontroll/", views.control, name="control"),
+    path(
+        "kontroll/bekreft-flac/",
+        views.confirm_flac_metadata,
+        name="confirm_flac_metadata",
+    ),
     path("filer/", views.files_list, name="files"),
     path("filer/ny/", views.file_add, name="file_add"),
     path("filer/<uuid:pk>/", views.file_detail, name="file"),

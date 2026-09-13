@@ -50,7 +50,9 @@ class FlacIngestItem(CanonicalModel):
     class Action(models.TextChoices):
         NEW = "new", "Ny innspilling"
         MATCHED = "matched", "Eksisterende treff"
+        UPDATED = "updated", "Endret fil"
         UNCHANGED = "unchanged", "Uendret fil"
+        RETRY = "retry", "Prøv igjen"
         CONFLICT = "conflict", "Må kontrolleres"
         INVALID = "invalid", "Kan ikke leses"
 
@@ -135,7 +137,11 @@ class FlacIngestItem(CanonicalModel):
     @property
     def can_apply(self):
         return (
-            self.action in {self.Action.NEW, self.Action.MATCHED}
+            self.action in {
+                self.Action.NEW,
+                self.Action.MATCHED,
+                self.Action.UPDATED,
+            }
             and not self.applied_at
         )
 

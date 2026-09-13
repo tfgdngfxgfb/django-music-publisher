@@ -1,5 +1,6 @@
 from io import BytesIO
 from pathlib import Path
+from uuid import UUID
 
 from PIL import Image, UnidentifiedImageError
 from django.conf import settings
@@ -9,7 +10,13 @@ from django.contrib.auth.decorators import permission_required
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Prefetch, Q
-from django.http import Http404, HttpResponse, HttpResponseForbidden, JsonResponse
+from django.http import (
+    Http404,
+    HttpResponse,
+    HttpResponseBadRequest,
+    HttpResponseForbidden,
+    JsonResponse,
+)
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -25,7 +32,9 @@ from catalogue.models import (
 from catalogue.services import create_release_track
 from flac_ingest.models import FlacIngestBatch, FlacIngestItem
 from flac_ingest.services import (
+    SOURCE_SYSTEM_NAME,
     apply_batch,
+    confirm_existing_flac_assertions,
     review_item,
     scan_directory,
     sync_recording_files,
@@ -579,8 +588,24 @@ def flac_ingest_preview(request, pk):
         for action, _label in FlacIngestItem.Action.choices
     }
     selected_action = request.GET.get("status", "")
+    warning_queryset = batch.items.exclude(messages=[]).exclude(
+        action__in=(
+            FlacIngestItem.Action.CONFLICT,
+            FlacIngestItem.Action.INVALID,
+            FlacIngestItem.Action.RETRY,
+        )
+    )
+    counts["warning"] = warning_queryset.count()
     valid_actions = {action for action, _label in FlacIngestItem.Action.choices}
-    if selected_action in valid_actions:
+    if selected_action == "warning":
+        queryset = queryset.exclude(messages=[]).exclude(
+            action__in=(
+                FlacIngestItem.Action.CONFLICT,
+                FlacIngestItem.Action.INVALID,
+                FlacIngestItem.Action.RETRY,
+            )
+        )
+    elif selected_action in valid_actions:
         queryset = queryset.filter(action=selected_action)
     else:
         selected_action = ""
@@ -603,6 +628,7 @@ def flac_ingest_preview(request, pk):
                 action__in=(
                     FlacIngestItem.Action.NEW,
                     FlacIngestItem.Action.MATCHED,
+                    FlacIngestItem.Action.UPDATED,
                 ),
                 applied_at__isnull=True,
             ).count(),
@@ -661,6 +687,60 @@ def flac_ingest_review(request, pk, item_pk):
             cancel_url=cancel_url,
         ),
     )
+
+
+@staff
+@require_POST
+@permission_required(
+    (
+        "flac_ingest.add_flacingestbatch",
+        "flac_ingest.view_flacingestbatch",
+    ),
+    raise_exception=True,
+)
+def flac_ingest_rescan(request, pk):
+    batch = get_object_or_404(FlacIngestBatch, pk=pk)
+    mode = request.POST.get("mode", "all")
+    relative_paths = None
+    if mode == "failed":
+        relative_paths = list(
+            batch.items.filter(
+                action__in=(
+                    FlacIngestItem.Action.INVALID,
+                    FlacIngestItem.Action.RETRY,
+                )
+            ).values_list("relative_path", flat=True)
+        )
+    elif mode == "selected":
+        try:
+            selected_ids = [
+                UUID(value) for value in request.POST.getlist("items")[:500]
+            ]
+        except (TypeError, ValueError):
+            return HttpResponseBadRequest("Ugyldig filvalg.")
+        relative_paths = list(
+            batch.items.filter(pk__in=selected_ids).values_list(
+                "relative_path", flat=True
+            )
+        )
+    elif mode != "all":
+        return HttpResponseBadRequest("Ukjent type ny skanning.")
+    if relative_paths == []:
+        messages.warning(request, "Ingen aktuelle filer ble valgt for ny skanning.")
+        return redirect("workbench:flac_ingest_preview", pk=batch.pk)
+    try:
+        new_batch = scan_directory(
+            relative_root=batch.relative_root,
+            recursive=batch.recursive,
+            relative_paths=relative_paths,
+            user=request.user,
+        )
+    except (ImproperlyConfigured, ValidationError) as error:
+        details = error.messages if hasattr(error, "messages") else [str(error)]
+        messages.error(request, "; ".join(details))
+        return redirect("workbench:flac_ingest_preview", pk=batch.pk)
+    messages.success(request, f"{new_batch.items.count()} filer ble skannet på nytt.")
+    return redirect("workbench:flac_ingest_preview", pk=new_batch.pk)
 
 
 @staff
@@ -1685,6 +1765,13 @@ def control(request):
             assertions = assertions.filter(status=VerificationStatus.DISPUTED)
         else:
             assertions = assertions.filter(status=VerificationStatus.UNVERIFIED)
+    flac_unverified_count = 0
+    if request.user.has_perm("provenance.change_metadataassertion"):
+        flac_unverified_count = MetadataAssertion.objects.filter(
+            source_record__source_system__name=SOURCE_SYSTEM_NAME,
+            source_record__external_record_id__startswith="flac:",
+            status=VerificationStatus.UNVERIFIED,
+        ).count()
     return render(
         request,
         "workbench/control.html",
@@ -1694,8 +1781,24 @@ def control(request):
             selected=selected,
             duplicates=duplicates[:100],
             assertions=assertions[:100],
+            flac_unverified_count=flac_unverified_count,
         ),
     )
+
+
+@require_POST
+@staff
+@permission_required("provenance.change_metadataassertion", raise_exception=True)
+def confirm_flac_metadata(request):
+    count = confirm_existing_flac_assertions(user=request.user)
+    if count:
+        messages.success(
+            request,
+            f"{count} tidligere anvendte FLAC-opplysninger ble bekreftet.",
+        )
+    else:
+        messages.info(request, "Ingen uverifiserte FLAC-opplysninger gjenstod.")
+    return redirect(reverse("workbench:control") + "?type=uverifisert")
 
 
 @staff

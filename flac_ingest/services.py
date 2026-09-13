@@ -1,10 +1,11 @@
 import json
+import logging
 from datetime import datetime
 from pathlib import Path, PurePosixPath
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured, ValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.utils import timezone
 from django.utils.text import slugify
@@ -34,6 +35,7 @@ from music_library.models import (
 from parties.models import ArtistIdentity, Party
 from provenance.models import (
     AppliedMetadataChange,
+    AssertionDecision,
     ImportBatch,
     MetadataAssertion,
     SourceRecord,
@@ -52,6 +54,15 @@ from .adapter import (
 from .models import FlacIngestBatch, FlacIngestItem, FlacSyncLog
 
 SOURCE_SYSTEM_NAME = "P7 radio-FLAC"
+logger = logging.getLogger(__name__)
+
+
+class FileChangedDuringScan(OSError):
+    pass
+
+
+class SourceFileUnavailable(ValidationError):
+    pass
 
 
 def music_root():
@@ -159,7 +170,7 @@ def _candidate_payload(matches):
     ]
 
 
-def _match_recording(parsed, technical):
+def _match_recording(parsed, technical, *, catalogue_has_recordings=True):
     messages = []
     p7uuid = parsed.get("p7uuid")
     if parsed.get("p7uuid_invalid"):
@@ -169,7 +180,14 @@ def _match_recording(parsed, technical):
         try:
             file_isrc = normalize_isrc(file_isrc)
         except ValidationError:
-            return None, "", [], ["ISRC har ugyldig format."], True
+            shown = str(file_isrc)[:80]
+            return (
+                None,
+                "",
+                [],
+                [f"Kunne ikke lese ISRC: ugyldig verdi «{shown}»."],
+                True,
+            )
     if p7uuid:
         recording = Recording.objects.filter(pk=p7uuid).first()
         if not recording:
@@ -207,6 +225,8 @@ def _match_recording(parsed, technical):
         )
         if identifier:
             return identifier.recording, "isrc", [], messages, False
+    if not catalogue_has_recordings:
+        return None, "", [], messages, False
     title = parsed.get("title", "")
     artist = _artist_identity((parsed.get("artists") or [""])[0])
     matches = find_recording_candidates(
@@ -299,7 +319,73 @@ def _metadata_errors(parsed):
     return errors
 
 
-def scan_directory(*, relative_root=".", recursive=True, user):
+def _stable_snapshot(path):
+    """Read tags and checksum only when the file stays unchanged throughout."""
+    before = path.stat()
+    snapshot = read_flac(path)
+    checksum = file_sha256(path)
+    after = path.stat()
+    before_state = (before.st_size, before.st_mtime_ns)
+    after_state = (after.st_size, after.st_mtime_ns)
+    if before_state != after_state:
+        raise FileChangedDuringScan(
+            "Filen ble endret under skanning og må prøves igjen."
+        )
+    return snapshot, checksum, after
+
+
+def _scan_error_item(batch, relative_path, action, message, stat=None):
+    modified = None
+    size = None
+    if stat is not None:
+        size = stat.st_size
+        modified = datetime.fromtimestamp(
+            stat.st_mtime, tz=timezone.get_current_timezone()
+        )
+    return FlacIngestItem.objects.create(
+        batch=batch,
+        relative_path=relative_path,
+        action=action,
+        file_size=size,
+        source_modified_at=modified,
+        messages=[message],
+    )
+
+
+def _candidate_paths(root, folder, recursive, relative_paths):
+    if relative_paths is not None:
+        return [resolve_music_path(value)[1] for value in relative_paths]
+    return list(folder.rglob("*") if recursive else folder.iterdir())
+
+
+def _existing_locations(relative_root, relative_paths):
+    base_queryset = FileLocation.objects.filter(
+        storage_type=FileLocation.StorageType.NAS,
+        is_current=True,
+    ).select_related("asset", "asset__recording")
+    if relative_paths is not None:
+        requested = sorted(set(relative_paths))
+        locations = []
+        for offset in range(0, len(requested), 500):
+            locations.extend(
+                base_queryset.filter(
+                    relative_path__in=requested[offset : offset + 500]
+                )
+            )
+    else:
+        prefix = str(PurePosixPath(relative_root or "."))
+        if prefix not in {"", "."}:
+            base_queryset = base_queryset.filter(
+                Q(relative_path=prefix) | Q(relative_path__startswith=f"{prefix}/")
+            )
+        locations = base_queryset
+    result = {}
+    for location in locations:
+        result.setdefault(location.relative_path, []).append(location)
+    return result
+
+
+def scan_directory(*, relative_root=".", recursive=True, user, relative_paths=None):
     root, folder = resolve_music_path(relative_root)
     if not folder.is_dir():
         raise ValidationError("Valgt innlesingsmappe finnes ikke.")
@@ -314,33 +400,39 @@ def scan_directory(*, relative_root=".", recursive=True, user):
         recursive=recursive,
         created_by=user,
     )
-    candidates = folder.rglob("*") if recursive else folder.iterdir()
+    candidates = _candidate_paths(root, folder, recursive, relative_paths)
+    locations_by_path = _existing_locations(relative_root, relative_paths)
+    catalogue_has_recordings = Recording.objects.exists()
     for path in sorted(candidates, key=lambda item: str(item).casefold()):
-        if not path.is_file() or path.suffix.casefold() != ".flac":
+        if path.suffix.casefold() != ".flac":
             continue
         relative_path = path.relative_to(root).as_posix()
-        stat = path.stat()
+        try:
+            stat = path.stat()
+        except OSError as error:
+            _scan_error_item(
+                batch,
+                relative_path,
+                FlacIngestItem.Action.INVALID,
+                f"Kunne ikke lese filopplysninger: {error}",
+            )
+            continue
+        if not path.is_file():
+            continue
         modified = datetime.fromtimestamp(
             stat.st_mtime, tz=timezone.get_current_timezone()
         )
-        existing_locations = FileLocation.objects.filter(
-            storage_type=FileLocation.StorageType.NAS,
-            relative_path=relative_path,
-            is_current=True,
-        ).select_related("asset")
-        if existing_locations.count() > 1:
-            FlacIngestItem.objects.create(
-                batch=batch,
-                relative_path=relative_path,
-                action=FlacIngestItem.Action.CONFLICT,
-                file_size=stat.st_size,
-                source_modified_at=modified,
-                messages=["Flere aktive filreferanser bruker samme sti."],
+        existing_locations = locations_by_path.get(relative_path, [])
+        if len(existing_locations) > 1:
+            _scan_error_item(
+                batch,
+                relative_path,
+                FlacIngestItem.Action.CONFLICT,
+                "Flere aktive filreferanser bruker samme sti.",
+                stat,
             )
             continue
-        existing_asset = (
-            existing_locations.first().asset if existing_locations else None
-        )
+        existing_asset = existing_locations[0].asset if existing_locations else None
         if (
             existing_asset
             and existing_asset.size_bytes == stat.st_size
@@ -362,20 +454,42 @@ def scan_directory(*, relative_root=".", recursive=True, user):
             )
             continue
         try:
-            snapshot = read_flac(path)
-            checksum = file_sha256(path)
+            snapshot, checksum, stable_stat = _stable_snapshot(path)
+            stat = stable_stat
+            modified = datetime.fromtimestamp(
+                stat.st_mtime, tz=timezone.get_current_timezone()
+            )
+        except FileChangedDuringScan as error:
+            _scan_error_item(
+                batch,
+                relative_path,
+                FlacIngestItem.Action.RETRY,
+                str(error),
+                stat,
+            )
+            continue
         except FlacReadError as error:
-            FlacIngestItem.objects.create(
-                batch=batch,
-                relative_path=relative_path,
-                action=FlacIngestItem.Action.INVALID,
-                file_size=stat.st_size,
-                source_modified_at=modified,
-                messages=[str(error)],
+            _scan_error_item(
+                batch,
+                relative_path,
+                FlacIngestItem.Action.INVALID,
+                str(error),
+                stat,
+            )
+            continue
+        except OSError as error:
+            _scan_error_item(
+                batch,
+                relative_path,
+                FlacIngestItem.Action.INVALID,
+                f"Kunne ikke lese hele filen: {error}",
+                stat,
             )
             continue
         recording, method, candidates, messages, conflict = _match_recording(
-            snapshot.parsed, snapshot.technical
+            snapshot.parsed,
+            snapshot.technical,
+            catalogue_has_recordings=catalogue_has_recordings,
         )
         if existing_asset and existing_asset.recording_id:
             path_recording = existing_asset.recording
@@ -404,9 +518,13 @@ def scan_directory(*, relative_root=".", recursive=True, user):
             FlacIngestItem.Action.CONFLICT
             if conflict
             else (
-                FlacIngestItem.Action.MATCHED
-                if recording
-                else FlacIngestItem.Action.NEW
+                FlacIngestItem.Action.UPDATED
+                if existing_asset
+                else (
+                    FlacIngestItem.Action.MATCHED
+                    if recording
+                    else FlacIngestItem.Action.NEW
+                )
             )
         )
         if recording and database_is_catalogue_authority(recording):
@@ -519,15 +637,51 @@ def _raw_value(value):
     return str(value)
 
 
-def _assertion(source_record, entity_type, entity, field, value):
-    return MetadataAssertion.objects.create(
+def _assertion(source_record, entity_type, entity, field, value, *, user):
+    """Record a FLAC value that the authority rules applied as canonical.
+
+    These assertions are confirmed because the value has already passed the
+    controlled ingest checks and FLAC is authoritative for this field. This is
+    separate from rights claims, which are never confirmed by FLAC ingest.
+    """
+    assertion = MetadataAssertion.objects.create(
         source_record=source_record,
         entity_type=entity_type,
         entity_uuid=entity.pk,
         field_name=field,
         raw_value=_raw_value(value),
         normalized_value=value,
+        status=VerificationStatus.CONFIRMED,
     )
+    AssertionDecision.objects.create(
+        assertion=assertion,
+        decision=VerificationStatus.CONFIRMED,
+        decided_by=user,
+        note="Automatisk bekreftet ved anvendelse fra autoritativ radio-FLAC.",
+    )
+    return assertion
+
+
+@transaction.atomic
+def confirm_existing_flac_assertions(*, user):
+    """Confirm legacy FLAC assertions created before automatic confirmation."""
+    assertions = MetadataAssertion.objects.filter(
+        source_record__source_system__name=SOURCE_SYSTEM_NAME,
+        source_record__external_record_id__startswith="flac:",
+        status=VerificationStatus.UNVERIFIED,
+    ).order_by("pk")
+    count = 0
+    for assertion in assertions.iterator(chunk_size=200):
+        AssertionDecision.objects.create(
+            assertion=assertion,
+            decision=VerificationStatus.CONFIRMED,
+            decided_by=user,
+            note="Manuelt bekreftet som tidligere anvendt FLAC-kildedata.",
+        )
+        assertion.status = VerificationStatus.CONFIRMED
+        assertion.save(update_fields=("status",))
+        count += 1
+    return count
 
 
 def _log_applied(assertion, entity, before, after, user, base_revision):
@@ -602,6 +756,40 @@ def _source_record_reference(item):
         else f"{relative_path[:244]}…{relative_path[-255:]}"
     )
     return external_record_id, source_locator
+
+
+def _verify_item_source(item):
+    """Fail before canonical writes if the preview no longer matches the file."""
+    _root, path = resolve_music_path(item.relative_path)
+    try:
+        before = path.stat()
+        checksum = file_sha256(path)
+        after = path.stat()
+    except OSError as error:
+        raise SourceFileUnavailable(
+            f"Filen er ikke tilgjengelig lenger: {error}"
+        ) from error
+    if (before.st_size, before.st_mtime_ns) != (
+        after.st_size,
+        after.st_mtime_ns,
+    ):
+        raise SourceFileUnavailable(
+            "Filen ble endret mens den ble kontrollert. Skann den på nytt."
+        )
+    expected_modified = item.source_modified_at
+    actual_modified = datetime.fromtimestamp(
+        after.st_mtime, tz=timezone.get_current_timezone()
+    )
+    if (
+        item.file_size != after.st_size
+        or not expected_modified
+        or abs((expected_modified - actual_modified).total_seconds()) >= 0.001
+        or (item.sha256 and checksum != item.sha256)
+    ):
+        raise SourceFileUnavailable(
+            "Filen er endret siden forhåndsvisningen. Skann den på nytt før import."
+        )
+    return path
 
 
 @transaction.atomic
@@ -692,6 +880,7 @@ def apply_item(item, *, user):
     )
     if not item.can_apply:
         return item
+    _verify_item_source(item)
     parsed = item.parsed_metadata
     external_record_id, source_locator = _source_record_reference(item)
     source_record = SourceRecord.objects.create(
@@ -738,6 +927,7 @@ def apply_item(item, *, user):
             recording,
             "title",
             parsed["title"],
+            user=user,
         )
         _log_applied(
             title_assertion,
@@ -759,6 +949,7 @@ def apply_item(item, *, user):
                 recording,
                 "title",
                 parsed["title"],
+                user=user,
             )
             recording.title = parsed["title"]
             recording.save(update_fields=("title",))
@@ -812,6 +1003,7 @@ def apply_item(item, *, user):
             entry,
             field,
             after,
+            user=user,
         )
         if before != after:
             setattr(entry, field, after if field == "energy" else (after or ""))
@@ -837,6 +1029,7 @@ def apply_item(item, *, user):
             entry,
             field,
             parsed[field],
+            user=user,
         )
         _log_applied(assertion, entry, before, parsed[field], user, base)
     _root, absolute = resolve_music_path(item.relative_path)
@@ -909,8 +1102,33 @@ def apply_batch(batch, *, user):
     applied = 0
     for item in batch.items.order_by("relative_path"):
         if item.can_apply:
-            apply_item(item, user=user)
-            applied += 1
+            try:
+                apply_item(item, user=user)
+            except SourceFileUnavailable as error:
+                item.refresh_from_db()
+                item.action = FlacIngestItem.Action.RETRY
+                item.messages = list(error.messages)
+                item.save(update_fields=("action", "messages"))
+            except ValidationError as error:
+                item.refresh_from_db()
+                item.action = FlacIngestItem.Action.CONFLICT
+                item.messages = list(error.messages)
+                item.save(update_fields=("action", "messages"))
+            except IntegrityError:
+                logger.warning(
+                    "Datakonflikt ved FLAC-import av %s",
+                    item.relative_path,
+                    exc_info=True,
+                )
+                item.refresh_from_db()
+                item.action = FlacIngestItem.Action.CONFLICT
+                item.messages = [
+                    "Dataene kolliderer med en eksisterende katalogpost. "
+                    "Kontroller identifikatorer og valgt innspilling."
+                ]
+                item.save(update_fields=("action", "messages"))
+            else:
+                applied += 1
     batch.refresh_from_db()
     remaining = (
         batch.items.filter(applied_at__isnull=True)
