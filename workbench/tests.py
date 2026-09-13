@@ -11,7 +11,7 @@ from django.urls import reverse
 from catalogue.models import ExternalIdentifier, Recording, Release, ReleaseTrack
 from media_assets.models import FileAsset, FileLocation
 from managed_music.services import create_managed_recording
-from music_library.models import MusicLibraryEntry
+from music_library.models import Channel, MusicLibraryEntry, TargetAudience
 from parties.models import Party
 from provenance.models import (
     AppliedMetadataChange,
@@ -530,6 +530,56 @@ class CatalogueWorkflowTests(WorkbenchTestCase):
         )
         self.assertContains(response, 'name="return"')
         self.assertContains(response, "fane=radio")
+
+    def test_radio_form_groups_and_saves_multiple_channels_and_targets(self):
+        recording = Recording.objects.create(title="Radiovalg")
+        entry = MusicLibraryEntry.objects.create(recording=recording)
+        channels = [
+            Channel.objects.create(code="p7_evangelisk", name="P7 Evangelisk"),
+            Channel.objects.create(code="p7_riks", name="P7 Riks"),
+        ]
+        audiences = [
+            TargetAudience.objects.create(code="60", name="60+"),
+            TargetAudience.objects.create(code="30_60", name="30–60"),
+        ]
+        url = reverse("workbench:radio_edit", args=(recording.pk,))
+
+        response = self.client.get(url)
+        self.assertContains(response, "Beskrivelse for radio")
+        self.assertContains(response, "Bruk i radio")
+        self.assertContains(response, '<div id="id_channels" class="radio-choice-grid">')
+        self.assertContains(
+            response,
+            '<div id="id_target_audiences" class="radio-choice-grid">',
+        )
+        self.assertContains(response, "P7 Evangelisk")
+        self.assertContains(response, "60+")
+
+        response = self.client.post(
+            url,
+            {
+                "genre": "Evangelisk",
+                "language": "no",
+                "gender": "group",
+                "energy": "1",
+                "channels": [str(channel.pk) for channel in channels],
+                "target_audiences": [str(target.pk) for target in audiences],
+                "verification_status": VerificationStatus.UNVERIFIED,
+                "notes": "",
+            },
+        )
+        self.assertRedirects(
+            response,
+            reverse("workbench:recording", args=(recording.pk,)) + "?fane=radio",
+        )
+        self.assertEqual(
+            set(entry.channels.values_list("name", flat=True)),
+            {"P7 Evangelisk", "P7 Riks"},
+        )
+        self.assertEqual(
+            set(entry.target_audiences.values_list("name", flat=True)),
+            {"60+", "30–60"},
+        )
 
     def test_multiple_tracks_are_atomic_and_existing_recording_keeps_radio_data(self):
         release = Release.objects.create(title="Album")

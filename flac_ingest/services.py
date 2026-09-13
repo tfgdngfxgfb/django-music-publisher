@@ -42,7 +42,13 @@ from provenance.models import (
 from rights.models import RightsClaim, RightsConfiguration
 from rights_core.models import VerificationStatus
 
-from .adapter import FlacReadError, file_sha256, read_flac, write_catalogue_tags
+from .adapter import (
+    TAG_ADAPTER_VERSION,
+    FlacReadError,
+    file_sha256,
+    read_flac,
+    write_catalogue_tags,
+)
 from .models import FlacIngestBatch, FlacIngestItem, FlacSyncLog
 
 SOURCE_SYSTEM_NAME = "P7 radio-FLAC"
@@ -339,6 +345,8 @@ def scan_directory(*, relative_root=".", recursive=True, user):
             existing_asset
             and existing_asset.size_bytes == stat.st_size
             and existing_asset.source_modified_at
+            and existing_asset.technical_metadata.get("tag_adapter_version")
+            == TAG_ADAPTER_VERSION
             and abs((existing_asset.source_modified_at - modified).total_seconds())
             < 0.001
         ):

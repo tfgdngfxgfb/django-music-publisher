@@ -51,6 +51,8 @@ class MusicLibraryEntry(CanonicalModel):
         FEMALE = "female", "Kvinne"
         MALE = "male", "Mann"
         MIXED = "mixed", "Blandet"
+        GROUP = "group", "Gruppe"
+        INSTRUMENTAL = "instrumental", "Instrumental"
         OTHER = "other", "Annet / ikke relevant"
 
     recording = models.OneToOneField(

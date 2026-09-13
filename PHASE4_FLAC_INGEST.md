@@ -15,7 +15,11 @@
 
 `flac_ingest.adapter` samler dagens tag-aliaser og holder StationPlaylist- og
 OneTagger-representasjon ute av domenemodellen. Alle rå Vorbis Comments og
-tekniske lyddata lagres i `SourceRecord.raw_payload`.
+tekniske lyddata lagres i `SourceRecord.raw_payload`. StationPlaylist-verdier
+som ligger som `TXXX:<felt> - <verdi>` i `COMMENT`, oversettes i adapteren til
+språk, kanal, målgruppe og kjønn uten å endre råverdiene. Adapterversjonen
+lagres med tekniske metadata, slik at en ny skanning kan behandle tidligere
+innleste filer på nytt når tolkningen forbedres.
 
 ## Ingest, matching og filer
 

@@ -78,6 +78,7 @@ class FlacAdapterTests(FlacTestMixin, TestCase):
         self.assertEqual(snapshot.technical["sample_rate"], 44100)
         self.assertEqual(snapshot.technical["bits_per_sample"], 16)
         self.assertEqual(snapshot.technical["channels"], 1)
+        self.assertEqual(snapshot.technical["tag_adapter_version"], 2)
 
     def test_onetagger_percentage_rating_maps_to_p7_energy(self):
         for raw_rating, expected_energy in (
@@ -89,6 +90,28 @@ class FlacAdapterTests(FlacTestMixin, TestCase):
         ):
             path = self.make_flac(f"rating-{raw_rating}.flac", RATING=raw_rating)
             self.assertEqual(read_flac(path).parsed["energy"], expected_energy)
+
+    def test_stationplaylist_txxx_comments_map_to_radio_metadata(self):
+        comments = [
+            "TXXX:Språk - Norsk",
+            "TXXX:Target - 60+",
+            "TXXX:Gender - Group",
+            "TXXX:Kanal - P7 Evangelisk",
+            "TXXX:Kanal - P7 Riks",
+            "TXXX:Rotasjon - Ikke rotasjonsverdig",
+        ]
+        path = self.make_flac("stationplaylist.flac", COMMENT=comments)
+
+        snapshot = read_flac(path)
+
+        self.assertEqual(snapshot.parsed["language"], "no")
+        self.assertEqual(snapshot.parsed["target_audiences"], ["60+"])
+        self.assertEqual(snapshot.parsed["gender"], "group")
+        self.assertEqual(
+            snapshot.parsed["channels"], ["P7 Evangelisk", "P7 Riks"]
+        )
+        self.assertEqual(snapshot.raw_tags["comment"], comments)
+        self.assertNotIn("Rotasjon", snapshot.parsed)
 
     def test_writeback_changes_allowlist_and_preserves_radio_and_unknown_tags(self):
         path = self.make_flac(
@@ -236,6 +259,36 @@ class FlacIngestTests(FlacTestMixin, TestCase):
 
         third = self.scan()
         self.assertEqual(third.items.get().action, FlacIngestItem.Action.UNCHANGED)
+
+    def test_new_adapter_version_reprocesses_unchanged_registered_file(self):
+        self.make_flac(
+            TITLE="Eldre innlesing",
+            COMMENT=[
+                "TXXX:Kanal - P7 Evangelisk",
+                "TXXX:Target - 60+",
+            ],
+        )
+        first = self.scan()
+        self.assertEqual(self.apply(first), 1)
+        first_item = first.items.get()
+        entry = first_item.recording.music_library_entry
+        self.assertEqual(
+            list(entry.channels.values_list("name", flat=True)), ["P7 Evangelisk"]
+        )
+
+        entry.channel_links.all().delete()
+        asset = first_item.file_asset
+        asset.technical_metadata.pop("tag_adapter_version", None)
+        asset.save(update_fields=("technical_metadata",))
+
+        second = self.scan()
+        second_item = second.items.get()
+        self.assertEqual(second_item.action, FlacIngestItem.Action.MATCHED)
+        self.assertEqual(second_item.parsed_metadata["channels"], ["P7 Evangelisk"])
+        self.assertEqual(self.apply(second), 1)
+        self.assertEqual(
+            list(entry.channels.values_list("name", flat=True)), ["P7 Evangelisk"]
+        )
 
     def test_files_with_same_new_isrc_reuse_recording_when_batch_is_applied(self):
         common_tags = {

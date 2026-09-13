@@ -1,5 +1,4 @@
 {% extends "workbench/base.html" %}
-{% load workbench_tags %}
 {% block subtitle %}{% if introduction %}<p>{{ introduction }}</p>{% endif %}{% endblock %}
 {% block content %}
 <form method="post" class="panel form-panel" novalidate>
@@ -7,14 +6,7 @@
   {% if return_url %}<input type="hidden" name="return" value="{{ return_url }}">{% endif %}
   {{ form.non_field_errors }}
   {% for field in form %}
-    {% with help_term=form_help|mapping_value:field.name %}
-    <div class="field{% if field.errors %} has-error{% endif %}">
-      <span class="field-label">{{ field.label_tag }}{% if help_term %}{% include "workbench/_help_tip.html" with tip_id=field.auto_id help_term=help_term %}{% endif %}</span>
-      {{ field }}
-      {% if field.help_text and not help_term %}<small>{{ field.help_text }}</small>{% endif %}
-      {{ field.errors }}
-    </div>
-    {% endwith %}
+    {% include "workbench/_form_field.html" with field=field %}
   {% endfor %}
   <div class="form-actions">
     <button class="button primary" type="submit">{{ submit_label|default:"Lagre" }}</button>

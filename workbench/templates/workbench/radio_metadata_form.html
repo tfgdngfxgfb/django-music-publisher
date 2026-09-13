@@ -1,0 +1,57 @@
+{% extends "workbench/base.html" %}
+{% block subtitle %}<p>Radiometadata brukes til planlegging og avspilling. Kanal og målgruppe kan ha flere verdier.</p>{% endblock %}
+{% block content %}
+<form method="post" class="panel radio-metadata-form" novalidate>
+  {% csrf_token %}
+  {% if return_url %}<input type="hidden" name="return" value="{{ return_url }}">{% endif %}
+  {{ form.non_field_errors }}
+
+  <section class="radio-form-section" aria-labelledby="radio-description-heading">
+    <div class="radio-section-heading">
+      <h2 id="radio-description-heading">Beskrivelse for radio</h2>
+      <p>Beskriv musikkens innhold og uttrykk.</p>
+    </div>
+    <div class="radio-form-grid">
+      {% include "workbench/_form_field.html" with field=form.genre %}
+      {% include "workbench/_form_field.html" with field=form.language %}
+      {% include "workbench/_form_field.html" with field=form.gender %}
+      {% include "workbench/_form_field.html" with field=form.energy %}
+    </div>
+  </section>
+
+  <section class="radio-form-section" aria-labelledby="radio-use-heading">
+    <div class="radio-section-heading">
+      <h2 id="radio-use-heading">Bruk i radio</h2>
+      <p>Velg alle kanalene og målgruppene innspillingen passer for.</p>
+    </div>
+    <div class="radio-choice-columns">
+      <fieldset class="field choice-field{% if form.channels.errors %} has-error{% endif %}">
+        <legend>{{ form.channels.label }}</legend>
+        {{ form.channels }}
+        {{ form.channels.errors }}
+      </fieldset>
+      <fieldset class="field choice-field{% if form.target_audiences.errors %} has-error{% endif %}">
+        <legend>{{ form.target_audiences.label }}</legend>
+        {{ form.target_audiences }}
+        {{ form.target_audiences.errors }}
+      </fieldset>
+    </div>
+  </section>
+
+  <section class="radio-form-section" aria-labelledby="radio-control-heading">
+    <div class="radio-section-heading">
+      <h2 id="radio-control-heading">Kontroll</h2>
+      <p>Angi om opplysningene er kontrollert, og legg til en merknad ved behov.</p>
+    </div>
+    <div class="radio-form-grid radio-control-grid">
+      {% include "workbench/_form_field.html" with field=form.verification_status %}
+      {% include "workbench/_form_field.html" with field=form.notes %}
+    </div>
+  </section>
+
+  <div class="form-actions radio-form-actions">
+    <button class="button primary" type="submit">{{ submit_label|default:"Lagre" }}</button>
+    <a class="button" href="{{ cancel_url }}">Avbryt</a>
+  </div>
+</form>
+{% endblock %}

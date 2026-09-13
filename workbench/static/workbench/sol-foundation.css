@@ -791,6 +791,43 @@ meter {
 .status-conflict, .status-pending { color: var(--warning); }
 .status-invalid, .status-failed, .status-missing { color: var(--danger); }
 
+.radio-metadata-form { max-width: 980px; padding: 0; overflow: hidden; }
+.radio-form-section { padding: 1.15rem 1.25rem 1.25rem; border-bottom: 1px solid var(--line); }
+.radio-section-heading { margin-bottom: .9rem; }
+.radio-section-heading h2 { margin: 0; color: var(--text-strong); font-size: 1rem; }
+.radio-section-heading p { margin: .25rem 0 0; color: var(--muted); font-size: .76rem; }
+.radio-form-grid,
+.radio-choice-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .9rem 1rem; }
+.radio-control-grid .field-notes { grid-column: 1 / -1; }
+.choice-field { min-width: 0; margin: 0; padding: 0; border: 0; }
+.choice-field legend { margin-bottom: .45rem; color: var(--text-strong); font-size: .8rem; font-weight: 680; }
+.choice-field > .radio-choice-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .45rem; }
+.choice-field > .radio-choice-grid > div { min-width: 0; }
+.choice-field > .radio-choice-grid label {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  min-height: 40px;
+  padding: .5rem .65rem;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  cursor: pointer;
+}
+.choice-field > .radio-choice-grid label:hover { border-color: var(--accent); }
+.choice-field > .radio-choice-grid label:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); color: var(--text-strong); }
+.field .radio-choice-grid input[type="checkbox"] {
+  display: block;
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+  margin: 0;
+  accent-color: var(--accent);
+}
+.choice-field > .radio-choice-grid label:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.radio-form-actions { margin: 0; padding: 1rem 1.25rem; }
+
 @media (max-width: 900px) {
   .ingest-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -819,6 +856,8 @@ meter {
   .archive-table td:nth-child(3),
   .archive-table th:nth-child(4),
   .archive-table td:nth-child(4) { display: none; }
+  .radio-form-grid,
+  .radio-choice-columns { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 480px) {

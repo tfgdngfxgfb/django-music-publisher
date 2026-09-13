@@ -1463,7 +1463,7 @@ def radio_edit(request, pk):
         return redirect(return_url)
     return render(
         request,
-        "workbench/form.html",
+        "workbench/radio_metadata_form.html",
         _page_context(
             "library",
             f"Radiometadata — {recording.title}",

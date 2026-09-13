@@ -136,17 +136,28 @@ class RecordingForm(forms.ModelForm):
 
 
 class RadioMetadataForm(forms.ModelForm):
+    energy = forms.TypedChoiceField(
+        label="Energy",
+        required=False,
+        coerce=int,
+        empty_value=None,
+        choices=(
+            ("", "Ikke registrert"),
+            *((str(value), f"{value} av 5") for value in range(1, 6)),
+        ),
+        help_text="P7s energinivå 1–5. Leses fra FLAC-taggen RATING.",
+    )
     channels = forms.ModelMultipleChoiceField(
         Channel.objects.filter(is_active=True),
         label="Kanaler",
         required=False,
-        widget=forms.CheckboxSelectMultiple,
+        widget=forms.CheckboxSelectMultiple(attrs={"class": "radio-choice-grid"}),
     )
     target_audiences = forms.ModelMultipleChoiceField(
         TargetAudience.objects.filter(is_active=True),
         label="Målgrupper",
         required=False,
-        widget=forms.CheckboxSelectMultiple,
+        widget=forms.CheckboxSelectMultiple(attrs={"class": "radio-choice-grid"}),
     )
 
     class Meta:
@@ -154,10 +165,10 @@ class RadioMetadataForm(forms.ModelForm):
         fields = (
             "genre",
             "language",
-            "target_audiences",
-            "channels",
             "gender",
             "energy",
+            "channels",
+            "target_audiences",
             "verification_status",
             "notes",
         )
@@ -170,20 +181,17 @@ class RadioMetadataForm(forms.ModelForm):
                 self.instance.target_audiences.all()
             )
 
-    def save(self, commit=True):
-        entry = super().save(commit=commit)
-        if commit:
-            MusicLibraryChannel.objects.filter(library_entry=entry).delete()
-            for channel in self.cleaned_data["channels"]:
-                MusicLibraryChannel.objects.create(
-                    library_entry=entry, channel=channel
-                )
-            MusicLibraryTargetAudience.objects.filter(library_entry=entry).delete()
-            for target in self.cleaned_data["target_audiences"]:
-                MusicLibraryTargetAudience.objects.create(
-                    library_entry=entry, target_audience=target
-                )
-        return entry
+    def _save_m2m(self):
+        """Persist canonical through rows without Django's bulk-create shortcut."""
+        entry = self.instance
+        MusicLibraryChannel.objects.filter(library_entry=entry).delete()
+        for channel in self.cleaned_data["channels"]:
+            MusicLibraryChannel.objects.create(library_entry=entry, channel=channel)
+        MusicLibraryTargetAudience.objects.filter(library_entry=entry).delete()
+        for target in self.cleaned_data["target_audiences"]:
+            MusicLibraryTargetAudience.objects.create(
+                library_entry=entry, target_audience=target
+            )
 
 
 class FlacScanForm(forms.Form):
