@@ -47,15 +47,14 @@ class RecordingAdmin(CanonicalAdmin):
             {"fields": ("title", "version_designation", "metadata_status")},
         ),
         (
-            "Optional metadata",
+            "Valgfrie metadata",
             {"fields": ("recording_kind", "duration_ms", "language")},
         ),
         (
-            "Identity and history",
+            "Identitet og historikk",
             {"fields": ("id", "created_at", "updated_at", "revision")},
         ),
     )
-
 
 @admin.register(RecordingContribution)
 class ContributionAdmin(CanonicalAdmin):
@@ -70,6 +69,9 @@ class ContributionAdmin(CanonicalAdmin):
     search_fields = ("recording__title", "party__name", "credited_as")
     autocomplete_fields = ("recording", "party", "artist_identity")
 
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("recording", "party")
+
 
 @admin.register(ExternalIdentifier)
 class IdentifierAdmin(CanonicalAdmin):
@@ -78,3 +80,6 @@ class IdentifierAdmin(CanonicalAdmin):
     list_filter = ("scheme",)
     autocomplete_fields = ("recording",)
     readonly_fields = (*CanonicalAdmin.readonly_fields, "normalized_value")
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("recording")

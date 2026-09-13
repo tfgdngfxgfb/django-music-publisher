@@ -37,7 +37,8 @@ def main():
             SECURE_SSL_REDIRECT="false",
             DJANGO_SETTINGS_MODULE="rights_project.settings",
             SECRET_KEY=secrets.token_urlsafe(48),
-            DATABASE_URL="sqlite:///" + (folder / "fresh.sqlite3").as_posix(),
+            DATABASE_URL=os.environ.get("SMOKE_DATABASE_URL")
+            or "sqlite:///" + (folder / "fresh.sqlite3").as_posix(),
             ALLOWED_HOSTS="127.0.0.1,localhost",
             DJANGO_SUPERUSER_USERNAME="smoke-admin",
             DJANGO_SUPERUSER_EMAIL="",
@@ -109,7 +110,15 @@ def main():
                         time.sleep(0.25)
                 else:
                     raise RuntimeError("Development server did not start")
-                require("P7 Rights" in html, "Landing page is missing its title")
+                require(
+                    "P7 Arkiv og rettigheter" in html,
+                    "Forsiden mangler riktig tittel",
+                )
+                help_html, _ = request("/hjelp/")
+                require(
+                    "Work ≠ Recording ≠ Release ≠ Track ≠ lydfil" in help_html,
+                    "Hjelpesiden mangler domeneforklaringen",
+                )
                 html, _ = request("/admin/login/")
 
                 def csrf(html):
@@ -127,7 +136,7 @@ def main():
                     },
                 )
                 require(
-                    url.endswith("/admin/") and "Catalogue" in html,
+                    url.endswith("/admin/") and "Katalog" in html,
                     "Admin login failed",
                 )
                 html, _ = request("/admin/catalogue/recording/add/")
@@ -182,7 +191,7 @@ def main():
                 require(recording_id in html, "Recording UUID changed after edit")
                 html, _ = request("/admin/music_publisher/work/")
                 require(
-                    "Musical work" in html or "Musical Work" in html,
+                    "Musikalsk verk" in html or "Musikalske verk" in html,
                     "DMP work administration is unavailable",
                 )
                 manage(
@@ -197,7 +206,11 @@ def main():
                         {
                             "result": "PASS",
                             "server": base,
-                            "database": "fresh temporary SQLite",
+                            "database": (
+                                "configured database"
+                                if os.environ.get("SMOKE_DATABASE_URL")
+                                else "fresh temporary SQLite"
+                            ),
                             "checks": [
                                 "migrate",
                                 "system check",

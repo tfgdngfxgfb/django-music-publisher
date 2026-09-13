@@ -34,13 +34,12 @@
             {% endif %}
           </tr>
         {% endfor %}
-          {% if group.name == 'Musical Works' %}
+          {% if group.name == 'Musikalske verk' %}
             <tr>
             {% if perms.music_publisher.can_process_royalties %}
-                <th scope="row"><a href="{% url 'royalty_calculation' %}">Royalty Calculations</a></th>
+                <th scope="row"><a href="{% url 'royalty_calculation' %}">Royaltyberegning</a></th>
             {% else %}
-                <th scope="row"><span title="Requires `Can process royalty statement` permission.
-                 See user manual for more information.">Royalty Calculations</span></th>
+                <th scope="row"><span title="Krever tilgang til å behandle royaltyavregninger.">Royaltyberegning</span></th>
             {% endif %}
             {% if show_changelinks %}
                 <td>&nbsp;</td>

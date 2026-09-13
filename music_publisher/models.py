@@ -45,6 +45,11 @@ WORLD_DICT = {"tis-a": "2WL", "tis-n": "2136", "name": "World"}
 class Artist(ArtistBase):
     """Performing artist."""
 
+    class Meta:
+        verbose_name = "utøvende artist"
+        verbose_name_plural = "utøvende artister"
+        ordering = ("last_name", "first_name", "-id")
+
     def get_dict(self):
         """Get the object in an internal dictionary format
 
@@ -73,7 +78,8 @@ class Label(LabelBase):
     """Music Label."""
 
     class Meta:
-        verbose_name = "Music Label"
+        verbose_name = "plateselskap"
+        verbose_name_plural = "plateselskaper"
 
     def __str__(self):
         return self.name.upper()
@@ -104,8 +110,8 @@ class Library(LibraryBase):
     """Music Library."""
 
     class Meta:
-        verbose_name = "Music Library"
-        verbose_name_plural = "Music Libraries"
+        verbose_name = "musikkbibliotek"
+        verbose_name_plural = "musikkbibliotek"
         ordering = ("name",)
 
     # name = models.CharField(
@@ -150,7 +156,8 @@ class Release(ReleaseBase):
     """
 
     class Meta:
-        verbose_name = "Release"
+        verbose_name = "utgivelse"
+        verbose_name_plural = "utgivelser"
 
     library = models.ForeignKey(
         Library, null=True, blank=True, on_delete=models.PROTECT
@@ -268,8 +275,8 @@ class LibraryRelease(Release):
 
     class Meta:
         proxy = True
-        verbose_name = "Library Release"
-        verbose_name_plural = "Library Releases"
+        verbose_name = "bibliotekutgivelse"
+        verbose_name_plural = "bibliotekutgivelser"
 
     objects = LibraryReleaseManager()
 
@@ -340,8 +347,8 @@ class CommercialRelease(Release):
 
     class Meta:
         proxy = True
-        verbose_name = "Commercial Release"
-        verbose_name_plural = "Commercial Releases"
+        verbose_name = "kommersiell utgivelse"
+        verbose_name_plural = "kommersielle utgivelser"
 
     objects = CommercialReleaseManager()
 
@@ -385,8 +392,8 @@ class Playlist(Release):
 
     class Meta:
         proxy = True
-        verbose_name = "Playlist"
-        verbose_name_plural = "Playlists"
+        verbose_name = "spilleliste"
+        verbose_name_plural = "spillelister"
 
     objects = PlaylistManager()
 
@@ -418,8 +425,8 @@ class Writer(WriterBase):
 
     class Meta:
         ordering = ("last_name", "first_name", "ipi_name", "-id")
-        verbose_name = "Writer"
-        verbose_name_plural = "Writers"
+        verbose_name = "opphaver"
+        verbose_name_plural = "opphavere"
 
     def __str__(self):
         name = super().__str__()
@@ -594,7 +601,8 @@ class Work(TitleBase):
     """
 
     class Meta:
-        verbose_name = "Musical Work"
+        verbose_name = "musikalsk verk"
+        verbose_name_plural = "musikalske verk"
         ordering = ("-id",)
         permissions = (
             ("can_process_royalties", "Can perform royalty calculations"),
@@ -865,7 +873,8 @@ class AlternateTitle(TitleBase):
             models.Index(fields=["work_id", "title_type", "title"]),
         ]
         ordering = ("-suffix", "title_type", "title")
-        verbose_name = "Alternate Title"
+        verbose_name = "alternativ tittel"
+        verbose_name_plural = "alternative titler"
 
     def get_dict(self):
         """Create a data structure that can be serialized as JSON.
@@ -899,10 +908,8 @@ class ArtistInWork(models.Model):
     artist = models.ForeignKey(Artist, on_delete=models.PROTECT)
 
     class Meta:
-        verbose_name = "Artist performing"
-        verbose_name_plural = (
-            "Artists performing (not mentioned in recordings section)"
-        )
+        verbose_name = "utøvende artist"
+        verbose_name_plural = "utøvende artister på verk"
         indexes = [
             models.Index(fields=["work", "artist"]),
         ]
@@ -943,8 +950,8 @@ class WriterInWork(models.Model):
     """
 
     class Meta:
-        verbose_name = "Writer in Work"
-        verbose_name_plural = "Writers in Work"
+        verbose_name = "opphaver i verk"
+        verbose_name_plural = "opphavere i verk"
         indexes = [
             models.Index(fields=["work", "writer", "controlled"]),
         ]
@@ -1135,8 +1142,8 @@ class Recording(models.Model):
     """
 
     class Meta:
-        verbose_name = "Recording"
-        verbose_name_plural = "Recordings"
+        verbose_name = "DMP-innspilling"
+        verbose_name_plural = "DMP-innspillinger"
         ordering = ("-id",)
 
     _recording_id = models.CharField(
@@ -1355,7 +1362,8 @@ class Track(models.Model):
     """
 
     class Meta:
-        verbose_name = "Track"
+        verbose_name = "spor"
+        verbose_name_plural = "spor"
         indexes = [
             models.Index(fields=["recording", "release"]),
             models.Index(fields=["release", "cut_number"]),
@@ -1428,8 +1436,8 @@ class CWRExport(models.Model):
     """
 
     class Meta:
-        verbose_name = "CWR Export"
-        verbose_name_plural = "CWR Exports"
+        verbose_name = "CWR-eksport"
+        verbose_name_plural = "CWR-eksporter"
         ordering = ("-id",)
 
     objects = DeferCwrManager()
@@ -2074,7 +2082,8 @@ class WorkAcknowledgement(models.Model):
     """
 
     class Meta:
-        verbose_name = "Registration Acknowledgement"
+        verbose_name = "registreringsbekreftelse"
+        verbose_name_plural = "registreringsbekreftelser"
         ordering = ("-date", "-id")
         indexes = [
             models.Index(fields=["society_code", "remote_work_id"]),
@@ -2137,7 +2146,8 @@ class ACKImport(models.Model):
     """
 
     class Meta:
-        verbose_name = "CWR ACK Import"
+        verbose_name = "CWR ACK-import"
+        verbose_name_plural = "CWR ACK-importer"
         ordering = ("-date", "-id")
 
     objects = DeferCwrManager()
@@ -2160,7 +2170,8 @@ class DataImport(models.Model):
     """
 
     class Meta:
-        verbose_name = "Data Import"
+        verbose_name = "dataimport"
+        verbose_name_plural = "dataimporter"
         ordering = ("-date", "-id")
 
     filename = models.CharField(max_length=60, editable=False)

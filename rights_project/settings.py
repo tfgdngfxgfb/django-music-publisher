@@ -35,6 +35,7 @@ INSTALLED_APPS = [  # noqa: F405
 ]
 ROOT_URLCONF = "rights_project.urls"
 WSGI_APPLICATION = "rights_project.wsgi.application"
+LANGUAGE_CODE = "nb"
 TEMPLATES[0]["DIRS"] = [PROJECT_DIR / "rights_project" / "templates"]  # noqa: F405
 DATABASES = {
     "default": dj_database_url.config(  # noqa: F405

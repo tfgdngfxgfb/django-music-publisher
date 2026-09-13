@@ -8,33 +8,41 @@ from .validators import normalize_isrc, validate_language
 
 class Recording(CanonicalModel):
     class Kind(models.TextChoices):
-        SOUND = "sound", "Sound recording"
-        VIDEO = "video", "Music video recording"
+        SOUND = "sound", "Lydinnspilling"
+        VIDEO = "video", "Musikkvideoinnspilling"
 
     class Status(models.TextChoices):
-        DRAFT = "draft", "Draft"
-        REVIEWED = "reviewed", "Metadata reviewed"
+        DRAFT = "draft", "Utkast"
+        REVIEWED = "reviewed", "Metadata kontrollert"
 
-    title = models.CharField(max_length=500, validators=[validate_not_blank])
-    version_designation = models.CharField(max_length=255, blank=True)
-    recording_kind = models.CharField(max_length=20, choices=Kind.choices, blank=True)
+    title = models.CharField("tittel", max_length=500, validators=[validate_not_blank])
+    version_designation = models.CharField(
+        "versjonsbetegnelse", max_length=255, blank=True
+    )
+    recording_kind = models.CharField(
+        "innspillingstype", max_length=20, choices=Kind.choices, blank=True
+    )
     duration_ms = models.PositiveBigIntegerField(
-        "Duration (milliseconds)", null=True, blank=True
+        "varighet (millisekunder)", null=True, blank=True
     )
     language = models.CharField(
         max_length=64,
         blank=True,
         validators=[validate_language],
-        help_text="Optional language tag, e.g. nb or en.",
+        verbose_name="språk",
+        help_text="Valgfri språkkode, for eksempel nb eller en.",
     )
     metadata_status = models.CharField(
         max_length=20,
         choices=Status.choices,
         default=Status.DRAFT,
-        help_text="Describes metadata only; does not establish rights or clearance.",
+        verbose_name="metadatastatus",
+        help_text="Beskriver bare metadata og dokumenterer ikke rettigheter eller klarering.",
     )
 
     class Meta:
+        verbose_name = "innspilling"
+        verbose_name_plural = "innspillinger"
         ordering = ("title", "id")
         constraints = [
             models.CheckConstraint(
@@ -57,29 +65,41 @@ class Recording(CanonicalModel):
 
 class RecordingContribution(CanonicalModel):
     class Role(models.TextChoices):
-        PRIMARY = "primary_artist", "Primary artist"
-        FEATURED = "featured_artist", "Featured artist"
-        MUSICIAN = "musician", "Musician"
-        VOCALIST = "vocalist", "Vocalist"
-        PRODUCER = "producer", "Producer"
-        ENGINEER = "engineer", "Engineer"
-        CONDUCTOR = "conductor", "Conductor"
-        CHOIR = "choir", "Choir"
+        PRIMARY = "primary_artist", "Hovedartist"
+        FEATURED = "featured_artist", "Medvirkende artist"
+        MUSICIAN = "musician", "Musiker"
+        VOCALIST = "vocalist", "Vokalist"
+        PRODUCER = "producer", "Produsent"
+        ENGINEER = "engineer", "Lydtekniker"
+        CONDUCTOR = "conductor", "Dirigent"
+        CHOIR = "choir", "Kor"
 
     recording = models.ForeignKey(
-        Recording, on_delete=models.CASCADE, related_name="contributions"
+        Recording,
+        verbose_name="innspilling",
+        on_delete=models.CASCADE,
+        related_name="contributions",
     )
     party = models.ForeignKey(
-        Party, on_delete=models.PROTECT, related_name="recording_contributions"
+        Party,
+        verbose_name="person/organisasjon",
+        on_delete=models.PROTECT,
+        related_name="recording_contributions",
     )
-    role = models.CharField(max_length=30, choices=Role.choices)
+    role = models.CharField("rolle", max_length=30, choices=Role.choices)
     artist_identity = models.ForeignKey(
-        ArtistIdentity, on_delete=models.PROTECT, null=True, blank=True
+        ArtistIdentity,
+        verbose_name="artistidentitet",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
     )
-    credited_as = models.CharField(max_length=255, blank=True)
-    display_order = models.PositiveIntegerField(default=0)
+    credited_as = models.CharField("kreditert som", max_length=255, blank=True)
+    display_order = models.PositiveIntegerField("visningsrekkefølge", default=0)
 
     class Meta:
+        verbose_name = "medvirkende"
+        verbose_name_plural = "medvirkende"
         ordering = ("display_order", "id")
         constraints = [
             models.CheckConstraint(
@@ -109,7 +129,7 @@ class RecordingContribution(CanonicalModel):
             raise ValidationError(
                 {
                     "artist_identity": (
-                        "Artist identity must belong to the selected party."
+                        "Artistidentiteten må tilhøre valgt person eller organisasjon."
                     )
                 }
             )
@@ -123,24 +143,33 @@ class ExternalIdentifier(CanonicalModel):
         ISRC = "ISRC", "ISRC"
 
     recording = models.ForeignKey(
-        Recording, on_delete=models.CASCADE, related_name="identifiers"
+        Recording,
+        verbose_name="innspilling",
+        on_delete=models.CASCADE,
+        related_name="identifiers",
     )
     scheme = models.CharField(
-        max_length=30, choices=Scheme.choices, default=Scheme.ISRC
+        "type", max_length=30, choices=Scheme.choices, default=Scheme.ISRC
     )
     namespace = models.CharField(
         max_length=100,
         blank=True,
         default="",
-        help_text="ISRC is global: leave empty. Reserved for future issuer-scoped schemes.",
+        verbose_name="navnerom",
+        help_text="ISRC er global: la feltet stå tomt. Feltet er reservert for senere identifikatortyper.",
     )
     value = models.CharField(
         max_length=255,
-        help_text="Original entered value is retained; normalization is automatic.",
+        verbose_name="verdi",
+        help_text="Den innskrevne verdien beholdes. Normalisering skjer automatisk.",
     )
-    normalized_value = models.CharField(max_length=255, editable=False)
+    normalized_value = models.CharField(
+        "normalisert verdi", max_length=255, editable=False
+    )
 
     class Meta:
+        verbose_name = "ekstern identifikator"
+        verbose_name_plural = "eksterne identifikatorer"
         ordering = ("scheme", "normalized_value")
         constraints = [
             models.UniqueConstraint(
@@ -174,7 +203,7 @@ class ExternalIdentifier(CanonicalModel):
         super().clean()
         if self.namespace:
             raise ValidationError(
-                {"namespace": "ISRC uses the global namespace (leave empty)."}
+                {"namespace": "ISRC bruker et globalt navnerom. La feltet stå tomt."}
             )
 
     def __str__(self):

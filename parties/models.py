@@ -7,18 +7,20 @@ from rights_core.models import CanonicalModel, validate_not_blank
 class Party(CanonicalModel):
     class Kind(models.TextChoices):
         PERSON = "person", "Person"
-        ORGANIZATION = "organization", "Organization"
-        GROUP = "group", "Group"
+        ORGANIZATION = "organization", "Organisasjon"
+        GROUP = "group", "Gruppe"
 
     name = models.CharField(
+        "navn",
         max_length=255,
         validators=[validate_not_blank],
-        help_text="Person, organization or group name; not a rights ownership assertion.",
+        help_text="Navnet på personen, organisasjonen eller gruppen. Navnet dokumenterer ikke eierskap.",
     )
-    kind = models.CharField(max_length=20, choices=Kind.choices)
+    kind = models.CharField("type", max_length=20, choices=Kind.choices)
 
     class Meta:
-        verbose_name_plural = "Parties"
+        verbose_name = "person/organisasjon"
+        verbose_name_plural = "personer og organisasjoner"
         ordering = ("name", "id")
         constraints = [
             models.CheckConstraint(
@@ -37,12 +39,18 @@ class Party(CanonicalModel):
 
 class ArtistIdentity(CanonicalModel):
     party = models.ForeignKey(
-        Party, on_delete=models.PROTECT, related_name="artist_identities"
+        Party,
+        verbose_name="person/organisasjon",
+        on_delete=models.PROTECT,
+        related_name="artist_identities",
     )
-    display_name = models.CharField(max_length=255, validators=[validate_not_blank])
+    display_name = models.CharField(
+        "artistnavn", max_length=255, validators=[validate_not_blank]
+    )
 
     class Meta:
-        verbose_name_plural = "Artist identities"
+        verbose_name = "artistidentitet"
+        verbose_name_plural = "artistidentiteter"
         ordering = ("display_name", "id")
         constraints = [
             models.CheckConstraint(
@@ -63,7 +71,7 @@ class ArtistIdentity(CanonicalModel):
             if original and original != self.party_id:
                 raise ValidationError(
                     {
-                        "party": "Create a new artist identity to represent another party."
+                        "party": "Opprett en ny artistidentitet for en annen person eller organisasjon."
                     }
                 )
 

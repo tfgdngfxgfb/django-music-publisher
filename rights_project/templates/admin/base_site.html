@@ -1,0 +1,11 @@
+{% extends "admin/base.html" %}
+
+{% block title %}{{ title }} | P7 Arkiv og rettigheter{% endblock %}
+
+{% block branding %}
+<div id="site-name"><a href="{% url 'admin:index' %}">P7 Arkiv og rettigheter</a></div>
+{% endblock %}
+
+{% block nav-global %}
+<a href="{% url 'help' %}" style="color:inherit;display:inline-block;padding:10px 15px">Hjelp</a>
+{% endblock %}

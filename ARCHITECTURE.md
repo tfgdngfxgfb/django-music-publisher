@@ -1,12 +1,12 @@
-# Architecture assessment: master rights alongside Django Music Publisher
+# P7 Archive & Rights / P7 Arkiv og rettigheter
 
 Date: 12 September 2026
-Status: proposed architecture; no application implementation or schema changes
+Status: architectural baseline; phase 1 implemented and phase 1.5 stabilized
 Audience: P7 product owners, developers and future data-migration partners
 
 ## 1. Recommendation and scope
 
-Build a modular Django application around the existing `music_publisher` app. Keep DMP as the authority for publishing works, writers, manuscript shares, CWR and acknowledgements. Add an independent recording catalogue and master-rights domain, connected through an optional integration app. Start with one PostgreSQL database and one deployment; separate services would add unnecessary synchronization and operational complexity at this stage.
+Build a modular archive and rights application around the proven parts of the existing `music_publisher` app. DMP is the historical foundation and remains responsible for publishing works, writers, manuscript shares, CWR and acknowledgements. P7's canonical architecture and data integrity take priority over future upstream merge simplicity. Add an independent recording catalogue and master-rights domain, connected through an optional integration app. Start with one PostgreSQL database and one deployment; separate services would add unnecessary synchronization and operational complexity at this stage.
 
 A recording must be creatable with a UUID and its own title, without a Work, ISRC, release, owner or publishing registration. Incomplete metadata and unverified rights must be visible states, not fabricated placeholder works or assumed ownership. Later, a user can create a Work and writers in DMP before any recording exists. Neither workflow depends on completing the other.
 
@@ -83,7 +83,7 @@ Initially keep code in this repository; do not split services or publish a repla
 
 ```text
 rights_project/          New host settings, URLs, operator branding and deployment
-music_publisher/         Unchanged upstream publishing component
+music_publisher/         Historical DMP publishing foundation; focused P7 changes allowed
 rights_core/             UUID conventions, Entity registry, reference vocabularies
 parties/                 Parties, names, artist identities, relationships
 catalogue/               Recordings, releases, tracks, labels, catalogues, assets
@@ -228,16 +228,16 @@ Export a versioned neutral bundle: manifest, normalized entity tables (JSON Line
 
 Schema/profile versions, explicit null semantics, decimal strings and ISO dates belong in the exchange contract. Test export → empty-database import → export for referential integrity and semantic equality, including unlinked masters and unknown/disputed rights. Enterprise adapters map this stable schema to recipient-specific fields and report every dropped/unmapped concept. Do not promise a lossless migration to an unspecified vendor: choose a target and run representative mapping/round-trip tests first. Portable relational facts and explicit crosswalks minimize the work without pretending all enterprise schemas agree.
 
-## 7. Migration and upstream synchronization
+## 7. Migration and DMP maintenance
 
 ### Repository and dependency strategy
 
-1. Record this upstream commit as the initial baseline. Keep `origin` for the user's fork and `upstream` for the original project. Use normal feature branches and reviewed upstream merge commits; no history rewrite of shared branches.
-2. Keep `music_publisher/**` and its migration names/app label untouched. Put new settings, templates, tests and dependencies outside it. Avoid global template overrides that unexpectedly change DMP screens.
+1. Keep the recorded upstream commit as historical provenance. `origin` is P7's repository; `upstream` may remain as a reference, but compatibility and easy merging are not architecture goals.
+2. Preserve the `music_publisher` app label, license notices, existing data and migration history. Make focused, tested changes when P7 data integrity, correctness or usability requires them; document material divergence.
 3. Treat `dmp_project`, packaging and upstream CI as upstream-owned example/deployment assets. A new `rights_project` and separate tested requirements/CI own the combined deployment. Do not install the checkout and a PyPI copy of the same app simultaneously.
-4. Add only new-app migrations, with bridge dependencies on the appropriate unchanged DMP migration. Preserve squash `replaces` histories; test fresh installs and representative previously migrated databases. Do not squash or fake upstream migrations to simplify the graph.
-5. For an upstream update, fetch and compare source, migration graph, settings and export behavior in an integration branch. Test original DMP tests plus bridge/rights contracts, migration rehearsals and stored CWR fixtures. Distinguish intentional output changes from regressions. Merge only after that review.
-6. If a DMP fix becomes necessary, isolate it as a small documented patch with an upstream issue/PR reference and regression test. Prefer contributing it upstream. Extract DMP as a pinned external package later only once packaging and runtime requirements agree and the bridge has stable contracts.
+4. Add normal forward migrations without rewriting history. Preserve squash `replaces` histories; test fresh installs and representative previously migrated databases. Do not squash or fake migrations to simplify the graph.
+5. Any future upstream code adoption is a selective port reviewed against P7's model, migration graph, CWR fixtures and complete test suite. It must not weaken canonical boundaries or overwrite P7-specific fixes.
+6. Keep DMP fixes focused and covered by regression tests. Extracting DMP as an external package is optional and only appropriate if its runtime and interfaces later align with P7's needs.
 
 ### Existing-data migration
 

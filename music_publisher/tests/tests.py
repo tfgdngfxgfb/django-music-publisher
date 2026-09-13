@@ -131,7 +131,7 @@ class DataImportTest(TestCase):
         di.log(self.obj, "test message")
         self.assertEqual(LogEntry.objects.count(), 1)
         le = LogEntry.objects.first()
-        self.assertEqual(str(le), "Added “ARTIST ONE”.")
+        self.assertEqual(str(le), 'La til "ARTIST ONE".')
         self.assertEqual(le.change_message, "test message")
 
     def test_unknown_key_exceptions(self):

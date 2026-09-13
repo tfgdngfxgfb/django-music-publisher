@@ -1,14 +1,15 @@
 <!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>P7 Rights</title></head>
+<html lang="nb">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>P7 Arkiv og rettigheter</title></head>
 <body style="font-family:system-ui,sans-serif;max-width:48rem;margin:4rem auto;padding:0 1rem">
-  <h1>P7 Rights</h1>
-  <p>Master recordings and music publishing in one application.</p>
+  <h1>P7 Arkiv og rettigheter</h1>
+  <p>Masterinnspillinger og musikkforlag i én applikasjon.</p>
   <ul>
-    <li><a href="{% url 'admin:catalogue_recording_changelist' %}">Master catalogue — Recordings</a></li>
-    <li><a href="{% url 'admin:app_list' app_label='music_publisher' %}">Publishing / DMP — Works, Writers and CWR</a></li>
-    <li><a href="{% url 'admin:index' %}">Administration</a></li>
+    <li><a href="{% url 'admin:catalogue_recording_changelist' %}">Masterkatalog — innspillinger</a></li>
+    <li><a href="{% url 'admin:app_list' app_label='music_publisher' %}">Musikkforlag / DMP — verk, opphavere og CWR</a></li>
+    <li><a href="{% url 'admin:index' %}">Administrasjon</a></li>
+    <li><a href="{% url 'help' %}">Hjelp — begreper og registrering</a></li>
   </ul>
-  <p>Sign in with your administrator account to manage the catalogue.</p>
+  <p>Logg inn med administratorkontoen din for å arbeide med katalogen.</p>
 </body>
 </html>

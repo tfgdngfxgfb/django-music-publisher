@@ -252,6 +252,17 @@ class CatalogueAdminTests(TransactionTestCase):
         }
 
     def test_admin_models_and_pages(self):
+        admin_index = self.client.get(reverse("admin:index"))
+        for text in (
+            "P7 Arkiv og rettigheter",
+            "Katalog",
+            "Innspillinger",
+            "Personer og organisasjoner",
+            "Musikalske verk",
+            "Hjelp",
+        ):
+            with self.subTest(text=text):
+                self.assertContains(admin_index, text)
         for model in (
             Recording,
             RecordingContribution,
@@ -306,11 +317,16 @@ class CatalogueAdminTests(TransactionTestCase):
         )
         response = self.client.post(reverse("admin:catalogue_recording_add"), data)
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Enter a 12-character ISRC")
+        self.assertContains(response, "Skriv inn en ISRC med 12 tegn")
         self.assertEqual(Recording.objects.count(), 0)
 
     def test_landing_dmp_and_login(self):
-        self.assertContains(self.client.get("/"), "P7 Rights")
+        self.assertContains(self.client.get("/"), "P7 Arkiv og rettigheter")
+        help_response = self.client.get("/hjelp/")
+        self.assertContains(
+            help_response, "Work ≠ Recording ≠ Release ≠ Track ≠ lydfil"
+        )
+        self.assertContains(help_response, "innebærer ikke eierskap")
         self.assertEqual(
             self.client.get(
                 reverse("admin:music_publisher_work_changelist")

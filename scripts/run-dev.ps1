@@ -3,7 +3,7 @@ param(
     [string]$HostAddress = "127.0.0.1",
     [int]$Port = 8000,
     [string]$AdminUsername = "admin",
-    [string]$AdminPassword = "123",
+    [string]$AdminPassword = "",
     [switch]$CheckOnly
 )
 
@@ -52,22 +52,22 @@ Write-Host "Applying database migrations..."
 if ($LASTEXITCODE -ne 0) { throw "Database migration failed." }
 
 $env:P7_DEV_ADMIN_USERNAME = $AdminUsername
-$env:P7_DEV_ADMIN_PASSWORD = $AdminPassword
+if ($AdminPassword) { $env:P7_DEV_ADMIN_PASSWORD = $AdminPassword }
 & $VenvPython manage.py ensure_dev_admin
-Remove-Item Env:P7_DEV_ADMIN_USERNAME, Env:P7_DEV_ADMIN_PASSWORD
+Remove-Item Env:P7_DEV_ADMIN_USERNAME -ErrorAction SilentlyContinue
+Remove-Item Env:P7_DEV_ADMIN_PASSWORD -ErrorAction SilentlyContinue
 if ($LASTEXITCODE -ne 0) { throw "Could not prepare the local administrator." }
 
 & $VenvPython manage.py check
 if ($LASTEXITCODE -ne 0) { throw "Django system check failed." }
 
 Write-Host ""
-Write-Host "P7 Rights is ready."
-Write-Host "Address:  http://${HostAddress}:$Port/"
-Write-Host "Admin:    http://${HostAddress}:$Port/admin/"
-Write-Host "Username: $AdminUsername"
-Write-Host "Password: $AdminPassword"
+Write-Host "P7 Arkiv og rettigheter er klar."
+Write-Host "Adresse:      http://${HostAddress}:$Port/"
+Write-Host "Administrasjon: http://${HostAddress}:$Port/admin/"
+Write-Host "Brukernavn:   $AdminUsername"
 
 if (-not $CheckOnly) {
-    Write-Host "Press Ctrl+C to stop the application."
+    Write-Host "Trykk Ctrl+C for å stoppe programmet."
     & $VenvPython manage.py runserver "${HostAddress}:$Port"
 }

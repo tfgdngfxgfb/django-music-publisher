@@ -16,3 +16,6 @@ class ArtistIdentityAdmin(CanonicalAdmin):
     list_display = ("display_name", "party", "id")
     search_fields = ("display_name", "party__name", "id")
     autocomplete_fields = ("party",)
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("party")

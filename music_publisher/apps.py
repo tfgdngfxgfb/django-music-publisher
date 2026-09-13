@@ -17,7 +17,7 @@ class MusicPublisherConfig(AppConfig):
 
     name = "music_publisher"
     label = "music_publisher"
-    verbose_name = "Music Publisher"
+    verbose_name = "Musikkforlag (DMP)"
 
     def ready(self):
         """Validate settings when ready to prevent deployments with invalid

@@ -138,13 +138,13 @@
 
 <body class="{% if is_popup %}popup {% endif %}{% block bodyclass %}{% endblock %}"
   data-admin-utc-offset="{% now "Z" %}">
-<a href="#content-start" class="skip-to-content-link">{% translate 'Skip to main content' %}</a>
+<a href="#content-start" class="skip-to-content-link">Gå til hovedinnhold</a>
 <!-- Container -->
 <div id="container">
 
     {% if not is_popup %}
         <div>
-            <a href="https://django-music-publisher.readthedocs.io/" target="_blank"><img src="{% static 'android-chrome-192x192.png' %}" alt="DMP" class="logo"></a>
+            <a href="/"><img src="{% static 'android-chrome-192x192.png' %}" alt="P7" class="logo"></a>
             <!-- Header -->
             {% block header %}
             <div id="header">
@@ -155,11 +155,6 @@
                 {% if has_permission %}
                 <div id="user-tools">
                     {% block userlinks %}
-                        {% if opts.app_label == 'music_publisher' %}
-                            <a href="https://django-music-publisher.readthedocs.io/en/latest/manual_{{ opts.model_name }}.html" target="_blank">User Manual</a> /
-                        {% else %}
-                            <a href="https://django-music-publisher.readthedocs.io/en/latest/manual.html" target="_blank">User Manual</a> /
-                        {% endif %}
                         {% if site_url %}
                             <a href="{{ site_url }}">{% translate 'View site' %}</a> /
                         {% endif %}

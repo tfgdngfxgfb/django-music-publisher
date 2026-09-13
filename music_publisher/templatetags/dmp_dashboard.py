@@ -23,7 +23,7 @@ def dmp_model_groups(model_list):
     """Return groups of models."""
     model_dict = OrderedDict([(el["object_name"], el) for el in model_list])
     sections = {
-        "Musical Works": [
+        "Musikalske verk": [
             "Work",
             "Publisher",
             "Writer",
@@ -32,7 +32,7 @@ def dmp_model_groups(model_list):
             "DataImport",
             "RoyaltyCalculation",
         ],
-        "Recordings": ["Recording", "Artist", "Label", "Playlist"],
-        "Releases": ["CommercialRelease", "LibraryRelease", "Library"],
+        "Innspillinger": ["Recording", "Artist", "Label", "Playlist"],
+        "Utgivelser": ["CommercialRelease", "LibraryRelease", "Library"],
     }
     yield from yield_sections(model_dict, sections)

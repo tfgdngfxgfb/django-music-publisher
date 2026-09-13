@@ -9,7 +9,9 @@ from django.db import models, router, transaction
 def validate_not_blank(value):
     """Reject empty or whitespace-only canonical names and titles."""
     if not value or not value.strip():
-        raise ValidationError("This value cannot be blank or whitespace only.")
+        raise ValidationError(
+            "Verdien kan ikke være tom eller bare inneholde mellomrom."
+        )
 
 
 class CanonicalQuerySet(models.QuerySet):
@@ -26,10 +28,12 @@ class CanonicalQuerySet(models.QuerySet):
 
 
 class CanonicalModel(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    revision = models.PositiveBigIntegerField(default=1, editable=False)
+    id = models.UUIDField(
+        "permanent UUID", primary_key=True, default=uuid.uuid4, editable=False
+    )
+    created_at = models.DateTimeField("opprettet", auto_now_add=True)
+    updated_at = models.DateTimeField("sist endret", auto_now=True)
+    revision = models.PositiveBigIntegerField("revisjon", default=1, editable=False)
 
     objects = CanonicalQuerySet.as_manager()
 
@@ -44,7 +48,7 @@ class CanonicalModel(models.Model):
 
     def save(self, *args, **kwargs):
         if getattr(self, "_saved_pk", self.pk) != self.pk:
-            raise ValidationError("Canonical UUIDs cannot be changed.")
+            raise ValidationError("Den permanente UUID-en kan ikke endres.")
         using = kwargs.get("using") or router.db_for_write(type(self), instance=self)
         with transaction.atomic(using=using):
             if not self._state.adding:
@@ -63,5 +67,5 @@ class CanonicalModel(models.Model):
 
     def delete(self, *args, **kwargs):
         if getattr(self, "_saved_pk", self.pk) != self.pk:
-            raise ValidationError("Canonical UUIDs cannot be changed.")
+            raise ValidationError("Den permanente UUID-en kan ikke endres.")
         return super().delete(*args, **kwargs)
