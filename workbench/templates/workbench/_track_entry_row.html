@@ -1,0 +1,42 @@
+<tr class="track-entry-row{% if form.errors %} has-errors{% endif %}" data-track-row>
+  <th scope="row" class="track-row-number" data-track-row-number>{{ row_number }}</th>
+  <td class="track-cell{% if form.disc_number.errors %} has-error{% endif %}">{{ form.disc_number }}{{ form.disc_number.errors }}</td>
+  <td class="track-cell{% if form.side.errors %} has-error{% endif %}">{{ form.side }}{{ form.side.errors }}</td>
+  <td class="track-cell track-position{% if form.track_number.errors or form.sequence_number.errors %} has-error{% endif %}">
+    <label class="sr-only" for="{{ form.track_number.id_for_label }}">Spornummer</label>
+    {{ form.track_number }}{{ form.track_number.errors }}
+    <label class="compact-label" for="{{ form.sequence_number.id_for_label }}">Rekkefølge</label>
+    {{ form.sequence_number }}{{ form.sequence_number.errors }}
+  </td>
+  <td class="track-cell{% if form.title_override.errors %} has-error{% endif %}">{{ form.title_override }}{{ form.title_override.errors }}</td>
+  <td class="track-cell{% if form.artist_identity.errors %} has-error{% endif %}">
+    {{ form.artist_identity }}{{ form.artist_identity.errors }}
+    <div class="track-paste-warning" data-track-paste-warning hidden></div>
+  </td>
+  <td class="track-cell{% if form.duration_display.errors %} has-error{% endif %}">{{ form.duration_display }}{{ form.duration_display.errors }}{{ form.duration_ms }}</td>
+  <td class="track-cell{% if form.new_isrc.errors %} has-error{% endif %}">{{ form.new_isrc }}{{ form.new_isrc.errors }}</td>
+  <td class="track-cell recording-link-cell{% if form.recording.errors or form.new_recording_title.errors or form.non_field_errors %} has-error{% endif %}">
+    <label class="compact-label" for="{{ form.existing_recording_search.id_for_label }}">Finn eksisterende</label>
+    {{ form.existing_recording_search }}
+    {{ form.recording }}{{ form.recording.errors }}
+    <span class="track-or">eller</span>
+    <label class="compact-label" for="{{ form.new_recording_title.id_for_label }}">Opprett ny innspilling</label>
+    {{ form.new_recording_title }}{{ form.new_recording_title.errors }}
+    <label class="force-create">{{ form.force_create }} <span>Opprett ny likevel</span></label>
+    {{ form.non_field_errors }}
+    {% if form.duplicate_candidates %}
+      <div class="track-candidates" role="alert">
+        <strong>Mulig eksisterende innspilling</strong>
+        {% for candidate in form.duplicate_candidates %}
+          <article class="track-candidate">
+            <div><strong>{{ candidate.recording.title }}</strong><small>{{ candidate.signals|join:", " }} · UUID {{ candidate.recording.pk }}</small></div>
+            <div class="track-candidate-actions">
+              <button class="button compact" type="button" data-use-recording="{{ candidate.recording.pk }}" data-recording-title="{{ candidate.recording.title }}">Bruk innspilling</button>
+              <a href="{% url 'workbench:recording' candidate.recording.pk %}" target="_blank" rel="noopener">Sammenlign</a>
+            </div>
+          </article>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </td>
+</tr>

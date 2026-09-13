@@ -206,6 +206,18 @@ class LibraryMembershipForm(forms.Form):
 
 
 class WorkbenchTrackCreationForm(TrackCreationForm):
+    duration_display = forms.CharField(
+        label="Varighet",
+        required=False,
+        help_text="Minutter og sekunder, for eksempel 3:42.",
+        widget=forms.TextInput(
+            attrs={
+                "placeholder": "3:42",
+                "inputmode": "numeric",
+                "data-track-field": "duration_display",
+            }
+        ),
+    )
     existing_recording_search = forms.CharField(
         label="Søk etter eksisterende innspilling",
         required=False,
@@ -214,6 +226,7 @@ class WorkbenchTrackCreationForm(TrackCreationForm):
                 "class": "recording-autocomplete",
                 "autocomplete": "off",
                 "placeholder": "Søk på tittel, artist eller ISRC",
+                "data-track-field": "existing_recording_search",
             }
         ),
     )
@@ -223,6 +236,28 @@ class WorkbenchTrackCreationForm(TrackCreationForm):
         self.fields["recording"].widget = forms.HiddenInput(
             attrs={"class": "recording-id"}
         )
+        self.fields["duration_ms"].widget = forms.HiddenInput()
+        field_attributes = {
+            "disc_number": {"placeholder": "1", "data-track-field": "disc_number"},
+            "side": {"placeholder": "A", "data-track-field": "side"},
+            "track_number": {"placeholder": "1", "data-track-field": "track_number"},
+            "sequence_number": {
+                "placeholder": "Rekkefølge",
+                "data-track-field": "sequence_number",
+            },
+            "title_override": {
+                "placeholder": "Tittel slik den står på utgivelsen",
+                "data-track-field": "title_override",
+            },
+            "artist_identity": {"data-track-field": "artist_identity"},
+            "new_isrc": {"placeholder": "NO-XXX-26-00001", "data-track-field": "new_isrc"},
+            "new_recording_title": {
+                "placeholder": "Tittel på ny innspilling",
+                "data-track-field": "new_recording_title",
+            },
+        }
+        for name, attributes in field_attributes.items():
+            self.fields[name].widget.attrs.update(attributes)
         self.order_fields(
             (
                 "existing_recording_search",
@@ -235,10 +270,36 @@ class WorkbenchTrackCreationForm(TrackCreationForm):
                 "track_number",
                 "sequence_number",
                 "title_override",
+                "duration_display",
                 "duration_ms",
                 "force_create",
             )
         )
+
+    def clean(self):
+        value = (self.cleaned_data.get("duration_display") or "").strip()
+        if value:
+            try:
+                if ":" in value:
+                    minutes, seconds = value.split(":", 1)
+                    if not minutes.isdigit() or not seconds.isdigit():
+                        raise ValueError
+                    seconds_value = int(seconds)
+                    if seconds_value > 59:
+                        raise ValueError
+                    total_seconds = int(minutes) * 60 + seconds_value
+                else:
+                    total_seconds = int(value)
+                if total_seconds < 0:
+                    raise ValueError
+            except ValueError:
+                self.add_error(
+                    "duration_display",
+                    "Bruk minutter:sekunder, for eksempel 3:42.",
+                )
+            else:
+                self.cleaned_data["duration_ms"] = total_seconds * 1000
+        return super().clean()
 
 
 class RecordingIdentifierForm(forms.ModelForm):

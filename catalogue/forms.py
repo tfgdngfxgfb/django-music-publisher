@@ -35,6 +35,7 @@ class TrackCreationForm(forms.Form):
 
     def clean(self):
         data = super().clean()
+        self.duplicate_candidates = ()
         recording = data.get("recording")
         title = (data.get("new_recording_title") or "").strip()
         if bool(recording) == bool(title):
@@ -51,6 +52,7 @@ class TrackCreationForm(forms.Form):
                 artist_identity=data.get("artist_identity"),
             )
             if matches:
+                self.duplicate_candidates = tuple(matches[:5])
                 suggestions = "; ".join(
                     f"{match.recording.title} – {', '.join(match.signals)} – UUID {match.recording.pk}"
                     for match in matches[:5]

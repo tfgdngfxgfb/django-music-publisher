@@ -1,43 +1,67 @@
 {% extends "workbench/base.html" %}
 {% block eyebrow %}<a class="back-link" href="{{ return_url }}">← {{ release.title }}</a>{% endblock %}
-{% block subtitle %}<p>Registrer opptil fem spor samlet. Hvert spor gjenbruker en innspilling eller oppretter innspilling og sporkobling atomisk.</p>{% endblock %}
+{% block subtitle %}<p>Registrer spor samlet. Sportittel og plassering gjelder denne utgivelsen; artist, ISRC og valgt eller ny innspilling er felles katalogdata.</p>{% endblock %}
 {% block content %}
-<form method="post" novalidate>
+<form method="post" novalidate data-track-entry data-next-sequence="{{ next_sequence }}">
   {% csrf_token %}
   <input type="hidden" name="return" value="{{ return_url }}">
   {{ formset.management_form }}
-  {{ formset.non_form_errors }}
-  <div class="track-stack">
-    {% for form in formset %}
-      <fieldset class="panel track-form">
-        <legend>Spor {{ forloop.counter }}</legend>
-        {{ form.non_field_errors }}
-        <div class="form-grid">
-          {% for field in form %}
-            {% if field.is_hidden %}
-              {{ field }}
-            {% else %}
-              <div class="field{% if field.errors %} has-error{% endif %}">
-                {{ field.label_tag }}{{ field }}{{ field.errors }}
-                {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
-              </div>
-            {% endif %}
+  {% if formset.non_form_errors %}<div class="message error" role="alert">{{ formset.non_form_errors }}</div>{% endif %}
+
+  <details class="panel track-paste">
+    <summary>Lim inn spor fra regneark eller tabell</summary>
+    <div class="track-paste-body">
+      <p>Lim inn tabulatordelte kolonner i denne rekkefølgen: <strong>plate, side, spor, sportittel, artist, varighet og ISRC</strong>. Første rad kan være overskrifter.</p>
+      <textarea rows="5" data-track-paste aria-label="Tabelltekst med spor" placeholder="1&#9;A&#9;1&#9;Første spor&#9;Artistnavn&#9;3:42&#9;NOXXX2600001"></textarea>
+      <div class="track-paste-actions">
+        <button class="button" type="button" data-apply-track-paste>Fordel tekst på rader</button>
+        <span class="muted">Ukjente artister markeres for kontroll og opprettes ikke automatisk.</span>
+      </div>
+    </div>
+  </details>
+
+  <section class="panel track-entry-shell" aria-labelledby="track-grid-heading">
+    <div class="panel-heading track-grid-heading">
+      <div>
+        <h2 id="track-grid-heading">Sporliste</h2>
+        <p>Trykk Enter for samme kolonne på neste rad. Tab flytter til neste felt.</p>
+      </div>
+      <button class="button" type="button" data-add-track-row>+ Ny rad</button>
+    </div>
+    <div class="track-grid-legend" aria-label="Forklaring">
+      <span class="track-scope release-scope">Utgivelsen</span> Sportittel og plassering
+      <span class="track-scope recording-scope">Innspillingen</span> Artist, ISRC og katalogkobling
+    </div>
+    <div class="track-grid-wrap">
+      <table class="track-entry-grid">
+        <thead>
+          <tr>
+            <th scope="col" class="track-row-heading">Rad</th>
+            <th scope="col">Plate</th>
+            <th scope="col">Side</th>
+            <th scope="col">Sporplassering <span class="track-scope release-scope">Utgivelsen</span></th>
+            <th scope="col">Sportittel <span class="track-scope release-scope">Utgivelsen</span></th>
+            <th scope="col">Artist <span class="track-scope recording-scope">Innspillingen</span></th>
+            <th scope="col">Varighet <span class="track-scope recording-scope">Innspillingen</span></th>
+            <th scope="col">ISRC <span class="track-scope recording-scope">Innspillingen</span></th>
+            <th scope="col">Koblet innspilling <span class="track-scope recording-scope">Innspillingen</span></th>
+          </tr>
+        </thead>
+        <tbody data-track-rows>
+          {% for form in formset %}
+            {% include "workbench/_track_entry_row.html" with row_number=forloop.counter %}
           {% endfor %}
-        </div>
-      </fieldset>
-    {% endfor %}
-  </div>
+        </tbody>
+      </table>
+    </div>
+    <template data-track-empty-row>
+      {% include "workbench/_track_entry_row.html" with form=formset.empty_form row_number="__row_number__" %}
+    </template>
+  </section>
+
   <div class="sticky-actions">
-    <button class="button primary" type="submit">Lagre utfylte spor</button>
+    <button class="button primary" type="submit" data-track-submit>Lagre sporlisten</button>
     <a class="button" href="{{ return_url }}">Avbryt</a>
   </div>
 </form>
-{% endblock %}
-{% block scripts %}
-<script>
-document.addEventListener("DOMContentLoaded", () => {
-  const first = document.querySelector('[name="tracks-0-sequence_number"]');
-  if (first && !first.value) first.value = "{{ next_sequence }}";
-});
-</script>
 {% endblock %}

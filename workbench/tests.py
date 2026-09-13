@@ -484,6 +484,7 @@ class CatalogueWorkflowTests(WorkbenchTestCase):
             "track_number",
             "sequence_number",
             "title_override",
+            "duration_display",
             "duration_ms",
             "force_create",
         )
@@ -546,6 +547,7 @@ class CatalogueWorkflowTests(WorkbenchTestCase):
                     "new_recording_title": "Ny master",
                     "sequence_number": "2",
                     "track_number": "2",
+                    "duration_display": "3:07",
                 },
             ],
         )
@@ -559,6 +561,9 @@ class CatalogueWorkflowTests(WorkbenchTestCase):
         )
         self.assertEqual(ReleaseTrack.objects.filter(release=release).count(), 2)
         self.assertEqual(Recording.objects.count(), 2)
+        new_track = ReleaseTrack.objects.get(recording__title="Ny master")
+        self.assertEqual(new_track.duration_ms, 187000)
+        self.assertEqual(new_track.recording.duration_ms, 187000)
         library.refresh_from_db()
         self.assertEqual(library.genre, "Pop")
 
@@ -577,7 +582,88 @@ class CatalogueWorkflowTests(WorkbenchTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Første")
         self.assertContains(response, "Andre")
-        self.assertContains(response, "må være unik")
+        self.assertContains(response, "Rekkefølgen er brukt i flere utfylte rader")
+        self.assertEqual(ReleaseTrack.objects.count(), 0)
+        self.assertEqual(Recording.objects.count(), 0)
+
+    def test_track_entry_is_a_table_with_bulk_paste_and_single_save_action(self):
+        release = Release.objects.create(title="Tabellalbum")
+        response = self.client.get(
+            reverse("workbench:release_tracks", args=(release.pk,))
+        )
+        self.assertContains(response, "data-track-entry")
+        self.assertContains(response, 'class="track-entry-grid"')
+        self.assertContains(response, "Sporplassering")
+        self.assertContains(response, "Koblet innspilling")
+        self.assertContains(response, "Lim inn spor fra regneark eller tabell")
+        self.assertContains(response, "Lagre sporlisten", count=1)
+        self.assertContains(response, "data-track-submit")
+
+    def test_duplicate_candidate_is_shown_on_its_row_without_creating_data(self):
+        existing = Recording.objects.create(title="Samme innspilling")
+        release = Release.objects.create(title="Dublettkontroll")
+        data = self.track_formset_data(
+            release,
+            [
+                {
+                    "new_recording_title": "Samme innspilling",
+                    "title_override": "Sportittelen beholdes",
+                    "sequence_number": "1",
+                }
+            ],
+        )
+        response = self.client.post(
+            reverse("workbench:release_tracks", args=(release.pk,)), data
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Mulig eksisterende innspilling")
+        self.assertContains(response, f'data-use-recording="{existing.pk}"')
+        self.assertContains(response, "Sportittelen beholdes")
+        self.assertEqual(ReleaseTrack.objects.count(), 0)
+        self.assertEqual(Recording.objects.count(), 1)
+
+    def test_track_entry_requires_both_release_change_and_track_add_permissions(self):
+        release = Release.objects.create(title="Beskyttet utgivelse")
+        url = reverse("workbench:release_tracks", args=(release.pk,))
+        only_release = self.create_user(
+            username="bare-utgivelse",
+            permissions=("catalogue.change_release",),
+        )
+        self.login(only_release)
+        self.assertEqual(self.client.get(url).status_code, 403)
+        self.assertEqual(
+            self.client.post(url, self.track_formset_data(release, [])).status_code,
+            403,
+        )
+        only_track = self.create_user(
+            username="bare-spor",
+            permissions=("catalogue.add_releasetrack",),
+        )
+        self.login(only_track)
+        self.assertEqual(self.client.get(url).status_code, 403)
+        self.assertEqual(
+            self.client.post(url, self.track_formset_data(release, [])).status_code,
+            403,
+        )
+
+    def test_invalid_display_duration_stays_on_the_affected_row(self):
+        release = Release.objects.create(title="Varighetskontroll")
+        data = self.track_formset_data(
+            release,
+            [
+                {
+                    "new_recording_title": "Bevart tittel",
+                    "sequence_number": "1",
+                    "duration_display": "3:75",
+                }
+            ],
+        )
+        response = self.client.post(
+            reverse("workbench:release_tracks", args=(release.pk,)), data
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Bruk minutter:sekunder")
+        self.assertContains(response, "Bevart tittel")
         self.assertEqual(ReleaseTrack.objects.count(), 0)
         self.assertEqual(Recording.objects.count(), 0)
 

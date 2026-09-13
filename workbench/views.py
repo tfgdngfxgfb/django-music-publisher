@@ -690,20 +690,38 @@ def release_tracks(request, pk):
             )
             duplicates = {value for value in sequences if sequences.count(value) > 1}
             if used or duplicates:
+                for form in changed_forms:
+                    sequence = form.cleaned_data.get("sequence_number")
+                    if sequence in used:
+                        form.add_error(
+                            "sequence_number",
+                            "Rekkefølgen finnes allerede på utgivelsen.",
+                        )
+                    elif sequence in duplicates:
+                        form.add_error(
+                            "sequence_number",
+                            "Rekkefølgen er brukt i flere utfylte rader.",
+                        )
                 formset._non_form_errors = formset.error_class(
-                    ["Sorteringsrekkefølge må være unik og kan ikke finnes fra før."],
+                    ["Rett rekkefølgen i de markerte radene."],
                     renderer=formset.renderer,
                 )
             else:
+                failed_form = None
                 try:
                     with transaction.atomic():
                         for form in changed_forms:
+                            failed_form = form
                             values = dict(form.cleaned_data)
                             values.pop("existing_recording_search", None)
+                            values.pop("duration_display", None)
                             create_release_track(release=release, **values)
-                except (ValueError, IntegrityError) as error:
-                    formset._non_form_errors = formset.error_class(
-                        [str(error)], renderer=formset.renderer
+                except ValueError as error:
+                    failed_form.add_error("new_recording_title", str(error))
+                except IntegrityError:
+                    failed_form.add_error(
+                        None,
+                        "Sporet kunne ikke lagres. Kontroller posisjon, ISRC og koblet innspilling.",
                     )
                 else:
                     messages.success(
