@@ -288,6 +288,22 @@ document.addEventListener("DOMContentLoaded", () => {
       trackEntry.setAttribute("aria-busy", "true");
     });
   }
+
+  document.querySelectorAll("[data-submit-once]").forEach((form) => {
+    let submitted = false;
+    form.addEventListener("submit", (event) => {
+      if (submitted) {
+        event.preventDefault();
+        return;
+      }
+      submitted = true;
+      const button = form.querySelector('button[type="submit"]');
+      if (button) {
+        button.disabled = true;
+        button.textContent = "Arbeider …";
+      }
+    });
+  });
 });
 
 document.querySelectorAll(".catalogue-cover").forEach((image) => {

@@ -5,7 +5,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 
-from catalogue.models import Recording, Release
+from catalogue.models import Recording, Release, ReleaseTrack
 from rights_core.models import CanonicalModel, validate_not_blank
 
 
@@ -34,6 +34,14 @@ class FileAsset(CanonicalModel):
         DOCUMENT = "document", "Dokument"
         OTHER = "other", "Annen mediefil"
 
+    class SyncStatus(models.TextChoices):
+        NOT_APPLICABLE = "not_applicable", "Ikke aktuell"
+        SYNCED = "synced", "Synkronisert"
+        PENDING = "pending", "Venter på synkronisering"
+        MISSING = "missing", "Fil ikke funnet"
+        CONFLICT = "conflict", "Konflikt"
+        FAILED = "failed", "Synkronisering feilet"
+
     recording = models.ForeignKey(
         Recording,
         verbose_name="innspilling",
@@ -50,6 +58,15 @@ class FileAsset(CanonicalModel):
         null=True,
         blank=True,
     )
+    release_track = models.ForeignKey(
+        ReleaseTrack,
+        verbose_name="spor på utgivelse",
+        on_delete=models.PROTECT,
+        related_name="file_assets",
+        null=True,
+        blank=True,
+        help_text="Brukes bare når filens utgivelseskontekst er entydig.",
+    )
     filename = models.CharField(
         "filnavn", max_length=500, validators=[validate_not_blank]
     )
@@ -65,25 +82,49 @@ class FileAsset(CanonicalModel):
     )
     role = models.CharField("filrolle", max_length=30, choices=Role.choices)
     technical_metadata = models.JSONField("tekniske metadata", default=dict, blank=True)
+    metadata_read_at = models.DateTimeField(
+        "filmetadata sist lest", null=True, blank=True
+    )
+    source_modified_at = models.DateTimeField(
+        "fil sist endret", null=True, blank=True
+    )
+    sync_status = models.CharField(
+        "synkroniseringsstatus",
+        max_length=20,
+        choices=SyncStatus.choices,
+        default=SyncStatus.NOT_APPLICABLE,
+    )
+    sync_requested_at = models.DateTimeField(
+        "synkronisering bestilt", null=True, blank=True
+    )
+    synced_at = models.DateTimeField("synkronisert", null=True, blank=True)
+    sync_error = models.TextField("synkroniseringsfeil", blank=True)
 
     class Meta:
         verbose_name = "filressurs"
         verbose_name_plural = "filressurser"
         ordering = ("filename", "id")
+        indexes = [
+            models.Index(
+                fields=("role", "sync_status"), name="file_asset_sync_idx"
+            )
+        ]
         constraints = [
             models.CheckConstraint(
                 condition=models.Q(filename__regex=r".*\S.*"),
                 name="file_asset_nonblank_name",
             ),
             models.CheckConstraint(
+                condition=(
+                    models.Q(release_track__isnull=True)
+                    | models.Q(recording__isnull=False, release__isnull=True)
+                ),
+                name="file_track_requires_recording",
+            ),
+            models.CheckConstraint(
                 condition=models.Q(recording__isnull=True)
                 | models.Q(release__isnull=True),
-                name="file_asset_at_most_one_target",
-            ),
-            models.UniqueConstraint(
-                fields=("sha256",),
-                condition=~models.Q(sha256=""),
-                name="file_asset_unique_sha256",
+                name="file_asset_no_recording_release_pair",
             ),
         ]
 
@@ -95,6 +136,22 @@ class FileAsset(CanonicalModel):
                     {"sha256": "SHA-256 må ha 64 heksadesimale tegn."}
                 )
         super().clean_fields(exclude=exclude)
+
+    def clean(self):
+        super().clean()
+        if self.release_track_id and (
+            not self.recording_id
+            or self.release_track.recording_id != self.recording_id
+            or self.release_id
+        ):
+            raise ValidationError(
+                {
+                    "release_track": (
+                        "Sporreferansen må tilhøre den valgte innspillingen, "
+                        "og kan ikke kombineres med en egen utgivelsesreferanse."
+                    )
+                }
+            )
 
     def __str__(self):
         return self.filename
@@ -162,7 +219,7 @@ class FileLocation(CanonicalModel):
         ]
         constraints = [
             models.UniqueConstraint(
-                fields=("asset", "storage_type", "relative_path"),
+                fields=("storage_type", "relative_path"),
                 condition=models.Q(is_current=True),
                 name="file_location_unique_current_path",
             )
@@ -202,3 +259,39 @@ class FileLocation(CanonicalModel):
 
     def __str__(self):
         return f"{self.get_storage_type_display()}: {self.relative_path}"
+
+
+class FileChecksum(CanonicalModel):
+    class Reason(models.TextChoices):
+        INGEST = "ingest", "Innlesing"
+        WRITEBACK = "writeback", "Etter metadataoppdatering"
+        VERIFICATION = "verification", "Kontroll"
+
+    asset = models.ForeignKey(
+        FileAsset,
+        on_delete=models.PROTECT,
+        related_name="checksum_history",
+        verbose_name="filressurs",
+    )
+    sha256 = models.CharField("SHA-256", max_length=64)
+    reason = models.CharField("årsak", max_length=20, choices=Reason.choices)
+    observed_at = models.DateTimeField("observert", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "filkontrollsum"
+        verbose_name_plural = "filkontrollsummer"
+        ordering = ("-observed_at", "id")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("asset", "sha256"), name="file_checksum_unique_value"
+            )
+        ]
+
+    def clean_fields(self, exclude=None):
+        self.sha256 = self.sha256.strip().lower()
+        if not re.fullmatch(r"[0-9a-f]{64}", self.sha256):
+            raise ValidationError({"sha256": "SHA-256 må ha 64 heksadesimale tegn."})
+        super().clean_fields(exclude=exclude)
+
+    def __str__(self):
+        return f"{self.asset}: {self.sha256[:12]}…"

@@ -6,7 +6,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import permission_required
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Prefetch, Q
 from django.http import Http404, HttpResponse, HttpResponseForbidden, JsonResponse
@@ -23,6 +23,12 @@ from catalogue.models import (
     ReleaseTrack,
 )
 from catalogue.services import create_release_track
+from flac_ingest.models import FlacIngestBatch, FlacIngestItem
+from flac_ingest.services import (
+    apply_batch,
+    scan_directory,
+    sync_recording_files,
+)
 from managed_music.forms import ManagedRecordingCreationForm
 from managed_music.models import ManagedRecording
 from managed_music.services import create_managed_recording
@@ -67,6 +73,7 @@ from .forms import (
     ContributionForm,
     FileAssetForm,
     FileLocationForm,
+    FlacScanForm,
     LibraryMembershipForm,
     ManagedFilterForm,
     MusicLibraryFilterForm,
@@ -192,6 +199,8 @@ def library_list(request):
             "recording", "managed_recording", "managed_recording__source_system"
         )
         .prefetch_related(
+            "channels",
+            "target_audiences",
             "recording__identifiers",
             "recording__release_tracks__release",
             "recording__file_assets__locations",
@@ -517,6 +526,83 @@ def managed_list(request):
 
 
 @staff
+@permission_required("flac_ingest.add_flacingestbatch", raise_exception=True)
+def flac_ingest_start(request):
+    form = FlacScanForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        try:
+            batch = scan_directory(user=request.user, **form.cleaned_data)
+        except (ImproperlyConfigured, ValidationError) as error:
+            form.add_error(None, error)
+        else:
+            messages.success(
+                request,
+                f"{batch.items.count()} FLAC-filer er lest. Kontroller forhåndsvisningen før bruk.",
+            )
+            return redirect("workbench:flac_ingest_preview", pk=batch.pk)
+    return render(
+        request,
+        "workbench/flac_ingest_start.html",
+        _page_context(
+            "library",
+            "Les inn fra musikkarkiv",
+            form=form,
+            cancel_url=reverse("workbench:library"),
+        ),
+    )
+
+
+@staff
+@permission_required("flac_ingest.view_flacingestbatch", raise_exception=True)
+def flac_ingest_preview(request, pk):
+    batch = get_object_or_404(
+        FlacIngestBatch.objects.select_related("created_by").prefetch_related(
+            "items__recording", "items__release", "items__file_asset"
+        ),
+        pk=pk,
+    )
+    items = list(batch.items.all())
+    counts = {
+        action: sum(item.action == action for item in items)
+        for action, _label in FlacIngestItem.Action.choices
+    }
+    return render(
+        request,
+        "workbench/flac_ingest_preview.html",
+        _page_context(
+            "library",
+            "Forhåndsvis FLAC-innlesing",
+            batch=batch,
+            items=items,
+            counts=counts,
+            applicable_count=sum(item.can_apply for item in items),
+            cancel_url=reverse("workbench:library"),
+        ),
+    )
+
+
+@staff
+@require_POST
+@permission_required(
+    (
+        "flac_ingest.view_flacingestbatch",
+        "flac_ingest.apply_flacingestbatch",
+    ),
+    raise_exception=True,
+)
+def flac_ingest_apply(request, pk):
+    batch = get_object_or_404(FlacIngestBatch, pk=pk)
+    try:
+        applied = apply_batch(batch, user=request.user)
+    except (ImproperlyConfigured, ValidationError) as error:
+        details = error.messages if hasattr(error, "messages") else [str(error)]
+        messages.error(request, "; ".join(details))
+    else:
+        messages.success(request, f"{applied} FLAC-filer ble brukt i Musikkarkivet.")
+    return redirect("workbench:flac_ingest_preview", pk=batch.pk)
+
+
+@staff
 @permission_required("managed_music.add_managedrecording", raise_exception=True)
 def managed_add(request):
     if not request.user.is_superuser:
@@ -648,6 +734,11 @@ def release_detail(request, pk):
         form = ReleaseForm(request.POST or None, instance=release)
         if request.method == "POST" and form.is_valid():
             form.save()
+            recordings = Recording.objects.filter(
+                release_tracks__release=release
+            ).distinct()
+            for recording in recordings:
+                sync_recording_files(recording)
             messages.success(request, "Utgivelsen ble lagret.")
             return redirect(
                 _safe_return(request, reverse("workbench:release", args=(pk,)))
@@ -766,6 +857,8 @@ def _recording_queryset():
             ReleaseTrack.objects.select_related("release", "release__label"),
         ),
         Prefetch("file_assets", FileAsset.objects.prefetch_related("locations")),
+        "music_library_entry__channels",
+        "music_library_entry__target_audiences",
     )
 
 
@@ -1193,6 +1286,12 @@ def recording_edit(request, pk):
     form = RecordingForm(request.POST or None, instance=recording)
     if request.method == "POST" and form.is_valid():
         form.save()
+        sync_results = sync_recording_files(recording)
+        if any(result and result.result != "success" for result in sync_results):
+            messages.warning(
+                request,
+                "Katalogendringen er lagret, men én eller flere radiofiler venter på synkronisering.",
+            )
         messages.success(request, "Innspillingen ble lagret.")
         return redirect(
             _safe_return(request, reverse("workbench:recording", args=(pk,)))
@@ -1222,6 +1321,7 @@ def recording_identifier_add(request, pk):
         identifier = form.save(commit=False)
         identifier.recording = recording
         identifier.save()
+        sync_recording_files(recording)
         messages.success(request, "Identifikatoren ble registrert.")
         return redirect("workbench:recording", pk=pk)
     return render(
@@ -1246,6 +1346,7 @@ def contribution_add(request, pk):
         contribution = form.save(commit=False)
         contribution.recording = recording
         contribution.save()
+        sync_recording_files(recording)
         messages.success(request, "Den medvirkende ble registrert.")
         return redirect(
             reverse("workbench:recording", args=(pk,)) + "?fane=contributors"

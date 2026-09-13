@@ -1,0 +1,15 @@
+{% extends "workbench/base.html" %}
+{% block eyebrow %}<a class="back-link" href="{{ cancel_url }}">← Musikkarkiv</a>{% endblock %}
+{% block subtitle %}<p>Les lokale radio-FLAC innenfor den konfigurerte musikkroten. Ingenting skrives til katalogen før forhåndsvisningen brukes.</p>{% endblock %}
+{% block content %}
+<section class="panel form-panel ingest-intro">
+  <h2>Velg mappe</h2>
+  <p>Skanningen leser alle Vorbis Comments, flerverdier og tekniske lydopplysninger. Ukjente tags beholdes som rå kildedata.</p>
+  <form method="post" class="form-grid" novalidate>
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    {% for field in form %}<div class="field{% if field.errors %} has-error{% endif %}">{{ field.label_tag }}{{ field }}{{ field.errors }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}</div>{% endfor %}
+    <div class="form-actions full"><button class="button primary" type="submit">Skann og forhåndsvis</button><a class="button" href="{{ cancel_url }}">Avbryt</a></div>
+  </form>
+</section>
+{% endblock %}

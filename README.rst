@@ -27,8 +27,9 @@ Double-click ``run-p7-demo.cmd`` to start a separate demo database containing
 only fictional data. The launcher creates five recordings, two releases, four
 tracks, artists, ISRC/EAN/UPC values, radio metadata, one explicitly managed
 recording, source conflicts, a duplicate candidate and registered file
-locations. It also generates a copyright-free two-second WAV test tone, a demo
-cover and UTF-8 JSON/CSV metadata under ``.local\demo-nas``.
+locations. It also generates a copyright-free two-second WAV test tone, a
+short silent radio-FLAC with fictional tags, a demo cover and UTF-8 JSON/CSV
+metadata under ``.local\demo-nas``.
 
 The UUIDs and content are fixed, and rerunning the launcher does not create
 duplicates. The demo uses ``.local\p7-demo.sqlite3`` and therefore does not mix
@@ -52,7 +53,7 @@ check out its branch explicitly:
 
 .. code-block:: powershell
 
-   git clone --branch feature/catalogue-workbench https://github.com/tfgdngfxgfb/django-music-publisher.git
+   git clone --branch feature/flac-music-library-ingest https://github.com/tfgdngfxgfb/django-music-publisher.git
    cd django-music-publisher
    python -m venv .venv
    .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
@@ -83,6 +84,28 @@ identifikator**, keep type **ISRC**, enter the code and save. The recording UUID
 does not change. Add people or organizations through **Personer og
 organisasjoner**, then add credits through **Medvirkende** on the recording.
 Credits never establish rights.
+
+FLAC ingest for the music library
+---------------------------------
+
+Set ``P7_MUSIC_ROOT`` in ``.env`` to the local folder or mounted NAS root that
+contains radio-FLAC files. The database stores only logical paths below this
+root. In **Musikkarkiv**, choose **Les inn fra musikkarkiv**, select an allowed
+folder, scan, review the preview and apply the safe rows. The scanner never
+accepts an arbitrary server path from the browser.
+
+For ordinary archive music, FLAC is normally authoritative for catalogue and
+radio metadata. For managed music or recordings with confirmed local master
+ownership, the database is authoritative for catalogue metadata, while FLAC
+remains authoritative for radio metadata. ``RATING`` maps to P7 **Energy**.
+Channel and target audience are multivalue catalogue registers. Unknown tags
+are retained in provenance records.
+
+If an authoritative catalogue change cannot be written to a radio-FLAC, the
+database change remains saved and the file receives a retry status. Retry
+pending items with::
+
+   .\.venv\Scripts\python.exe manage.py sync_flac_tags --all-failed
 
 Publishing is available through the administration navigation or directly at
 http://127.0.0.1:8000/admin/music_publisher/ . Its separate recording models are

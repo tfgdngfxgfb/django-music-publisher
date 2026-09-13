@@ -752,6 +752,40 @@ meter {
 .track-candidate-actions a { font-size: .62rem; }
 [data-track-submit]:disabled { opacity: .65; cursor: wait; }
 
+.ingest-intro h2 { margin-top: 0; color: var(--text-strong); }
+.ingest-intro > p { color: var(--muted); }
+.ingest-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: .7rem;
+  margin-bottom: .8rem;
+}
+.ingest-summary > div {
+  display: grid;
+  gap: .15rem;
+  padding: .8rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.ingest-summary strong { color: var(--text-strong); font-size: 1.25rem; }
+.ingest-summary span { color: var(--muted); font-size: .68rem; }
+.ingest-preview { padding: 0; overflow: hidden; }
+.ingest-preview .panel-heading { padding: .9rem 1rem; }
+.ingest-preview .panel-heading p { margin: .2rem 0 0; color: var(--muted); font-size: .72rem; }
+.ingest-preview td { vertical-align: top; }
+.ingest-preview td > strong,
+.ingest-preview td > small { display: block; }
+.ingest-preview td > small { margin-top: .2rem; color: var(--muted); }
+.ingest-warning { margin-bottom: .25rem; color: var(--warning); font-size: .7rem; }
+.status-new, .status-matched, .status-synced { color: var(--success); }
+.status-conflict, .status-pending { color: var(--warning); }
+.status-invalid, .status-failed, .status-missing { color: var(--danger); }
+
+@media (max-width: 900px) {
+  .ingest-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 @media (min-width: 1450px) {
   .catalogue-desk.has-inspector { grid-template-columns: minmax(720px, 1fr) 420px; }
 }

@@ -4,6 +4,7 @@
 <nav class="help-index panel" aria-label="Innhold">
   <strong>På denne siden</strong>
   <a href="#grunnbegreper">Grunnbegreper</a>
+  <a href="#flac-innlesing">FLAC-innlesing</a>
   <a href="#eierskapsoversikt">Eierskapsoversikt</a>
   <a href="#rettighetsbegreper">Rettighetsbegreper</a>
   <a href="#dokumentasjon">Dokumentasjon og kilder</a>
@@ -21,6 +22,18 @@
     <article class="panel"><h3>Person og artistidentitet</h3><p>En part er en virkelig person, gruppe eller organisasjon. Artistidentitet er et offentlig artist- eller scenenavn. Kreditering innebærer ikke eierskap.</p></article>
     <article class="panel"><h3>Filer</h3><p>Filressurs er filidentiteten; filplassering er en registrert plassering. En sti beviser ikke at filen finnes, og filbesittelse beviser ikke eierskap.</p></article>
     <article class="panel"><h3>Begrepene er forskjellige</h3><p><strong>Verk ≠ innspilling ≠ utgivelse ≠ spor ≠ lydfil</strong></p><p><code>Work ≠ Recording ≠ Release ≠ Track ≠ lydfil</code></p><p>Et verk kan ha flere innspillinger. Samme innspilling kan forekomme på flere utgivelser og ha flere filrepresentasjoner.</p></article>
+  </div>
+</section>
+
+<section id="flac-innlesing" class="help-section">
+  <div class="section-heading"><div><span class="page-kicker">Musikkarkiv</span><h2>FLAC-innlesing og metadataautoritet</h2></div></div>
+  <div class="help-grid">
+    <article class="panel"><h3>Les inn fra musikkarkiv</h3><p>Velg en mappe under den konfigurerte musikkroten, skann og kontroller forhåndsvisningen før data brukes. Systemet leser alle FLAC-tags og tekniske lydopplysninger. Ukjente tags bevares i kildeposten.</p></article>
+    <article class="panel"><h3>Ikke forvaltet musikk</h3><p>FLAC er normalt autoritativ for katalog- og radiometadata. En sikker P7UUID eller ISRC gjenbruker eksisterende innspilling; usikre treff sendes til kontroll og slås aldri sammen automatisk.</p></article>
+    <article class="panel"><h3>Forvaltet eller lokalt eid musikk</h3><p>Databasen er autoritativ for tittel, artist, ISRC og katalogkrediteringer. Avvikende filverdier overskriver ikke katalogen. Katalogendringer synkroniseres kontrollert til radio-FLAC.</p></article>
+    <article class="panel"><h3>Radiometadata</h3><p>FLAC/OneTagger-arbeidsflyten er alltid autoritativ for radiosjanger, radiospråk, Energy, kanal, målgruppe og kjønn. RATING betyr Energy hos P7. Disse taggene beskyttes ved katalogsynkronisering.</p></article>
+    <article class="panel"><h3>P7UUID</h3><p>En intern, stabil kobling fra radiofilen til innspillingens UUID. Den er ikke en bransjeidentifikator eller et bevis på eierskap. Konflikt med filens ISRC må kontrolleres manuelt.</p></article>
+    <article class="panel"><h3>Synkroniseringsstatus</h3><p>«Venter» betyr at katalogendringen er lagret, men filen ikke er oppdatert ennå. En manglende eller utilgjengelig fil mister aldri databaseendringen; synkroniseringen kan prøves på nytt.</p></article>
   </div>
 </section>
 

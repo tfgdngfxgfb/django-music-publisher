@@ -9,7 +9,13 @@ from catalogue.models import ExternalIdentifier, Label, Recording, Release
 from catalogue.services import create_release_track
 from managed_music.services import create_managed_recording
 from media_assets.models import FileAsset, FileLocation
-from music_library.models import MusicLibraryEntry
+from music_library.models import (
+    Channel,
+    MusicLibraryChannel,
+    MusicLibraryEntry,
+    MusicLibraryTargetAudience,
+    TargetAudience,
+)
 from parties.models import ArtistIdentity, Party
 from provenance.models import MetadataAssertion, SourceRecord, SourceSystem
 from provenance.services import decide_assertion
@@ -64,12 +70,17 @@ class Command(BaseCommand):
             recording=first_track.recording,
             genre="Pop",
             language="nb",
-            target=MusicLibraryEntry.Target.FAMILY,
-            channel="P7 Kristen Riksradio",
             gender=MusicLibraryEntry.Gender.FEMALE,
-            rating=4,
-            energy=3,
+            energy=4,
             verification_status=VerificationStatus.CONFIRMED,
+        )
+        channel = Channel.objects.create(code="p7_riks", name="P7 Riks")
+        audience = TargetAudience.objects.create(code="familie", name="Familie")
+        MusicLibraryChannel.objects.create(
+            library_entry=library_entry, channel=channel
+        )
+        MusicLibraryTargetAudience.objects.create(
+            library_entry=library_entry, target_audience=audience
         )
         archive_only = Recording.objects.create(title="Kun i Musikkarkivet")
         MusicLibraryEntry.objects.create(

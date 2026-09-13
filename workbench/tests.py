@@ -688,7 +688,10 @@ class CatalogueWorkflowTests(WorkbenchTestCase):
         with CaptureQueriesContext(connection) as queries:
             response = self.client.get(reverse("workbench:library"))
             self.assertEqual(response.status_code, 200)
-        self.assertLessEqual(len(queries), 12)
+        # Channel and target-audience are separate normalized multivalue
+        # relations. Their two fixed prefetches keep the count independent of
+        # catalogue size and avoid per-row queries.
+        self.assertLessEqual(len(queries), 14)
 
 
 class ProvenanceApplicationTests(WorkbenchTestCase):
@@ -835,8 +838,7 @@ class CatalogueInspectorTests(WorkbenchTestCase):
             recording=recording,
             genre="Pop",
             language="nb",
-            rating=4,
-            energy=3,
+            energy=4,
         )
         asset = FileAsset.objects.create(
             recording=recording,

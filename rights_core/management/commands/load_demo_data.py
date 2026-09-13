@@ -4,6 +4,7 @@ import csv
 import hashlib
 import json
 import math
+import shutil
 import struct
 import uuid
 import wave
@@ -14,6 +15,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
+from mutagen.flac import FLAC
 
 from catalogue.models import (
     DuplicateCandidate,
@@ -26,7 +28,13 @@ from catalogue.models import (
 )
 from managed_music.models import ManagedRecording
 from media_assets.models import FileAsset, FileLocation
-from music_library.models import MusicLibraryEntry
+from music_library.models import (
+    Channel,
+    MusicLibraryChannel,
+    MusicLibraryEntry,
+    MusicLibraryTargetAudience,
+    TargetAudience,
+)
 from parties.models import ArtistIdentity, Party
 from provenance.models import (
     AssertionDecision,
@@ -207,19 +215,36 @@ class Command(BaseCommand):
 
         library_entries = []
         library_specs = (
-            (80, recordings[0], "Pop", "nb", "P7 Kristen Riksradio", 5, 4),
-            (81, recordings[1], "Visesang", "nb", "P7 Kristen Riksradio", 4, 2),
-            (82, recordings[2], "Pop", "en", "P7 Kristen Riksradio", 3, 3),
-            (83, recordings[4], "", "", "", None, None),
-            (84, recordings[3], "Pop", "nb", "P7 Kristen Riksradio", 3, 3),
+            (80, recordings[0], "Pop", "nb", ("P7 Riks", "P7 Ung"), 4),
+            (81, recordings[1], "Visesang", "nb", ("P7 Riks",), 2),
+            (82, recordings[2], "Pop", "en", ("P7 Ung",), 3),
+            (83, recordings[4], "", "", (), None),
+            (84, recordings[3], "Pop", "nb", ("P7 Riks",), 3),
         )
+        channels = {
+            name: Channel.objects.get_or_create(
+                pk=demo_uuid(850 + offset),
+                defaults={"code": code, "name": name},
+            )[0]
+            for offset, (code, name) in enumerate(
+                (("p7_riks", "P7 Riks"), ("p7_ung", "P7 Ung"))
+            )
+        }
+        audiences = {
+            name: TargetAudience.objects.get_or_create(
+                pk=demo_uuid(860 + offset),
+                defaults={"code": code, "name": name},
+            )[0]
+            for offset, (code, name) in enumerate(
+                (("ung_voksen", "Ung voksen"), ("voksen", "Voksen"))
+            )
+        }
         for (
             number,
             recording,
             genre,
             language,
-            channel,
-            rating,
+            channel_names,
             energy,
         ) in library_specs:
             entry, _ = MusicLibraryEntry.objects.get_or_create(
@@ -228,8 +253,6 @@ class Command(BaseCommand):
                     "recording": recording,
                     "genre": genre,
                     "language": language,
-                    "channel": channel,
-                    "rating": rating,
                     "energy": energy,
                     "verification_status": (
                         VerificationStatus.CONFIRMED
@@ -239,6 +262,17 @@ class Command(BaseCommand):
                     "notes": "Fiktive radiodata for prøvebruk.",
                 },
             )
+            MusicLibraryChannel.objects.filter(library_entry=entry).delete()
+            for channel_name in channel_names:
+                MusicLibraryChannel.objects.create(
+                    library_entry=entry, channel=channels[channel_name]
+                )
+            MusicLibraryTargetAudience.objects.filter(library_entry=entry).delete()
+            if channel_names:
+                for audience in audiences.values():
+                    MusicLibraryTargetAudience.objects.create(
+                        library_entry=entry, target_audience=audience
+                    )
             library_entries.append(entry)
         entries_by_recording = {entry.recording_id: entry for entry in library_entries}
         for offset, recording in enumerate(recordings):
@@ -393,6 +427,29 @@ class Command(BaseCommand):
                 frames.extend(struct.pack("<h", value))
             output.writeframes(frames)
 
+        radio_flac = folders["audio"] / "nordlys-radio-demo.flac"
+        shutil.copyfile(
+            Path(settings.BASE_DIR) / "flac_ingest" / "test_fixtures" / "silence.flac",
+            radio_flac,
+        )
+        flac = FLAC(radio_flac)
+        flac["TITLE"] = "Tittel fra FLAC som avviker (demo)"
+        flac["ARTIST"] = "NORDLYS (demo)"
+        flac["ALBUM"] = "Lys over fjorden (demo)"
+        flac["TRACKNUMBER"] = "1"
+        flac["DISCNUMBER"] = "1"
+        flac["ISRC"] = "NOP7D2400001"
+        flac["COMPOSER"] = "Kari Nordmann (demo)"
+        flac["LYRICIST"] = "Kari Nordmann (demo)"
+        flac["GENRE"] = "Pop"
+        flac["LANGUAGE"] = "nb"
+        flac["RATING"] = "4"
+        flac["KANAL"] = ["P7 Riks", "P7 Ung"]
+        flac["TARGET"] = ["Ung voksen", "Voksen"]
+        flac["P7UUID"] = str(demo_uuid(30))
+        flac["P7_DEMO_UNKNOWN"] = "Bevares ved synkronisering"
+        flac.save()
+
         json_path = folders["metadata"] / "catalogue-sample.json"
         json_path.write_text(
             json.dumps(
@@ -440,6 +497,7 @@ class Command(BaseCommand):
         return {
             "cover": cover,
             "audio": audio,
+            "radio_flac": radio_flac,
             "json": json_path,
             "csv": csv_path,
             "agreement": agreement,
@@ -480,6 +538,14 @@ class Command(BaseCommand):
                 FileAsset.Role.DOCUMENT,
                 "text/plain",
             ),
+            (
+                155,
+                recording,
+                None,
+                paths["radio_flac"],
+                FileAsset.Role.RADIO_FLAC,
+                "audio/flac",
+            ),
         )
         for offset, recording_target, release_target, path, role, mime in assets:
             digest = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -496,7 +562,26 @@ class Command(BaseCommand):
                     "technical_metadata": (
                         {"sample_rate": 44100, "bits_per_sample": 16, "demo_tone": True}
                         if mime == "audio/wav"
-                        else {"demo_file": True}
+                        else (
+                            {
+                                "sample_rate": 44100,
+                                "bits_per_sample": 16,
+                                "channels": 1,
+                                "demo_silence": True,
+                            }
+                            if mime == "audio/flac"
+                            else {"demo_file": True}
+                        )
+                    ),
+                    "sync_status": (
+                        FileAsset.SyncStatus.CONFLICT
+                        if role == FileAsset.Role.RADIO_FLAC
+                        else FileAsset.SyncStatus.NOT_APPLICABLE
+                    ),
+                    "sync_error": (
+                        "Demofilens TITLE avviker med hensikt fra katalogtittelen."
+                        if role == FileAsset.Role.RADIO_FLAC
+                        else ""
                     ),
                 },
             )

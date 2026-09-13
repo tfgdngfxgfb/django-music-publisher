@@ -8,6 +8,17 @@ urlpatterns = [
     path("omslag/<uuid:pk>/", views.cover_image, name="cover_image"),
     path("musikkarkiv/", views.library_list, name="library"),
     path("musikkarkiv/legg-til/", views.library_add, name="library_add"),
+    path("musikkarkiv/les-inn/", views.flac_ingest_start, name="flac_ingest_start"),
+    path(
+        "musikkarkiv/les-inn/<uuid:pk>/",
+        views.flac_ingest_preview,
+        name="flac_ingest_preview",
+    ),
+    path(
+        "musikkarkiv/les-inn/<uuid:pk>/bruk/",
+        views.flac_ingest_apply,
+        name="flac_ingest_apply",
+    ),
     path("forvaltet/", views.managed_list, name="managed"),
     path("forvaltet/legg-til/", views.managed_add, name="managed_add"),
     path("utgivelser/", views.release_list, name="releases"),

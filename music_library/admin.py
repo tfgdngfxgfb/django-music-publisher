@@ -2,7 +2,23 @@ from django.contrib import admin
 
 from rights_core.admin import CanonicalAdmin
 
-from .models import MusicLibraryEntry
+from .models import (
+    Channel,
+    MusicLibraryChannel,
+    MusicLibraryEntry,
+    MusicLibraryTargetAudience,
+    TargetAudience,
+)
+
+
+class ChannelInline(admin.TabularInline):
+    model = MusicLibraryChannel
+    extra = 0
+
+
+class TargetAudienceInline(admin.TabularInline):
+    model = MusicLibraryTargetAudience
+    extra = 0
 
 
 class ManagedStatusFilter(admin.SimpleListFilter):
@@ -26,8 +42,6 @@ class MusicLibraryEntryAdmin(CanonicalAdmin):
         "recording",
         "genre",
         "language",
-        "channel",
-        "rating",
         "energy",
         "verification_status",
         "is_managed",
@@ -37,10 +51,7 @@ class MusicLibraryEntryAdmin(CanonicalAdmin):
         "verification_status",
         "genre",
         "language",
-        "target",
-        "channel",
         "gender",
-        "rating",
         "energy",
     )
     search_fields = (
@@ -51,6 +62,7 @@ class MusicLibraryEntryAdmin(CanonicalAdmin):
         "id",
     )
     autocomplete_fields = ("recording",)
+    inlines = (ChannelInline, TargetAudienceInline)
 
     def get_readonly_fields(self, request, obj=None):
         fields = list(super().get_readonly_fields(request, obj))
@@ -65,4 +77,19 @@ class MusicLibraryEntryAdmin(CanonicalAdmin):
             super()
             .get_queryset(request)
             .select_related("recording", "managed_recording")
+            .prefetch_related("channels", "target_audiences")
         )
+
+
+@admin.register(Channel)
+class ChannelAdmin(CanonicalAdmin):
+    list_display = ("name", "code", "is_active")
+    list_filter = ("is_active",)
+    search_fields = ("name", "code", "id")
+
+
+@admin.register(TargetAudience)
+class TargetAudienceAdmin(CanonicalAdmin):
+    list_display = ("name", "code", "is_active")
+    list_filter = ("is_active",)
+    search_fields = ("name", "code", "id")

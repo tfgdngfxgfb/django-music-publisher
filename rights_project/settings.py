@@ -37,13 +37,16 @@ INSTALLED_APPS = [  # noqa: F405
     "managed_music",
     "media_assets",
     "rights",
+    "flac_ingest.apps.FlacIngestConfig",
     "workbench",
 ]
 ROOT_URLCONF = "rights_project.urls"
 WSGI_APPLICATION = "rights_project.wsgi.application"
 LANGUAGE_CODE = "nb"
-TEMPLATES[0]["DIRS"] = [PROJECT_DIR / "rights_project" / "templates"]  # noqa: F405
-TEMPLATES[0].setdefault("OPTIONS", {}).setdefault("libraries", {})[
+TEMPLATES[0]["DIRS"] = [  # noqa: F405
+    PROJECT_DIR / "rights_project" / "templates"
+]
+TEMPLATES[0].setdefault("OPTIONS", {}).setdefault("libraries", {})[  # noqa: F405
     "workbench_tags"
 ] = "workbench.templatetags.workbench_tags"
 DATABASES = {
@@ -75,3 +78,4 @@ if S3_ENABLED:  # noqa: F405
 # Physical roots belong to each installation. FileLocation stores only portable,
 # logical relative paths.
 P7_NAS_ROOT = os.getenv("P7_NAS_ROOT", "")
+P7_MUSIC_ROOT = os.getenv("P7_MUSIC_ROOT", P7_NAS_ROOT)

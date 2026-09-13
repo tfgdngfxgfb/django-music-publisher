@@ -1,4 +1,7 @@
+from pathlib import Path
+
 from django import forms
+from django.conf import settings
 from django.forms import formset_factory
 
 from catalogue.forms import TrackCreationForm
@@ -9,7 +12,13 @@ from catalogue.models import (
     Release,
 )
 from media_assets.models import FileAsset, FileLocation
-from music_library.models import MusicLibraryEntry
+from music_library.models import (
+    Channel,
+    MusicLibraryChannel,
+    MusicLibraryEntry,
+    MusicLibraryTargetAudience,
+    TargetAudience,
+)
 from parties.models import ArtistIdentity, Party
 from provenance.models import SourceSystem
 from rights.summaries import OwnershipCategory
@@ -125,19 +134,88 @@ class RecordingForm(forms.ModelForm):
 
 
 class RadioMetadataForm(forms.ModelForm):
+    channels = forms.ModelMultipleChoiceField(
+        Channel.objects.filter(is_active=True),
+        label="Kanaler",
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+    )
+    target_audiences = forms.ModelMultipleChoiceField(
+        TargetAudience.objects.filter(is_active=True),
+        label="Målgrupper",
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+    )
+
     class Meta:
         model = MusicLibraryEntry
         fields = (
             "genre",
             "language",
-            "target",
-            "channel",
+            "target_audiences",
+            "channels",
             "gender",
-            "rating",
             "energy",
             "verification_status",
             "notes",
         )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk:
+            self.fields["channels"].initial = self.instance.channels.all()
+            self.fields["target_audiences"].initial = (
+                self.instance.target_audiences.all()
+            )
+
+    def save(self, commit=True):
+        entry = super().save(commit=commit)
+        if commit:
+            MusicLibraryChannel.objects.filter(library_entry=entry).delete()
+            for channel in self.cleaned_data["channels"]:
+                MusicLibraryChannel.objects.create(
+                    library_entry=entry, channel=channel
+                )
+            MusicLibraryTargetAudience.objects.filter(library_entry=entry).delete()
+            for target in self.cleaned_data["target_audiences"]:
+                MusicLibraryTargetAudience.objects.create(
+                    library_entry=entry, target_audience=target
+                )
+        return entry
+
+
+class FlacScanForm(forms.Form):
+    relative_root = forms.ChoiceField(label="Mappe i musikkarkivet", choices=())
+    recursive = forms.BooleanField(
+        label="Ta med undermapper", required=False, initial=True
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        configured = str(getattr(settings, "P7_MUSIC_ROOT", "") or "").strip()
+        choices = []
+        if configured:
+            root = Path(configured).expanduser()
+            if root.is_dir():
+                choices.append((".", "Hele musikkarkivet"))
+                choices.extend(
+                    (path.name, path.name)
+                    for path in sorted(
+                        root.iterdir(), key=lambda item: item.name.casefold()
+                    )
+                    if path.is_dir()
+                )
+        self.fields["relative_root"].choices = choices
+        if not choices:
+            self.fields["relative_root"].help_text = (
+                "P7_MUSIC_ROOT er ikke konfigurert eller finnes ikke."
+            )
+
+    def clean_relative_root(self):
+        value = self.cleaned_data["relative_root"]
+        if not self.fields["relative_root"].choices:
+            raise forms.ValidationError("Musikkroten er ikke tilgjengelig.")
+        return value
 
 
 class ReleaseForm(forms.ModelForm):

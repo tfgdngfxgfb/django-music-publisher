@@ -5,7 +5,7 @@ Dato: 13. september 2026.
 ## Modeller og grenser
 
 - `catalogue`: `Label`, `Release`, `ReleaseTrack` og `DuplicateCandidate`; `ExternalIdentifier` støtter ISRC på innspilling samt UPC/EAN/GTIN på utgivelse.
-- `music_library`: `MusicLibraryEntry` med sjanger, språk, målgruppe, kanal, kjønn, rating, energi og verifikasjonsstatus.
+- `music_library`: `MusicLibraryEntry` med sjanger, språk, målgruppe, kanal, kjønn, Energy og verifikasjonsstatus. Fase 4 normaliserer kanal/målgruppe som flerverdi og lar FLAC `RATING` bety Energy.
 - `managed_music`: `ManagedRecording` peker på en `MusicLibraryEntry`. Databaserelasjonen gjør det umulig å ha forvaltet musikk uten arkivmedlemskap. Musikkarkivposter blir aldri automatisk forvaltet.
 - `provenance`: `SourceSystem`, `ImportBatch`, `SourceRecord`, `MetadataAssertion` og `AssertionDecision`. Rå kildeverdier og beslutningshistorikk bevares separat fra kanoniske felt.
 - `media_assets`: `FileAsset` og `FileLocation`. Filens UUID og eventuelle SHA-256 er adskilt fra aktive, flyttede, manglende og historiske plasseringer. NAS-root kommer fra `P7_NAS_ROOT`.
@@ -28,7 +28,7 @@ Startadressen krever innlogging og åpner en integrert startside i samme Django-
 | `ARTIST` | hovedartistens krediterte navn/artistidentitet |
 | `ISRC` | Recording-identifikator med type ISRC |
 | `GENRE` | `MusicLibraryEntry.genre` |
-| `RATING` | `MusicLibraryEntry.rating` |
+| `RATING` | `MusicLibraryEntry.energy` (korrigert og implementert i fase 4) |
 | `ENERGY` | `MusicLibraryEntry.energy` |
 | `TARGET` | `MusicLibraryEntry.target` |
 | `KANAL` | `MusicLibraryEntry.channel` |

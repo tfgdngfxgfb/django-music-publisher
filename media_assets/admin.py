@@ -2,7 +2,7 @@ from django.contrib import admin
 
 from rights_core.admin import CanonicalAdmin
 
-from .models import FileAsset, FileLocation
+from .models import FileAsset, FileChecksum, FileLocation
 
 
 class FileLocationInline(admin.TabularInline):
@@ -28,9 +28,11 @@ class FileAssetAdmin(CanonicalAdmin):
         "size_bytes",
         "recording",
         "release",
+        "release_track",
+        "sync_status",
         "updated_at",
     )
-    list_filter = ("role", "mime_type")
+    list_filter = ("role", "mime_type", "sync_status")
     search_fields = (
         "filename",
         "sha256",
@@ -39,11 +41,13 @@ class FileAssetAdmin(CanonicalAdmin):
         "locations__relative_path",
         "id",
     )
-    autocomplete_fields = ("recording", "release")
+    autocomplete_fields = ("recording", "release", "release_track")
     inlines = (FileLocationInline,)
 
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related("recording", "release")
+        return super().get_queryset(request).select_related(
+            "recording", "release", "release_track"
+        )
 
 
 @admin.register(FileLocation)
@@ -63,3 +67,12 @@ class FileLocationAdmin(CanonicalAdmin):
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related("asset")
+
+
+@admin.register(FileChecksum)
+class FileChecksumAdmin(CanonicalAdmin):
+    list_display = ("asset", "sha256", "reason", "observed_at")
+    list_filter = ("reason",)
+    search_fields = ("asset__filename", "sha256")
+    autocomplete_fields = ("asset",)
+    readonly_fields = ("asset", "sha256", "reason", "observed_at")

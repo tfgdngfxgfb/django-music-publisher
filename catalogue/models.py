@@ -230,6 +230,9 @@ class RecordingContribution(CanonicalModel):
         ENGINEER = "engineer", "Lydtekniker"
         CONDUCTOR = "conductor", "Dirigent"
         CHOIR = "choir", "Kor"
+        COMPOSER = "composer", "Komponist"
+        LYRICIST = "lyricist", "Tekstforfatter"
+        ARRANGER = "arranger", "Arrangør"
 
     recording = models.ForeignKey(
         Recording,
@@ -242,6 +245,8 @@ class RecordingContribution(CanonicalModel):
         verbose_name="person/organisasjon",
         on_delete=models.PROTECT,
         related_name="recording_contributions",
+        null=True,
+        blank=True,
     )
     role = models.CharField("rolle", max_length=30, choices=Role.choices)
     artist_identity = models.ForeignKey(
@@ -253,6 +258,14 @@ class RecordingContribution(CanonicalModel):
     )
     credited_as = models.CharField("kreditert som", max_length=255, blank=True)
     display_order = models.PositiveIntegerField("visningsrekkefølge", default=0)
+    source_record = models.ForeignKey(
+        "provenance.SourceRecord",
+        verbose_name="kildepost",
+        on_delete=models.PROTECT,
+        related_name="recording_contributions",
+        null=True,
+        blank=True,
+    )
 
     class Meta:
         verbose_name = "medvirkende"
@@ -270,10 +283,18 @@ class RecordingContribution(CanonicalModel):
                         "engineer",
                         "conductor",
                         "choir",
+                        "composer",
+                        "lyricist",
+                        "arranger",
                     ]
                 ),
                 name="contribution_valid_role",
-            )
+            ),
+            models.CheckConstraint(
+                condition=models.Q(party__isnull=False)
+                | ~models.Q(credited_as=""),
+                name="contribution_has_identity_or_credit",
+            ),
         ]
 
     def clean(self):
@@ -292,7 +313,8 @@ class RecordingContribution(CanonicalModel):
             )
 
     def __str__(self):
-        return f"{self.party} — {self.get_role_display()} — {self.recording}"
+        name = self.credited_as or str(self.party)
+        return f"{name} — {self.get_role_display()} — {self.recording}"
 
 
 class ExternalIdentifier(CanonicalModel):

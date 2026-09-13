@@ -9,6 +9,7 @@ djangorestframework==3.18.1
 jmespath==1.1.0
 Markdown==3.7
 music_metadata_territories==24.12
+mutagen==1.48.1
 pillow==12.3.0
 psycopg2-binary==2.9.13
 python-dateutil==2.9.0.post0

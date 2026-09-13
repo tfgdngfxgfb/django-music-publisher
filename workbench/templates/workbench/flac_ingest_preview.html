@@ -1,0 +1,29 @@
+{% extends "workbench/base.html" %}
+{% block eyebrow %}<a class="back-link" href="{% url 'workbench:flac_ingest_start' %}">← Ny skanning</a>{% endblock %}
+{% block subtitle %}<p>{{ batch.relative_root }} · {{ items|length }} filer · Opprettet av {{ batch.created_by }}</p>{% endblock %}
+{% block content %}
+<div class="ingest-summary" aria-label="Oppsummering">
+  <div><strong>{{ counts.new|default:0 }}</strong><span>Nye innspillinger</span></div>
+  <div><strong>{{ counts.matched|default:0 }}</strong><span>Eksisterende treff</span></div>
+  <div><strong>{{ counts.unchanged|default:0 }}</strong><span>Uendrede filer</span></div>
+  <div><strong>{{ counts.conflict|default:0 }}</strong><span>Konflikter</span></div>
+  <div><strong>{{ counts.invalid|default:0 }}</strong><span>Mangelfulle filer</span></div>
+</div>
+<section class="panel ingest-preview">
+  <div class="panel-heading"><div><h2>Kontroll før bruk</h2><p>Konflikter og mangelfulle filer blir ikke importert automatisk.</p></div></div>
+  <div class="table-wrap"><table class="data-table"><thead><tr><th>Fil</th><th>Forslag</th><th>Innspilling</th><th>Utgivelse</th><th>Radiodata</th><th>Kontroll</th></tr></thead><tbody>
+  {% for item in items %}<tr>
+    <td><code>{{ item.relative_path }}</code>{% if item.applied_at %}<span class="status status-confirmed">Brukt</span>{% endif %}</td>
+    <td><span class="status status-{{ item.action }}">{{ item.get_action_display }}</span>{% if item.match_method %}<small>{{ item.match_method }}</small>{% endif %}</td>
+    <td><strong>{{ item.parsed_metadata.title|default:"TITLE mangler" }}</strong><small>{% if item.recording %}{{ item.recording.title }} · {{ item.recording.pk }}{% else %}{{ item.parsed_metadata.artists|join:", "|default:"Ukjent artist" }}{% endif %}</small></td>
+    <td>{% if item.release %}{{ item.release.title }}{% elif item.parsed_metadata.album %}{{ item.parsed_metadata.album }}{% else %}Ingen sikker utgivelse{% endif %}</td>
+    <td><small>{{ item.parsed_metadata.genre|default:"Ingen sjanger" }} · {{ item.parsed_metadata.language|default:"ukjent språk" }} · Energy {{ item.parsed_metadata.energy|default:"—" }}</small></td>
+    <td>{% for message in item.messages %}<div class="ingest-warning">{{ message }}</div>{% empty %}<span class="muted">Ingen konflikt funnet</span>{% endfor %}{% if item.candidates %}<details><summary>Mulige treff</summary>{% for candidate in item.candidates %}<p>{{ candidate.title }} · {{ candidate.signals|join:", " }} · {{ candidate.recording_uuid }}</p>{% endfor %}</details>{% endif %}</td>
+  </tr>{% empty %}<tr><td colspan="6" class="empty">Ingen FLAC-filer ble funnet.</td></tr>{% endfor %}
+  </tbody></table></div>
+</section>
+<div class="sticky-actions">
+  {% if applicable_count and perms.flac_ingest.apply_flacingestbatch %}<form method="post" action="{% url 'workbench:flac_ingest_apply' batch.pk %}" data-submit-once>{% csrf_token %}<button class="button primary" type="submit">Bruk/importer {{ applicable_count }} filer</button></form>{% endif %}
+  <a class="button" href="{{ cancel_url }}">Til Musikkarkiv</a>
+</div>
+{% endblock %}
