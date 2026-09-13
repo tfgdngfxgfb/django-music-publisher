@@ -13,6 +13,7 @@ class FileLocationInline(admin.TabularInline):
         "relative_path",
         "status",
         "is_current",
+        "verification_status",
         "google_drive_id",
         "google_drive_url",
     )
@@ -53,9 +54,10 @@ class FileLocationAdmin(CanonicalAdmin):
         "relative_path",
         "status",
         "is_current",
+        "verification_status",
         "observed_at",
     )
-    list_filter = ("storage_type", "status", "is_current")
+    list_filter = ("storage_type", "status", "is_current", "verification_status")
     search_fields = ("asset__filename", "relative_path", "google_drive_id", "id")
     autocomplete_fields = ("asset",)
 

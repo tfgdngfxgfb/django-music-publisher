@@ -114,6 +114,10 @@ class FileLocation(CanonicalModel):
         MISSING = "missing", "Mangler"
         HISTORICAL = "historical", "Historisk"
 
+    class VerificationStatus(models.TextChoices):
+        UNCHECKED = "unchecked", "Ikke kontrollert"
+        VERIFIED = "verified", "Kontrollert plassering"
+
     asset = models.ForeignKey(
         FileAsset,
         verbose_name="filressurs",
@@ -130,6 +134,12 @@ class FileLocation(CanonicalModel):
         "status", max_length=20, choices=Status.choices, default=Status.ACTIVE
     )
     is_current = models.BooleanField("nåværende plassering", default=True)
+    verification_status = models.CharField(
+        "kontrollstatus",
+        max_length=20,
+        choices=VerificationStatus.choices,
+        default=VerificationStatus.UNCHECKED,
+    )
     observed_at = models.DateTimeField("observert", auto_now_add=True)
     ended_at = models.DateTimeField("avsluttet", null=True, blank=True)
     google_drive_id = models.CharField("Google Drive-ID", max_length=255, blank=True)
@@ -145,6 +155,9 @@ class FileLocation(CanonicalModel):
             ),
             models.Index(
                 fields=("status", "is_current"), name="file_location_state_idx"
+            ),
+            models.Index(
+                fields=("verification_status",), name="file_location_verify_idx"
             ),
         ]
         constraints = [

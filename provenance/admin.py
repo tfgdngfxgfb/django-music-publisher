@@ -4,6 +4,7 @@ from rights_core.admin import CanonicalAdmin
 from rights_core.models import VerificationStatus
 
 from .models import (
+    AppliedMetadataChange,
     AssertionDecision,
     ImportBatch,
     MetadataAssertion,
@@ -127,7 +128,7 @@ class MetadataAssertionAdmin(CanonicalAdmin):
 
     def save_model(self, request, obj, form, change):
         if not change and obj.supersedes_id:
-            supersede_assertion(obj.supersedes, obj)
+            supersede_assertion(obj.supersedes, obj, user=request.user)
         else:
             super().save_model(request, obj, form, change)
 
@@ -155,3 +156,30 @@ class AssertionDecisionAdmin(CanonicalAdmin):
 
     def get_queryset(self, request):
         return super().get_queryset(request).select_related("assertion", "decided_by")
+
+
+@admin.register(AppliedMetadataChange)
+class AppliedMetadataChangeAdmin(CanonicalAdmin):
+    list_display = (
+        "entity_type",
+        "entity_uuid",
+        "field_name",
+        "before_value",
+        "after_value",
+        "changed_by",
+        "created_at",
+    )
+    search_fields = ("entity_uuid", "field_name", "assertion__raw_value")
+    list_filter = ("entity_type", "field_name")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("assertion", "changed_by")

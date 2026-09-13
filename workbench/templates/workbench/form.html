@@ -1,0 +1,3 @@
+{% extends "workbench/base.html" %}
+{% block subtitle %}{% if introduction %}<p>{{ introduction }}</p>{% endif %}{% endblock %}
+{% block content %}<form method="post" class="panel form-panel" novalidate>{% csrf_token %}{% if return_url %}<input type="hidden" name="return" value="{{ return_url }}">{% endif %}{{ form.non_field_errors }}{% for field in form %}<div class="field{% if field.errors %} has-error{% endif %}">{{ field.label_tag }}{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{{ field.errors }}</div>{% endfor %}<div class="form-actions"><button class="button primary" type="submit">{{ submit_label|default:"Lagre" }}</button><a class="button" href="{{ cancel_url }}">Avbryt</a></div></form>{% endblock %}

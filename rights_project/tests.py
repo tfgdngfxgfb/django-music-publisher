@@ -43,8 +43,8 @@ class IntegratedHomeTests(TestCase):
         response = self.client.get(reverse("home"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Startside")
-        self.assertContains(response, 'id="nav-sidebar"', html=False)
+        self.assertContains(response, "Start")
+        self.assertContains(response, 'class="side-nav"', html=False)
         for label in (
             "Musikkarkiv",
             "Forvaltet musikk",
@@ -68,8 +68,8 @@ class IntegratedHomeTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Utgivelser")
         self.assertContains(response, "Hjelp")
-        self.assertNotContains(response, "Åpne Musikkarkiv")
-        self.assertNotContains(response, "Åpne Forvaltet musikk")
+        self.assertNotContains(response, "Radiometadata, innspillinger og radiofiler")
+        self.assertNotContains(response, "Katalogtilhørighet og dokumentasjon")
         self.assertNotContains(response, "Mulige dubletter")
         self.assertNotContains(response, "Kilder og verifikasjon")
 

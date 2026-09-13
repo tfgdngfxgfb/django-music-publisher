@@ -1,0 +1,43 @@
+{% extends "workbench/base.html" %}
+{% block eyebrow %}<a class="back-link" href="{{ return_url }}">← {{ release.title }}</a>{% endblock %}
+{% block subtitle %}<p>Registrer opptil fem spor samlet. Hvert spor gjenbruker en innspilling eller oppretter innspilling og sporkobling atomisk.</p>{% endblock %}
+{% block content %}
+<form method="post" novalidate>
+  {% csrf_token %}
+  <input type="hidden" name="return" value="{{ return_url }}">
+  {{ formset.management_form }}
+  {{ formset.non_form_errors }}
+  <div class="track-stack">
+    {% for form in formset %}
+      <fieldset class="panel track-form">
+        <legend>Spor {{ forloop.counter }}</legend>
+        {{ form.non_field_errors }}
+        <div class="form-grid">
+          {% for field in form %}
+            {% if field.is_hidden %}
+              {{ field }}
+            {% else %}
+              <div class="field{% if field.errors %} has-error{% endif %}">
+                {{ field.label_tag }}{{ field }}{{ field.errors }}
+                {% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </fieldset>
+    {% endfor %}
+  </div>
+  <div class="sticky-actions">
+    <button class="button primary" type="submit">Lagre utfylte spor</button>
+    <a class="button" href="{{ return_url }}">Avbryt</a>
+  </div>
+</form>
+{% endblock %}
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const first = document.querySelector('[name="tracks-0-sequence_number"]');
+  if (first && !first.value) first.value = "{{ next_sequence }}";
+});
+</script>
+{% endblock %}

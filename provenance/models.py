@@ -289,3 +289,56 @@ class AssertionDecision(CanonicalModel):
 
     def __str__(self):
         return f"{self.assertion} — {self.get_decision_display()}"
+
+
+class AppliedMetadataChange(CanonicalModel):
+    """Immutable audit evidence for a source value applied to canonical data."""
+
+    assertion = models.ForeignKey(
+        MetadataAssertion,
+        verbose_name="metadatapåstand",
+        on_delete=models.PROTECT,
+        related_name="applied_changes",
+    )
+    entity_type = models.CharField(
+        "objekttype", max_length=40, choices=MetadataAssertion.EntityType.choices
+    )
+    entity_uuid = models.UUIDField("objektets UUID", db_index=True)
+    field_name = models.CharField("feltnavn", max_length=100)
+    before_value = models.JSONField("tidligere verdi", null=True, blank=True)
+    after_value = models.JSONField("ny verdi", null=True, blank=True)
+    base_revision = models.PositiveBigIntegerField("forventet revisjon")
+    result_revision = models.PositiveBigIntegerField("ny revisjon")
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name="endret av",
+        on_delete=models.PROTECT,
+        related_name="applied_metadata_changes",
+    )
+
+    class Meta:
+        verbose_name = "anvendt kildeverdi"
+        verbose_name_plural = "anvendte kildeverdier"
+        ordering = ("-created_at", "id")
+        indexes = [
+            models.Index(
+                fields=("entity_type", "entity_uuid", "field_name"),
+                name="applied_change_target_idx",
+            )
+        ]
+
+    def clean(self):
+        super().clean()
+        if not self._state.adding:
+            raise ValidationError("Loggen over anvendte kildeverdier kan ikke endres.")
+        if self.assertion_id and (
+            self.entity_type != self.assertion.entity_type
+            or self.entity_uuid != self.assertion.entity_uuid
+            or self.field_name != self.assertion.field_name
+        ):
+            raise ValidationError(
+                "Loggposten må gjelde samme objekt og felt som kilden."
+            )
+
+    def __str__(self):
+        return f"{self.get_entity_type_display()}.{self.field_name}: {self.after_value}"

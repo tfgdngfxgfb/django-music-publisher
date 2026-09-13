@@ -1,0 +1,42 @@
+{% load static %}<!doctype html>
+<html lang="nb" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{{ title }} · P7 Arkiv og rettigheter</title>
+  <script>document.documentElement.dataset.theme=localStorage.getItem("p7-theme")||((window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches)?"dark":"light");</script>
+  <link rel="stylesheet" href="{% static 'workbench/workbench.css' %}">
+</head>
+<body>
+  <a class="skip-link" href="#main">Hopp til innhold</a>
+  <header class="topbar">
+    <a class="brand" href="{% url 'home' %}"><span class="brand-mark">P7</span><span>Arkiv og rettigheter</span></a>
+    <div class="top-actions">
+      <button class="theme-button" type="button" id="theme-toggle" aria-label="Bytt lyst eller mørkt tema">◐ <span>Tema</span></button>
+      <span class="user-name">{{ request.user.get_username }}</span>
+      <form method="post" action="{% url 'admin:logout' %}">{% csrf_token %}<button class="link-button" type="submit">Logg ut</button></form>
+    </div>
+  </header>
+  <div class="app-shell">
+    <nav class="side-nav" aria-label="Hovedmeny">
+      <a {% if section == 'home' %}aria-current="page"{% endif %} href="{% url 'home' %}">Start</a>
+      {% if perms.music_library.view_musiclibraryentry %}<a {% if section == 'library' %}aria-current="page"{% endif %} href="{% url 'workbench:library' %}">Musikkarkiv</a>{% endif %}
+      {% if perms.managed_music.view_managedrecording %}<a {% if section == 'managed' %}aria-current="page"{% endif %} href="{% url 'workbench:managed' %}">Forvaltet musikk</a>{% endif %}
+      {% if perms.catalogue.view_release %}<a {% if section == 'releases' %}aria-current="page"{% endif %} href="{% url 'workbench:releases' %}">Utgivelser</a>{% endif %}
+      {% if perms.parties.view_party or perms.parties.view_artistidentity %}<a {% if section == 'parties' %}aria-current="page"{% endif %} href="{% url 'workbench:parties' %}">Artister/personer</a>{% endif %}
+      {% if perms.catalogue.view_duplicatecandidate or perms.provenance.view_metadataassertion %}<a {% if section == 'control' %}aria-current="page"{% endif %} href="{% url 'workbench:control' %}">Kontroll</a>{% endif %}
+      {% if perms.media_assets.view_fileasset %}<a {% if section == 'files' %}aria-current="page"{% endif %} href="{% url 'workbench:files' %}">Filer</a>{% endif %}
+      <a {% if section == 'help' %}aria-current="page"{% endif %} href="{% url 'help' %}">Hjelp</a>
+      {% if request.user.is_superuser %}<hr><a href="{% url 'admin:index' %}">Administrasjon</a>{% endif %}
+      {% if perms.music_publisher.view_work %}<a href="{% url 'admin:app_list' app_label='music_publisher' %}">Musikkforlag</a>{% endif %}
+    </nav>
+    <main id="main" class="main-content" tabindex="-1">
+      {% if messages %}<div class="messages" aria-live="polite">{% for message in messages %}<div class="message {{ message.tags }}">{{ message }}</div>{% endfor %}</div>{% endif %}
+      <div class="page-heading"><div>{% block eyebrow %}{% endblock %}<h1>{{ title }}</h1>{% block subtitle %}{% endblock %}</div>{% block page_actions %}{% endblock %}</div>
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+  <script src="{% static 'workbench/workbench.js' %}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

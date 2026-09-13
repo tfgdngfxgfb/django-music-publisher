@@ -1,0 +1,7 @@
+{% if page.paginator.num_pages > 1 %}
+<nav class="pagination" aria-label="Sidenavigasjon">
+  {% if page.has_previous %}<a href="?{% if page_query %}{{ page_query }}&{% endif %}page={{ page.previous_page_number }}">Forrige</a>{% endif %}
+  <span>Side {{ page.number }} av {{ page.paginator.num_pages }}</span>
+  {% if page.has_next %}<a href="?{% if page_query %}{{ page_query }}&{% endif %}page={{ page.next_page_number }}">Neste</a>{% endif %}
+</nav>
+{% endif %}

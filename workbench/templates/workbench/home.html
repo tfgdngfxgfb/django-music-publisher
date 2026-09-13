@@ -1,0 +1,12 @@
+{% extends "workbench/base.html" %}
+{% block subtitle %}<p>Snarveier og faktiske kontrolloppgaver for katalogarbeidet.</p>{% endblock %}
+{% block content %}
+<div class="shortcut-grid">
+  {% if perms.music_library.view_musiclibraryentry %}<a class="shortcut" href="{% url 'workbench:library' %}"><strong>Musikkarkiv</strong><span>Radiometadata, innspillinger og radiofiler</span></a>{% endif %}
+  {% if perms.managed_music.view_managedrecording %}<a class="shortcut" href="{% url 'workbench:managed' %}"><strong>Forvaltet musikk</strong><span>Katalogtilhørighet og dokumentasjon — ikke eierskapsbevis</span></a>{% endif %}
+  {% if perms.catalogue.view_release %}<a class="shortcut" href="{% url 'workbench:releases' %}"><strong>Utgivelser</strong><span>Utgivelsesdata og effektiv sporregistrering</span></a>{% endif %}
+  {% if perms.parties.view_party %}<a class="shortcut" href="{% url 'workbench:parties' %}"><strong>Artister og personer</strong><span>Juridiske parter og separate artistidentiteter</span></a>{% endif %}
+  {% if perms.media_assets.view_fileasset %}<a class="shortcut" href="{% url 'workbench:files' %}"><strong>Filer</strong><span>Filreferanser og aktive eller historiske plasseringer</span></a>{% endif %}
+</div>
+{% if tasks %}<section class="panel"><div class="panel-heading"><h2>Kontrolloppgaver</h2><a href="{% url 'workbench:control' %}">Åpne kontroll</a></div><div class="task-list">{% for task in tasks %}<a href="{{ task.url }}"><span>{{ task.label }}</span><strong>{{ task.count }}</strong></a>{% endfor %}</div></section>{% endif %}
+{% endblock %}

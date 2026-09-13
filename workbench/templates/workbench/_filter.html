@@ -1,0 +1,5 @@
+<form class="filter-bar" method="get">
+  {% for field in form %}<label><span>{{ field.label }}</span>{{ field }}</label>{% endfor %}
+  <button class="button primary" type="submit">Søk og filtrer</button>
+  <a class="button" href="{{ request.path }}">Nullstill</a>
+</form>
