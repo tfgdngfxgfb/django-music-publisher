@@ -164,6 +164,10 @@ class FlacIngestTests(FlacTestMixin, TestCase):
             read_flac(self.root / item.relative_path).parsed["p7uuid"],
             str(recording.pk),
         )
+        self.client.force_login(self.user)
+        library_response = self.client.get(reverse("workbench:library"))
+        self.assertEqual(library_response.status_code, 200)
+        self.assertContains(library_response, "Uavklart artistnavn")
 
         second = self.scan()
         self.assertEqual(second.items.get().action, FlacIngestItem.Action.UNCHANGED)
@@ -195,6 +199,27 @@ class FlacIngestTests(FlacTestMixin, TestCase):
 
         third = self.scan()
         self.assertEqual(third.items.get().action, FlacIngestItem.Action.UNCHANGED)
+
+    def test_files_with_same_new_isrc_reuse_recording_when_batch_is_applied(self):
+        common_tags = {
+            "ARTIST": "Uavklart felles artist",
+            "ISRC": "NO-P7T-26-00999",
+        }
+        self.make_flac("sett/spor-a.flac", TITLE="Første fil", **common_tags)
+        self.make_flac("sett/spor-b.flac", TITLE="Andre fil", **common_tags)
+
+        batch = self.scan()
+        self.assertEqual(
+            list(batch.items.values_list("action", flat=True)),
+            [FlacIngestItem.Action.NEW, FlacIngestItem.Action.NEW],
+        )
+        self.assertEqual(self.apply(batch), 2)
+
+        recording_ids = set(batch.items.values_list("recording_id", flat=True))
+        self.assertEqual(len(recording_ids), 1)
+        self.assertEqual(Recording.objects.count(), 1)
+        self.assertEqual(ExternalIdentifier.objects.count(), 1)
+        self.assertEqual(FileAsset.objects.count(), 2)
 
     def test_managed_catalogue_is_protected_but_radio_metadata_updates(self):
         recording = Recording.objects.create(title="Databasefasit")

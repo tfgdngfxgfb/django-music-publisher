@@ -607,6 +607,23 @@ def apply_item(item, *, user):
         },
     )
     recording = item.recording
+    # Several files in the same preview may carry the same previously unseen
+    # ISRC. The first applied row creates the Recording; later rows must
+    # re-check the identifier boundary instead of creating a duplicate.
+    if recording is None and parsed.get("isrc"):
+        normalized_isrc = normalize_isrc(parsed["isrc"])
+        identifier = (
+            ExternalIdentifier.objects.select_for_update()
+            .select_related("recording")
+            .filter(
+                scheme=ExternalIdentifier.Scheme.ISRC,
+                namespace="",
+                normalized_value=normalized_isrc,
+            )
+            .first()
+        )
+        if identifier:
+            recording = identifier.recording
     is_new = recording is None
     if is_new:
         recording = Recording.objects.create(
