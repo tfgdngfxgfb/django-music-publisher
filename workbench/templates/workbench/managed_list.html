@@ -19,7 +19,7 @@
     {% for managed in page %}
       <tr>
         <td><a href="{% url 'workbench:recording' managed.recording.pk %}?return={{ request.get_full_path|urlencode }}">{{ managed.recording.title }}</a></td>
-        <td>{% with contribution=managed.recording.contributions.all|first %}{% if contribution %}{{ contribution.credited_as|default:contribution.party.name }}{% else %}<span class="muted">Ukjent</span>{% endif %}{% endwith %}</td>
+        <td>{% if managed.primary_credit %}{{ managed.primary_credit.display_credit }}{% else %}<span class="muted">Ukjent</span>{% endif %}</td>
         <td>{% for identifier in managed.recording.identifiers.all %}{% if identifier.scheme == 'ISRC' %}<code>{{ identifier.normalized_value }}</code>{% endif %}{% empty %}—{% endfor %}</td>
         {% if perms.rights.view_rightsclaim %}
           <td><a class="status status-{{ managed.ownership_summary.status_class }}" href="{% url 'workbench:recording' managed.recording.pk %}?fane=rights&return={{ request.get_full_path|urlencode }}">{{ managed.ownership_summary.label }}</a>{% if managed.ownership_summary.has_unknown_local_share %}<small class="table-note">Lokal andel er ukjent</small>{% endif %}</td>

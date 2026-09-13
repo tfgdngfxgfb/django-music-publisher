@@ -190,6 +190,18 @@ def home(request):
     )
 
 
+def _primary_credit(recording):
+    credits = list(recording.contributions.all())
+    return next(
+        (
+            credit
+            for credit in credits
+            if credit.role == RecordingContribution.Role.PRIMARY
+        ),
+        credits[0] if credits else None,
+    )
+
+
 @staff
 @permission_required("music_library.view_musiclibraryentry", raise_exception=True)
 def library_list(request):
@@ -296,9 +308,7 @@ def library_list(request):
             ),
             "—",
         )
-        entry.primary_credit = next(
-            iter(entry.recording.contributions.all()), None
-        )
+        entry.primary_credit = _primary_credit(entry.recording)
         if request.user.has_perm("media_assets.view_fileasset"):
             assets = list(entry.recording.file_assets.all())
             locations = [
@@ -488,6 +498,8 @@ def managed_list(request):
     page, query = _paginate(request, queryset)
     rows = list(page.object_list)
     page.object_list = rows
+    for managed in rows:
+        managed.primary_credit = _primary_credit(managed.recording)
     if can_view_rights:
         for managed in rows:
             claims = tuple(managed.recording.rights_claims.all())
@@ -725,6 +737,8 @@ def release_detail(request, pk):
         ),
         pk=pk,
     )
+    for track in release.tracks.all():
+        track.primary_credit = _primary_credit(track.recording)
     form = None
     if request.method == "POST" and not request.user.has_perm(
         "catalogue.change_release"

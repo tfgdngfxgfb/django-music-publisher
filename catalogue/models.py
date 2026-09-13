@@ -313,8 +313,18 @@ class RecordingContribution(CanonicalModel):
             )
 
     def __str__(self):
-        name = self.credited_as or str(self.party)
-        return f"{name} — {self.get_role_display()} — {self.recording}"
+        return f"{self.display_credit} — {self.get_role_display()} — {self.recording}"
+
+    @property
+    def display_credit(self):
+        """Return a safe catalogue label even while identity is unresolved."""
+        if self.credited_as:
+            return self.credited_as
+        if self.artist_identity_id:
+            return self.artist_identity.display_name
+        if self.party_id:
+            return self.party.name
+        return "Uavklart"
 
 
 class ExternalIdentifier(CanonicalModel):

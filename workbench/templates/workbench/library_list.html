@@ -12,7 +12,7 @@
         {% for entry in page %}
           <tr {% if entry == selected_entry %}class="selected-recording"{% endif %}>
             <td><a class="recording-preview" href="{{ entry.preview_url }}" {% if entry == selected_entry %}aria-current="true"{% endif %}><span class="cover-placeholder miniature" aria-hidden="true">{% if entry.cover_id %}<img class="catalogue-cover" src="{% url 'workbench:cover_image' entry.cover_id %}" alt="" loading="lazy">{% else %}<svg><use href="#i-release"></use></svg>{% endif %}</span><strong>{{ entry.recording.title }}</strong></a></td>
-            <td>{% if entry.primary_credit %}{% if entry.primary_credit.credited_as %}{{ entry.primary_credit.credited_as }}{% elif entry.primary_credit.party %}{{ entry.primary_credit.party.name }}{% else %}<span class="muted">Uavklart</span>{% endif %}{% else %}<span class="muted">Ukjent</span>{% endif %}</td>
+            <td>{% if entry.primary_credit %}{{ entry.primary_credit.display_credit }}{% else %}<span class="muted">Ukjent</span>{% endif %}</td>
             <td><code>{{ entry.isrc }}</code></td>
             <td class="duration">{{ entry.display_duration }}</td>
             <td><span class="status status-{{ entry.verification_status }}">{{ entry.get_verification_status_display }}</span></td>
@@ -31,7 +31,7 @@
     <a class="inspector-close" href="{{ close_panel_url }}" aria-label="Lukk detaljpanel">×</a>
     <header class="inspector-header">
       <div class="cover-placeholder inspector-cover">{% if entry.cover_id %}<img class="catalogue-cover" src="{% url 'workbench:cover_image' entry.cover_id %}" alt="Registrert omslag" loading="lazy">{% else %}<svg aria-hidden="true"><use href="#i-release"></use></svg>{% endif %}</div>
-      <div><h2>{{ recording.title }}</h2><p class="inspector-artist">{% if entry.primary_credit %}{% if entry.primary_credit.credited_as %}{{ entry.primary_credit.credited_as }}{% elif entry.primary_credit.party %}{{ entry.primary_credit.party.name }}{% else %}Uavklart artist{% endif %}{% else %}Ukjent artist{% endif %}</p><dl class="identity-lines"><dt>ISRC</dt><dd><code>{{ entry.isrc }}</code></dd><dt>UUID</dt><dd><code>{{ recording.pk }}</code><button type="button" class="icon-copy" data-copy="{{ recording.pk }}" aria-label="Kopier UUID">□</button></dd></dl></div>
+      <div><h2>{{ recording.title }}</h2><p class="inspector-artist">{% if entry.primary_credit %}{{ entry.primary_credit.display_credit }}{% else %}Ukjent artist{% endif %}</p><dl class="identity-lines"><dt>ISRC</dt><dd><code>{{ entry.isrc }}</code></dd><dt>UUID</dt><dd><code>{{ recording.pk }}</code><button type="button" class="icon-copy" data-copy="{{ recording.pk }}" aria-label="Kopier UUID">□</button></dd></dl></div>
     </header>
     {% if perms.managed_music.view_managedrecording and entry.managed_recording %}<span class="status status-confirmed membership-status">Registrert i Forvaltet musikk</span>{% endif %}
     <nav class="inspector-tabs" aria-label="Forhåndsvisning"><a href="#preview-overview">Oversikt</a><a href="#preview-radio">Radio</a>{% if perms.media_assets.view_fileasset %}<a href="#preview-files">Filer</a>{% endif %}{% if perms.provenance.view_metadataassertion %}<a href="#preview-sources">Kilder</a>{% endif %}</nav>

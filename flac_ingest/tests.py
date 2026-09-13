@@ -168,6 +168,17 @@ class FlacIngestTests(FlacTestMixin, TestCase):
         library_response = self.client.get(reverse("workbench:library"))
         self.assertEqual(library_response.status_code, 200)
         self.assertContains(library_response, "Uavklart artistnavn")
+        contributors_response = self.client.get(
+            reverse("workbench:recording", args=[recording.pk])
+            + "?fane=contributors"
+        )
+        self.assertEqual(contributors_response.status_code, 200)
+        self.assertContains(contributors_response, "Komponist uten identitetsmatch")
+        release_response = self.client.get(
+            reverse("workbench:release", args=[Release.objects.get().pk])
+        )
+        self.assertEqual(release_response.status_code, 200)
+        self.assertContains(release_response, "Uavklart artistnavn")
 
         second = self.scan()
         self.assertEqual(second.items.get().action, FlacIngestItem.Action.UNCHANGED)
