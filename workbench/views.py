@@ -26,7 +26,7 @@ from catalogue.services import create_release_track
 from managed_music.forms import ManagedRecordingCreationForm
 from managed_music.models import ManagedRecording
 from managed_music.services import create_managed_recording
-from media_assets.models import FileAsset
+from media_assets.models import FileAsset, FileLocation
 from music_library.models import MusicLibraryEntry
 from parties.models import ArtistIdentity, Party
 from provenance.models import AppliedMetadataChange, MetadataAssertion, SourceSystem
@@ -185,6 +185,7 @@ def library_list(request):
         .prefetch_related(
             "recording__identifiers",
             "recording__release_tracks__release",
+            "recording__file_assets__locations",
             Prefetch(
                 "recording__contributions",
                 RecordingContribution.objects.select_related(
@@ -269,11 +270,63 @@ def library_list(request):
             if duration is not None
             else "—"
         )
+        entry.isrc = next(
+            (
+                identifier.normalized_value
+                for identifier in entry.recording.identifiers.all()
+                if identifier.scheme == "ISRC"
+            ),
+            "—",
+        )
+        entry.primary_credit = next(
+            iter(entry.recording.contributions.all()), None
+        )
+        if request.user.has_perm("media_assets.view_fileasset"):
+            assets = list(entry.recording.file_assets.all())
+            locations = [
+                location
+                for asset in assets
+                for location in asset.locations.all()
+                if location.is_current
+            ]
+            if any(
+                location.verification_status
+                == FileLocation.VerificationStatus.VERIFIED
+                for location in locations
+            ):
+                entry.file_state = "verified"
+                entry.file_state_label = "Kontrollert"
+            elif locations:
+                entry.file_state = "unchecked"
+                entry.file_state_label = "Ikke kontrollert"
+            elif assets:
+                entry.file_state = "reference"
+                entry.file_state_label = "Kun referanse"
+            else:
+                entry.file_state = "missing"
+                entry.file_state_label = "Ingen fil"
     panel_sources = MetadataAssertion.objects.none()
+    panel_file = None
+    panel_location = None
     if selected and request.user.has_perm("provenance.view_metadataassertion"):
         panel_sources = MetadataAssertion.objects.filter(
             entity_type="recording", entity_uuid=selected.recording_id
         ).select_related("source_record__source_system")[:5]
+    if selected and request.user.has_perm("media_assets.view_fileasset"):
+        panel_assets = list(selected.recording.file_assets.all())
+        panel_file = next(
+            (asset for asset in panel_assets if asset.role == FileAsset.Role.RADIO_FLAC),
+            panel_assets[0] if panel_assets else None,
+        )
+        if panel_file:
+            panel_location = next(
+                (
+                    location
+                    for location in panel_file.locations.all()
+                    if location.is_current
+                ),
+                None,
+            )
     return render(
         request,
         "workbench/library_list.html",
@@ -285,6 +338,8 @@ def library_list(request):
             page_query=query,
             selected_entry=selected,
             panel_sources=panel_sources,
+            panel_file=panel_file,
+            panel_location=panel_location,
             close_panel_url="?" + list_params.urlencode() + "&selected=none",
             sources=SourceSystem.objects.all(),
         ),

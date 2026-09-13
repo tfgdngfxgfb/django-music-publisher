@@ -30,10 +30,22 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  const globalSearch = document.getElementById("global-search");
+  document.addEventListener("keydown", (event) => {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+      if (!globalSearch) return;
+      event.preventDefault();
+      globalSearch.focus();
+      globalSearch.select();
+    }
+  });
+
   document.querySelectorAll("[data-copy]").forEach((button) => {
     button.addEventListener("click", async () => {
       await navigator.clipboard.writeText(button.dataset.copy);
+      const original = button.textContent;
       button.textContent = "Kopiert";
+      window.setTimeout(() => { button.textContent = original; }, 1400);
     });
   });
 

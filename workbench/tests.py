@@ -8,7 +8,7 @@ from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
-from catalogue.models import Recording, Release, ReleaseTrack
+from catalogue.models import ExternalIdentifier, Recording, Release, ReleaseTrack
 from media_assets.models import FileAsset, FileLocation
 from managed_music.services import create_managed_recording
 from music_library.models import MusicLibraryEntry
@@ -61,6 +61,20 @@ class WorkbenchTestCase(TestCase):
 
 
 class AuthenticationAndPermissionTests(WorkbenchTestCase):
+    def test_global_catalogue_search_follows_library_permission(self):
+        user = self.create_user()
+        self.login(user)
+        self.assertNotContains(self.client.get(reverse("home")), 'id="global-search"')
+
+        viewer = self.create_user(
+            username="search-viewer",
+            permissions=("music_library.view_musiclibraryentry",),
+        )
+        self.login(viewer)
+        response = self.client.get(reverse("home"))
+        self.assertContains(response, 'id="global-search"')
+        self.assertContains(response, 'action="%s"' % reverse("workbench:library"))
+
     def test_logout_page_is_norwegian(self):
         self.login(self.create_user())
         response = self.client.post(reverse("admin:logout"))
@@ -587,6 +601,40 @@ class FileWorkspaceTests(WorkbenchTestCase):
 
 
 class CatalogueInspectorTests(WorkbenchTestCase):
+    def test_library_workspace_shows_identifier_radio_and_file_state(self):
+        self.login(self.create_user(superuser=True))
+        recording = Recording.objects.create(title="Visuell kontroll", duration_ms=193000)
+        ExternalIdentifier.objects.create(
+            recording=recording,
+            scheme=ExternalIdentifier.Scheme.ISRC,
+            value="NO-P7K-26-00999",
+        )
+        MusicLibraryEntry.objects.create(
+            recording=recording,
+            genre="Pop",
+            language="nb",
+            rating=4,
+            energy=3,
+        )
+        asset = FileAsset.objects.create(
+            recording=recording,
+            filename="radio.flac",
+            role=FileAsset.Role.RADIO_FLAC,
+        )
+        FileLocation.objects.create(
+            asset=asset,
+            storage_type=FileLocation.StorageType.NAS,
+            relative_path="Demo/Visuell kontroll/radio.flac",
+            verification_status=FileLocation.VerificationStatus.VERIFIED,
+        )
+
+        response = self.client.get(reverse("workbench:library"))
+        self.assertContains(response, "NOP7K2600999")
+        self.assertContains(response, "Kontrollert")
+        self.assertContains(response, "Radio-FLAC registrert")
+        self.assertContains(response, "4 av 5")
+        self.assertContains(response, 'class="global-search"')
+
     def test_filter_selection_and_return_context(self):
         self.login(self.create_user(superuser=True))
         recording = Recording.objects.create(title="Blå kveld")
