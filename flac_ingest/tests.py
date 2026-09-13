@@ -1,6 +1,8 @@
 import shutil
 import tempfile
 from pathlib import Path
+from types import SimpleNamespace
+from uuid import uuid4
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
@@ -24,6 +26,7 @@ from flac_ingest.adapter import read_flac, write_catalogue_tags
 from flac_ingest.models import FlacIngestItem, FlacSyncLog
 from flac_ingest.services import (
     apply_batch,
+    _source_record_reference,
     resolve_music_path,
     scan_directory,
     sync_file_asset,
@@ -114,6 +117,18 @@ class FlacIngestTests(FlacTestMixin, TestCase):
         with override_settings(P7_MUSIC_ROOT=str(self.root)):
             with self.captureOnCommitCallbacks(execute=True):
                 return apply_batch(batch, user=self.user)
+
+    def test_long_path_uses_bounded_source_identity_and_preserves_full_path(self):
+        relative_path = f"lang-katalog/{'svært-lang-kildetittel-' * 24}.flac"
+        item = SimpleNamespace(
+            batch_id=uuid4(), pk=uuid4(), relative_path=relative_path
+        )
+        external_record_id, source_locator = _source_record_reference(item)
+
+        self.assertLessEqual(len(external_record_id), 255)
+        self.assertLessEqual(len(source_locator), 500)
+        self.assertTrue(external_record_id.startswith("flac:"))
+        self.assertTrue(source_locator.endswith(".flac"))
 
     def test_new_tagged_file_creates_operational_catalogue_and_is_idempotent(self):
         self.make_flac(

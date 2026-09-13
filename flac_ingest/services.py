@@ -584,6 +584,18 @@ def _sync_library_relations(entry, model, through, relation_name, values):
     return before
 
 
+def _source_record_reference(item):
+    """Build a bounded source ID while retaining a useful path locator."""
+    external_record_id = f"flac:{item.batch_id}:{item.pk}"
+    relative_path = item.relative_path
+    source_locator = (
+        relative_path
+        if len(relative_path) <= 500
+        else f"{relative_path[:244]}…{relative_path[-255:]}"
+    )
+    return external_record_id, source_locator
+
+
 @transaction.atomic
 def review_item(item, *, parsed, resolution, user, note=""):
     """Approve corrected interpreted metadata without changing the source FLAC."""
@@ -673,12 +685,14 @@ def apply_item(item, *, user):
     if not item.can_apply:
         return item
     parsed = item.parsed_metadata
+    external_record_id, source_locator = _source_record_reference(item)
     source_record = SourceRecord.objects.create(
         source_system=item.batch.import_batch.source_system,
         import_batch=item.batch.import_batch,
-        external_record_id=f"{item.batch_id}:{item.relative_path}",
-        source_locator=item.relative_path,
+        external_record_id=external_record_id,
+        source_locator=source_locator,
         raw_payload={
+            "relative_path": item.relative_path,
             "tags": item.raw_tags,
             "parsed": parsed,
             "technical": item.technical_metadata,
