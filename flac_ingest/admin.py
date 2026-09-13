@@ -18,6 +18,8 @@ class FlacIngestItemAdmin(CanonicalAdmin):
         "action",
         "match_method",
         "recording",
+        "reviewed_by",
+        "reviewed_at",
         "applied_at",
     )
     list_filter = ("action", "match_method")
@@ -30,6 +32,9 @@ class FlacIngestItemAdmin(CanonicalAdmin):
         "technical_metadata",
         "sha256",
         "source_record",
+        "reviewed_by",
+        "reviewed_at",
+        "review_note",
     )
 
 

@@ -8,6 +8,8 @@
   for katalogmetadata. Avvik i filen overskriver ikke katalogen.
 - FLAC/OneTagger-arbeidsflyten er alltid autoritet for radiosjanger,
   radiospråk, Energy, kanal, målgruppe og kjønn. `RATING` betyr P7 Energy.
+  Både direkteverdier `1–5` og OneTaggers lagring `20/40/60/80/100` tolkes
+  som Energy `1–5`.
 - Writeback har en eksplisitt allowlist for katalogtags. Radiotags og ukjente
   tags bevares og kontrolleres etter skriving. `P7UUID` gir stabil filkobling.
 
@@ -21,6 +23,9 @@ Workbench har arbeidsflyten **Les inn fra musikkarkiv → Skann → Forhåndsvis
 Bruk/importer**. Bare konfigurerte mapper under `P7_MUSIC_ROOT` kan velges.
 Recording treffes i rekkefølgen P7UUID, ISRC, konservativ metadata og ellers ny
 Recording. Konflikter beholdes som `FlacIngestItem` og merges aldri automatisk.
+En autorisert bruker kan åpne **Kontroller og rett**, korrigere den tolkede
+verdien, velge ny eller eksisterende Recording og godkjenne raden før import.
+Råtags endres ikke. Bruker, tidspunkt og kontrollmerknad logges.
 
 Release og ReleaseTrack opprettes bare når album og en sikker strekkode eller
 katalognummer finnes. Manglende releasegrunnlag hindrer ikke Recording og
@@ -45,6 +50,7 @@ transkodes aldri.
 - `media_assets.0003`: ReleaseTrack-kontekst, syncstatus, checksumhistorikk,
   sti-integritet og syncindeks.
 - `flac_ingest.0001`: persistente skanninger, kontrollrader og synklogg.
+- `flac_ingest.0002`: revisjonsspor for manuell kontroll av innlesingsrader.
 
 ## Verifikasjon og begrensninger
 

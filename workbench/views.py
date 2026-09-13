@@ -26,6 +26,7 @@ from catalogue.services import create_release_track
 from flac_ingest.models import FlacIngestBatch, FlacIngestItem
 from flac_ingest.services import (
     apply_batch,
+    review_item,
     scan_directory,
     sync_recording_files,
 )
@@ -73,6 +74,7 @@ from .forms import (
     ContributionForm,
     FileAssetForm,
     FileLocationForm,
+    FlacIngestReviewForm,
     FlacScanForm,
     LibraryMembershipForm,
     ManagedFilterForm,
@@ -568,16 +570,22 @@ def flac_ingest_start(request):
 @permission_required("flac_ingest.view_flacingestbatch", raise_exception=True)
 def flac_ingest_preview(request, pk):
     batch = get_object_or_404(
-        FlacIngestBatch.objects.select_related("created_by").prefetch_related(
-            "items__recording", "items__release", "items__file_asset"
-        ),
+        FlacIngestBatch.objects.select_related("created_by"),
         pk=pk,
     )
-    items = list(batch.items.all())
+    queryset = batch.items.select_related("recording", "release", "file_asset")
     counts = {
-        action: sum(item.action == action for item in items)
+        action: batch.items.filter(action=action).count()
         for action, _label in FlacIngestItem.Action.choices
     }
+    selected_action = request.GET.get("status", "")
+    valid_actions = {action for action, _label in FlacIngestItem.Action.choices}
+    if selected_action in valid_actions:
+        queryset = queryset.filter(action=selected_action)
+    else:
+        selected_action = ""
+    page, page_query = _paginate(request, queryset, per_page=100)
+    items = list(page.object_list)
     return render(
         request,
         "workbench/flac_ingest_preview.html",
@@ -586,9 +594,71 @@ def flac_ingest_preview(request, pk):
             "Forhåndsvis FLAC-innlesing",
             batch=batch,
             items=items,
+            total_count=batch.items.count(),
             counts=counts,
-            applicable_count=sum(item.can_apply for item in items),
+            selected_action=selected_action,
+            page=page,
+            page_query=page_query,
+            applicable_count=batch.items.filter(
+                action__in=(
+                    FlacIngestItem.Action.NEW,
+                    FlacIngestItem.Action.MATCHED,
+                ),
+                applied_at__isnull=True,
+            ).count(),
             cancel_url=reverse("workbench:library"),
+        ),
+    )
+
+
+@staff
+@permission_required(
+    (
+        "flac_ingest.view_flacingestbatch",
+        "flac_ingest.apply_flacingestbatch",
+    ),
+    raise_exception=True,
+)
+def flac_ingest_review(request, pk, item_pk):
+    batch = get_object_or_404(FlacIngestBatch, pk=pk)
+    item = get_object_or_404(
+        FlacIngestItem.objects.select_related("recording"),
+        pk=item_pk,
+        batch=batch,
+        action=FlacIngestItem.Action.CONFLICT,
+        applied_at__isnull=True,
+    )
+    form = FlacIngestReviewForm(request.POST or None, item=item)
+    cancel_url = _safe_return(
+        request, reverse("workbench:flac_ingest_preview", args=[batch.pk])
+    )
+    if request.method == "POST" and form.is_valid():
+        try:
+            review_item(
+                item,
+                parsed=form.interpreted_metadata(),
+                resolution=form.cleaned_data["resolution"],
+                user=request.user,
+                note=form.cleaned_data["review_note"],
+            )
+        except ValidationError as error:
+            form.add_error(None, error)
+        else:
+            messages.success(
+                request,
+                "Tolkningen er kontrollert. Filen er nå klar til import.",
+            )
+            return redirect(cancel_url + f"#item-{item.pk}")
+    return render(
+        request,
+        "workbench/flac_ingest_review.html",
+        _page_context(
+            "library",
+            "Kontroller FLAC-tolkning",
+            batch=batch,
+            item=item,
+            form=form,
+            cancel_url=cancel_url,
         ),
     )
 

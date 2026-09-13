@@ -114,9 +114,14 @@ def _position(value):
         return None
 
 
-def _energy(value):
+def normalize_energy(value):
+    """Translate direct P7 levels and OneTagger's 20-step rating scale."""
     number = _position(value)
-    return number if number is not None and 1 <= number <= 5 else None
+    if number is not None and 1 <= number <= 5:
+        return number
+    if number in {20, 40, 60, 80, 100}:
+        return number // 20
+    return None
 
 
 def _gender(value):
@@ -169,7 +174,7 @@ def read_flac(path):
             parsed[field] = _position(_first(values))
         elif field == "energy":
             value = _first(values)
-            energy = _energy(value)
+            energy = normalize_energy(value)
             if value and energy is None:
                 parsed["energy_invalid"] = value
             else:

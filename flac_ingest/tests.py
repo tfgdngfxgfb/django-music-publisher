@@ -76,6 +76,17 @@ class FlacAdapterTests(FlacTestMixin, TestCase):
         self.assertEqual(snapshot.technical["bits_per_sample"], 16)
         self.assertEqual(snapshot.technical["channels"], 1)
 
+    def test_onetagger_percentage_rating_maps_to_p7_energy(self):
+        for raw_rating, expected_energy in (
+            ("20", 1),
+            ("40", 2),
+            ("60", 3),
+            ("80", 4),
+            ("100", 5),
+        ):
+            path = self.make_flac(f"rating-{raw_rating}.flac", RATING=raw_rating)
+            self.assertEqual(read_flac(path).parsed["energy"], expected_energy)
+
     def test_writeback_changes_allowlist_and_preserves_radio_and_unknown_tags(self):
         path = self.make_flac(
             TITLE="Før",
@@ -320,6 +331,52 @@ class FlacIngestTests(FlacTestMixin, TestCase):
         self.assertEqual(item.action, FlacIngestItem.Action.CONFLICT)
         self.assertIn("RATING må være et Energy-nivå fra 1 til 5.", item.messages)
 
+    def test_conflict_can_be_corrected_and_approved_without_changing_raw_tags(self):
+        self.make_flac(
+            TITLE="Kontroller meg",
+            ARTIST="Uavklart artist",
+            RATING="9",
+            GENRE="Salme",
+        )
+        batch = self.scan()
+        item = batch.items.get()
+        self.assertEqual(item.action, FlacIngestItem.Action.CONFLICT)
+
+        self.client.force_login(self.user)
+        url = reverse("workbench:flac_ingest_review", args=[batch.pk, item.pk])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Godkjenn og gjør klar")
+        response = self.client.post(
+            url,
+            {
+                "resolution": "new",
+                "title": "Kontroller meg",
+                "artists": "Uavklart artist",
+                "isrc": "",
+                "p7uuid": "",
+                "genre": "Salme",
+                "language": "nb",
+                "energy": "4",
+                "channels": "P7 Riks; P7 Kristen Riksradio",
+                "target_audiences": "Voksen",
+                "gender": "",
+                "review_note": "Kontrollert mot P7s Energy-skala.",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        item.refresh_from_db()
+        self.assertEqual(item.action, FlacIngestItem.Action.NEW)
+        self.assertEqual(item.parsed_metadata["energy"], 4)
+        self.assertNotIn("energy_invalid", item.parsed_metadata)
+        self.assertEqual(item.raw_tags["rating"], ["9"])
+        self.assertEqual(item.reviewed_by, self.user)
+        self.assertIsNotNone(item.reviewed_at)
+        self.assertEqual(item.review_note, "Kontrollert mot P7s Energy-skala.")
+
+        self.assertEqual(self.apply(batch), 1)
+        self.assertEqual(MusicLibraryEntry.objects.get().energy, 4)
+
     def test_sync_failure_keeps_database_change_and_retry_state(self):
         recording = Recording.objects.create(title="Ny databaseverdi")
         library = MusicLibraryEntry.objects.create(recording=recording)
@@ -360,3 +417,26 @@ class FlacWorkbenchPermissionTests(FlacTestMixin, TestCase):
             response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Les inn fra musikkarkiv")
+
+    def test_review_endpoint_enforces_apply_permission_on_direct_post(self):
+        self.make_flac(TITLE="Kontroll", RATING="9")
+        with override_settings(P7_MUSIC_ROOT=str(self.root)):
+            batch = scan_directory(relative_root=".", recursive=True, user=self.user)
+        item = batch.items.get()
+        url = reverse("workbench:flac_ingest_review", args=[batch.pk, item.pk])
+        staff = get_user_model().objects.create_user(
+            username="review-staff", password="test", is_staff=True
+        )
+        self.client.force_login(staff)
+        response = self.client.post(
+            url,
+            {
+                "resolution": "new",
+                "title": "Kontroll",
+                "energy": "3",
+            },
+        )
+        self.assertEqual(response.status_code, 403)
+        item.refresh_from_db()
+        self.assertEqual(item.action, FlacIngestItem.Action.CONFLICT)
+        self.assertIsNone(item.reviewed_at)

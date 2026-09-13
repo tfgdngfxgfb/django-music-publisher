@@ -585,6 +585,85 @@ def _sync_library_relations(entry, model, through, relation_name, values):
 
 
 @transaction.atomic
+def review_item(item, *, parsed, resolution, user, note=""):
+    """Approve corrected interpreted metadata without changing the source FLAC."""
+    item = (
+        FlacIngestItem.objects.select_for_update()
+        .select_related("recording", "file_asset__recording")
+        .get(pk=item.pk)
+    )
+    if item.applied_at:
+        raise ValidationError(
+            "Filen er allerede brukt og kan ikke kontrolleres på nytt."
+        )
+    if item.action != FlacIngestItem.Action.CONFLICT:
+        raise ValidationError("Bare filer merket «Må kontrolleres» kan godkjennes her.")
+
+    errors = _metadata_errors(parsed)
+    if parsed.get("barcode"):
+        try:
+            _release_identifier(parsed)
+        except ValidationError as error:
+            errors.extend(error.messages)
+    if errors:
+        raise ValidationError(errors)
+
+    recording = None
+    if resolution.startswith("recording:"):
+        recording_id = resolution.partition(":")[2]
+        recording = Recording.objects.filter(pk=recording_id).first()
+        if not recording:
+            raise ValidationError("Den valgte innspillingen finnes ikke lenger.")
+    elif resolution != "new":
+        raise ValidationError("Velg om filen skal bruke en eksisterende innspilling.")
+
+    p7uuid = parsed.get("p7uuid")
+    if p7uuid and (not recording or str(recording.pk) != p7uuid):
+        raise ValidationError(
+            "P7UUID må peke til den valgte innspillingen. Korriger eller tøm feltet."
+        )
+    if parsed.get("isrc"):
+        normalized_isrc = normalize_isrc(parsed["isrc"])
+        linked_recording_id = (
+            ExternalIdentifier.objects.filter(
+                scheme=ExternalIdentifier.Scheme.ISRC,
+                namespace="",
+                normalized_value=normalized_isrc,
+            )
+            .values_list("recording_id", flat=True)
+            .first()
+        )
+        if linked_recording_id and (
+            not recording or linked_recording_id != recording.pk
+        ):
+            raise ValidationError(
+                "ISRC er allerede knyttet til en annen innspilling. Velg den innspillingen eller korriger ISRC."
+            )
+    if (
+        item.file_asset_id
+        and item.file_asset.recording_id
+        and (not recording or item.file_asset.recording_id != recording.pk)
+    ):
+        raise ValidationError(
+            "Den registrerte filplasseringen tilhører en annen innspilling."
+        )
+
+    item.parsed_metadata = parsed
+    item.recording = recording
+    item.release = _find_release(parsed)
+    item.action = (
+        FlacIngestItem.Action.MATCHED if recording else FlacIngestItem.Action.NEW
+    )
+    item.match_method = "manual_review"
+    item.messages = []
+    item.reviewed_by = user
+    item.reviewed_at = timezone.now()
+    item.review_note = note.strip()
+    item.save()
+    return item
+
+
+@transaction.atomic
 def apply_item(item, *, user):
     item = (
         FlacIngestItem.objects.select_for_update()

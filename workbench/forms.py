@@ -11,6 +11,8 @@ from catalogue.models import (
     RecordingContribution,
     Release,
 )
+from catalogue.validators import normalize_isrc, validate_language
+from flac_ingest.adapter import normalize_energy
 from media_assets.models import FileAsset, FileLocation
 from music_library.models import (
     Channel,
@@ -216,6 +218,140 @@ class FlacScanForm(forms.Form):
         if not self.fields["relative_root"].choices:
             raise forms.ValidationError("Musikkroten er ikke tilgjengelig.")
         return value
+
+
+class FlacIngestReviewForm(forms.Form):
+    resolution = forms.ChoiceField(label="Kobling til innspilling", choices=())
+    title = forms.CharField(label="Tittel", max_length=500)
+    artists = forms.CharField(
+        label="Artisttekst",
+        required=False,
+        help_text="Skill flere navn med semikolon. Det opprettes ikke juridiske personer automatisk.",
+    )
+    isrc = forms.CharField(label="ISRC", max_length=32, required=False)
+    p7uuid = forms.UUIDField(
+        label="P7UUID",
+        required=False,
+        help_text="Kan korrigeres eller tømmes. Råverdien fra filen bevares uansett.",
+    )
+    genre = forms.CharField(label="Radiosjanger", max_length=100, required=False)
+    language = forms.CharField(label="Radiospråk", max_length=64, required=False)
+    energy = forms.TypedChoiceField(
+        label="Energy",
+        required=False,
+        coerce=int,
+        empty_value=None,
+        choices=(
+            ("", "Ikke registrert"),
+            *((str(value), str(value)) for value in range(1, 6)),
+        ),
+    )
+    channels = forms.CharField(
+        label="Kanaler", required=False, help_text="Skill flere verdier med semikolon."
+    )
+    target_audiences = forms.CharField(
+        label="Målgrupper",
+        required=False,
+        help_text="Skill flere verdier med semikolon.",
+    )
+    gender = forms.ChoiceField(
+        label="Kjønn",
+        required=False,
+        choices=(("", "Ikke registrert"), *MusicLibraryEntry.Gender.choices),
+    )
+    review_note = forms.CharField(
+        label="Kontrollmerknad",
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 2}),
+    )
+
+    def __init__(self, *args, item, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.item = item
+        choices = [("new", "Opprett en ny innspilling")]
+        seen = set()
+        if item.recording_id:
+            value = f"recording:{item.recording_id}"
+            choices.insert(0, (value, f"Bruk foreslått: {item.recording.title}"))
+            seen.add(str(item.recording_id))
+        for candidate in item.candidates:
+            candidate_id = candidate.get("recording_uuid")
+            if not candidate_id or candidate_id in seen:
+                continue
+            choices.append(
+                (
+                    f"recording:{candidate_id}",
+                    f"Bruk eksisterende: {candidate.get('title') or candidate_id}",
+                )
+            )
+            seen.add(candidate_id)
+        self.fields["resolution"].choices = choices
+        parsed = item.parsed_metadata
+        energy = parsed.get("energy")
+        if energy is None:
+            energy = normalize_energy(parsed.get("energy_invalid"))
+        self.initial.update(
+            {
+                "resolution": (
+                    f"recording:{item.recording_id}" if item.recording_id else "new"
+                ),
+                "title": parsed.get("title", ""),
+                "artists": "; ".join(parsed.get("artists", [])),
+                "isrc": parsed.get("isrc", ""),
+                "p7uuid": parsed.get("p7uuid", ""),
+                "genre": parsed.get("genre", ""),
+                "language": parsed.get("language", ""),
+                "energy": energy,
+                "channels": "; ".join(parsed.get("channels", [])),
+                "target_audiences": "; ".join(parsed.get("target_audiences", [])),
+                "gender": parsed.get("gender", ""),
+            }
+        )
+
+    def clean_isrc(self):
+        value = self.cleaned_data["isrc"].strip()
+        if value:
+            normalize_isrc(value)
+        return value
+
+    def clean_language(self):
+        value = self.cleaned_data["language"].strip()
+        if value:
+            validate_language(value)
+        return value
+
+    @staticmethod
+    def _values(value):
+        return [
+            part.strip() for part in value.replace("\n", ";").split(";") if part.strip()
+        ]
+
+    def interpreted_metadata(self):
+        parsed = dict(self.item.parsed_metadata)
+        parsed["title"] = self.cleaned_data["title"].strip()
+        optional_values = {
+            "artists": self._values(self.cleaned_data["artists"]),
+            "genre": self.cleaned_data["genre"].strip(),
+            "language": self.cleaned_data["language"],
+            "channels": self._values(self.cleaned_data["channels"]),
+            "target_audiences": self._values(self.cleaned_data["target_audiences"]),
+            "gender": self.cleaned_data["gender"],
+        }
+        for field, value in optional_values.items():
+            if value:
+                parsed[field] = value
+            else:
+                parsed.pop(field, None)
+        for field in ("isrc", "p7uuid", "energy"):
+            value = self.cleaned_data[field]
+            if value in (None, ""):
+                parsed.pop(field, None)
+            else:
+                parsed[field] = str(value) if field == "p7uuid" else value
+        parsed.pop("energy_invalid", None)
+        parsed.pop("gender_invalid", None)
+        parsed.pop("p7uuid_invalid", None)
+        return parsed
 
 
 class ReleaseForm(forms.ModelForm):

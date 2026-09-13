@@ -1,0 +1,28 @@
+{% extends "workbench/base.html" %}
+{% block eyebrow %}<a class="back-link" href="{{ cancel_url }}">← Tilbake til forhåndsvisningen</a>{% endblock %}
+{% block subtitle %}<p><code>{{ item.relative_path }}</code></p>{% endblock %}
+{% block content %}
+<div class="detail-grid ingest-review">
+  <section class="panel form-panel">
+    <div class="panel-heading"><div><h2>Tolket informasjon</h2><p>Rett bare tolkningen som skal brukes i P7. Originale FLAC-tagger beholdes i kildehistorikken og filen endres ikke her.</p></div></div>
+    {% if item.messages %}<div class="review-warnings" role="alert">{% for message in item.messages %}<div class="ingest-warning">{{ message }}</div>{% endfor %}</div>{% endif %}
+    <form method="post" class="form-grid" novalidate data-submit-once>
+      {% csrf_token %}
+      <input type="hidden" name="return" value="{{ cancel_url }}">
+      {{ form.non_field_errors }}
+      {% for field in form %}<div class="field{% if field.errors %} has-error{% endif %}{% if field.name == 'review_note' %} full{% endif %}">{{ field.label_tag }}{{ field }}{{ field.errors }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}</div>{% endfor %}
+      <div class="form-actions full"><button class="button primary" type="submit">Godkjenn og gjør klar</button><a class="button" href="{{ cancel_url }}">Avbryt</a></div>
+    </form>
+  </section>
+  <aside>
+    <section class="panel metadata">
+      <h2>Råverdier fra filen</h2>
+      <p><span>RATING</span>{% if item.parsed_metadata.energy_invalid %}{{ item.parsed_metadata.energy_invalid }}{% elif item.parsed_metadata.energy %}{{ item.parsed_metadata.energy }}{% else %}Ikke registrert{% endif %}</p>
+      <p><span>TITLE</span>{{ item.parsed_metadata.title|default:"Ikke registrert" }}</p>
+      <p><span>ARTIST</span>{{ item.parsed_metadata.artists|join:", "|default:"Ikke registrert" }}</p>
+      <p><span>ISRC</span>{{ item.parsed_metadata.isrc|default:"Ikke registrert" }}</p>
+      <details><summary>Vis alle råtags</summary><dl class="raw-tag-list">{% for key, values in item.raw_tags.items %}<dt>{{ key }}</dt><dd>{{ values|join:", " }}</dd>{% endfor %}</dl></details>
+    </section>
+  </aside>
+</div>
+{% endblock %}

@@ -19,6 +19,11 @@ urlpatterns = [
         views.flac_ingest_apply,
         name="flac_ingest_apply",
     ),
+    path(
+        "musikkarkiv/les-inn/<uuid:pk>/kontroller/<uuid:item_pk>/",
+        views.flac_ingest_review,
+        name="flac_ingest_review",
+    ),
     path("forvaltet/", views.managed_list, name="managed"),
     path("forvaltet/legg-til/", views.managed_add, name="managed_add"),
     path("utgivelser/", views.release_list, name="releases"),

@@ -110,6 +110,16 @@ class FlacIngestItem(CanonicalModel):
         null=True,
         blank=True,
     )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="reviewed_flac_ingest_items",
+        null=True,
+        blank=True,
+        verbose_name="kontrollert av",
+    )
+    reviewed_at = models.DateTimeField("kontrollert", null=True, blank=True)
+    review_note = models.TextField("kontrollmerknad", blank=True)
     applied_at = models.DateTimeField("brukt", null=True, blank=True)
 
     class Meta:
