@@ -76,3 +76,21 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 });
+
+document.querySelectorAll(".catalogue-cover").forEach((image) => {
+  image.addEventListener("error", () => image.remove());
+  if (image.complete && !image.naturalWidth) image.remove();
+});
+const inspectorLinks = document.querySelectorAll(".inspector-tabs a");
+function selectInspector(link) {
+  inspectorLinks.forEach((item) => {
+    const active = item === link;
+    item.setAttribute("aria-current", String(active));
+    document.querySelector(item.getAttribute("href")).hidden = !active;
+  });
+}
+inspectorLinks.forEach((link) => link.addEventListener("click", (event) => {
+  event.preventDefault();
+  selectInspector(link);
+}));
+if (inspectorLinks.length) selectInspector(inspectorLinks[0]);

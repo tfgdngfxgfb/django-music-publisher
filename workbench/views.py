@@ -1,10 +1,15 @@
+from io import BytesIO
+from pathlib import Path
+
+from PIL import Image, UnidentifiedImageError
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import permission_required
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Prefetch, Q
-from django.http import HttpResponseForbidden, JsonResponse
+from django.http import Http404, HttpResponse, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -147,6 +152,7 @@ def library_list(request):
         )
         .prefetch_related(
             "recording__identifiers",
+            "recording__release_tracks__release",
             Prefetch(
                 "recording__contributions",
                 RecordingContribution.objects.select_related(
@@ -168,6 +174,19 @@ def library_list(request):
                 )
             ).distinct()
         status = form.cleaned_data.get("status")
+        for field in ("genre", "language"):
+            if form.cleaned_data.get(field):
+                queryset = queryset.filter(
+                    **{field + "__iexact": form.cleaned_data[field]}
+                )
+        ordering = {
+            "title": "recording__title",
+            "-title": "-recording__title",
+            "recent": "-updated_at",
+        }
+        queryset = queryset.order_by(
+            ordering.get(form.cleaned_data.get("order"), "recording__title"), "id"
+        )
         if status:
             queryset = queryset.filter(verification_status=status)
         managed = form.cleaned_data.get("managed")
@@ -183,6 +202,46 @@ def library_list(request):
             ).values("entity_uuid")
             queryset = queryset.filter(recording_id__in=recording_ids)
     page, query = _paginate(request, queryset)
+    rows = list(page.object_list)
+    selected = next(
+        (
+            entry
+            for entry in rows
+            if str(entry.recording_id) == request.GET.get("selected")
+        ),
+        None,
+    )
+    if not selected and rows and request.GET.get("selected") != "none":
+        selected = rows[0]
+    if request.user.has_perms(
+        ("media_assets.view_fileasset", "media_assets.view_filelocation")
+    ):
+        covers = dict(
+            FileAsset.objects.filter(
+                role="cover_image", recording_id__in=[e.recording_id for e in rows]
+            )
+            .order_by("id")
+            .values_list("recording_id", "id")
+        )
+        for entry in rows:
+            entry.cover_id = covers.get(entry.recording_id)
+    list_params = request.GET.copy()
+    list_params.pop("selected", None)
+    for entry in rows:
+        params = list_params.copy()
+        params["selected"] = str(entry.recording_id)
+        entry.preview_url = "?" + params.urlencode()
+        duration = entry.recording.duration_ms
+        entry.display_duration = (
+            f"{duration // 60000}:{duration // 1000 % 60:02}"
+            if duration is not None
+            else "—"
+        )
+    panel_sources = MetadataAssertion.objects.none()
+    if selected and request.user.has_perm("provenance.view_metadataassertion"):
+        panel_sources = MetadataAssertion.objects.filter(
+            entity_type="recording", entity_uuid=selected.recording_id
+        ).select_related("source_record__source_system")[:5]
     return render(
         request,
         "workbench/library_list.html",
@@ -192,6 +251,9 @@ def library_list(request):
             form=form,
             page=page,
             page_query=query,
+            selected_entry=selected,
+            panel_sources=panel_sources,
+            close_panel_url="?" + list_params.urlencode() + "&selected=none",
             sources=SourceSystem.objects.all(),
         ),
     )
@@ -979,3 +1041,46 @@ def file_location_add(request, pk):
 @staff
 def help_page(request):
     return render(request, "workbench/help.html", _page_context("help", "Hjelp"))
+
+
+@staff
+@permission_required(
+    ("media_assets.view_fileasset", "media_assets.view_filelocation"),
+    raise_exception=True,
+)
+def cover_image(request, pk):
+    """Read a bounded raster preview inside the configured NAS root only."""
+    asset = get_object_or_404(FileAsset, pk=pk, role="cover_image")
+    if not request.user.has_perm("music_library.view_musiclibraryentry"):
+        return HttpResponseForbidden()
+    if not settings.P7_NAS_ROOT:
+        raise Http404
+    root = Path(settings.P7_NAS_ROOT).resolve()
+    for location in asset.locations.filter(
+        storage_type="nas", is_current=True, status="active"
+    )[:5]:
+        try:
+            path = location.resolved_nas_path().resolve()
+            if not path.is_relative_to(root) or path.stat().st_size > 20 * 1024 * 1024:
+                continue
+            with Image.open(path) as source:
+                if (
+                    source.format not in {"JPEG", "PNG", "WEBP"}
+                    or source.width * source.height > 25000000
+                ):
+                    continue
+                source.thumbnail((640, 640))
+                output = BytesIO()
+                source.convert("RGB").save(output, format="JPEG", quality=85)
+            response = HttpResponse(output.getvalue(), content_type="image/jpeg")
+            response["Cache-Control"] = "private, no-store"
+            response["X-Content-Type-Options"] = "nosniff"
+            return response
+        except (
+            OSError,
+            ValueError,
+            UnidentifiedImageError,
+            Image.DecompressionBombError,
+        ):
+            continue
+    raise Http404

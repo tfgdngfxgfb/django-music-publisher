@@ -19,6 +19,17 @@ class SearchForm(forms.Form):
 
 
 class MusicLibraryFilterForm(SearchForm):
+    genre = forms.CharField(label="Sjanger", required=False)
+    language = forms.CharField(label="Språk", required=False)
+    order = forms.ChoiceField(
+        label="Sortering",
+        required=False,
+        choices=(
+            ("title", "Tittel A–Å"),
+            ("-title", "Tittel Å–A"),
+            ("recent", "Sist endret"),
+        ),
+    )
     status = forms.ChoiceField(
         label="Verifikasjon",
         required=False,

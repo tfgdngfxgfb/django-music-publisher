@@ -386,3 +386,68 @@ class FileWorkspaceTests(WorkbenchTestCase):
         )
         response = self.client.get(reverse("workbench:file", args=(asset.pk,)))
         self.assertContains(response, "Kontrollert plassering")
+
+
+class CatalogueInspectorTests(WorkbenchTestCase):
+    def test_filter_selection_and_return_context(self):
+        self.login(self.create_user(superuser=True))
+        recording = Recording.objects.create(title="Blå kveld")
+        MusicLibraryEntry.objects.create(
+            recording=recording, genre="Gospel", language="nb"
+        )
+        response = self.client.get(
+            reverse("workbench:library"),
+            {
+                "q": "Blå",
+                "genre": "Gospel",
+                "language": "nb",
+                "selected": str(recording.pk),
+            },
+        )
+        self.assertEqual(response.context["selected_entry"].recording_id, recording.pk)
+        self.assertContains(response, "preview-radio")
+        self.assertContains(response, "q%3DBl")
+        self.assertIsNone(
+            self.client.get(reverse("workbench:library"), {"selected": "none"}).context[
+                "selected_entry"
+            ]
+        )
+        self.assertEqual(
+            self.client.get(reverse("workbench:library"), {"genre": "Jazz"})
+            .context["page"]
+            .paginator.count,
+            0,
+        )
+
+    def test_cover_permissions_and_confined_raster_preview(self):
+        import tempfile
+        from pathlib import Path
+        from PIL import Image
+
+        asset = FileAsset.objects.create(filename="cover.png", role="cover_image")
+        location = FileLocation.objects.create(
+            asset=asset, storage_type="nas", relative_path="cover.png", status="active"
+        )
+        url = reverse("workbench:cover_image", args=[asset.pk])
+        self.assertEqual(self.client.get(url).status_code, 302)
+        self.login(self.create_user())
+        self.assertEqual(self.client.get(url).status_code, 403)
+        self.login(self.create_user(username="cover-admin", superuser=True))
+        with tempfile.TemporaryDirectory() as folder, self.settings(P7_NAS_ROOT=folder):
+            Image.new("RGB", (20, 20)).save(Path(folder) / "cover.png")
+            response = self.client.get(url)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response["Content-Type"], "image/jpeg")
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "UPDATE media_assets_filelocation SET relative_path = %s WHERE id = %s",
+                    [
+                        "../outside.png",
+                        (
+                            location.pk.hex
+                            if connection.vendor == "sqlite"
+                            else location.pk
+                        ),
+                    ],
+                )
+            self.assertEqual(self.client.get(url).status_code, 404)

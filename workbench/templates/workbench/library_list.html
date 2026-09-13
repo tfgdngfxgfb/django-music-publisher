@@ -1,6 +1,34 @@
 {% extends "workbench/base.html" %}
-{% block subtitle %}<p>Radiometadata og radiofiler knyttet til den felles innspillingen.</p>{% endblock %}
-{% block page_actions %}{% if perms.music_library.add_musiclibraryentry %}<a class="button primary" href="{% url 'workbench:library_add' %}">Legg til innspilling</a>{% endif %}{% endblock %}
-{% block content %}{% include "workbench/_filter.html" %}<div class="table-wrap"><table class="data-table"><thead><tr><th>Tittel</th><th>Artist</th><th>ISRC</th><th>Sjanger</th><th>Kanal</th><th>Status</th><th>Forvaltning</th></tr></thead><tbody>
-{% for entry in page %}<tr><td><a href="{% url 'workbench:recording' entry.recording.pk %}?return={{ request.get_full_path|urlencode }}">{{ entry.recording.title }}</a></td><td>{% with contribution=entry.recording.contributions.all|first %}{% if contribution %}{{ contribution.credited_as|default:contribution.party.name }}{% else %}<span class="muted">Ukjent</span>{% endif %}{% endwith %}</td><td>{% for identifier in entry.recording.identifiers.all %}{% if identifier.scheme == 'ISRC' %}<code>{{ identifier.normalized_value }}</code>{% endif %}{% empty %}<span class="muted">—</span>{% endfor %}</td><td>{{ entry.genre|default:"—" }}</td><td>{{ entry.channel|default:"—" }}</td><td><span class="status status-{{ entry.verification_status }}">{{ entry.get_verification_status_display }}</span></td><td>{% if entry.managed_recording %}<span class="status status-confirmed">Registrert i Forvaltet musikk</span>{% else %}<span class="muted">Ikke forvaltet</span>{% endif %}</td></tr>{% empty %}<tr><td colspan="7" class="empty">Ingen innspillinger samsvarer med utvalget.</td></tr>{% endfor %}
-</tbody></table></div>{% include "workbench/_pagination.html" %}{% endblock %}
+{% block subtitle %}<p>Innspillinger og radiometadata</p>{% endblock %}
+{% block page_actions %}{% if perms.music_library.add_musiclibraryentry %}<a class="button primary" href="{% url 'workbench:library_add' %}">+ Legg til innspilling</a>{% endif %}{% endblock %}
+{% block content %}
+<div class="catalogue-desk {% if selected_entry %}has-inspector{% endif %}">
+<section class="catalogue-results" aria-label="Katalogliste">
+{% include "workbench/_filter.html" %}
+<div class="table-wrap"><table class="data-table archive-table"><thead><tr><th>Innspilling</th><th>Artist</th><th>Utgivelse</th><th>Varighet</th><th>Status</th></tr></thead><tbody>
+{% for entry in page %}
+<tr {% if entry == selected_entry %}class="selected-recording"{% endif %}>
+<td><a class="recording-preview" href="{{ entry.preview_url }}" {% if entry == selected_entry %}aria-current="true"{% endif %}><span class="cover-placeholder miniature" aria-hidden="true"><svg><use href="#i-release"></use></svg></span><span>{{ entry.recording.title }}</span></a></td>
+<td>{% with credit=entry.recording.contributions.all|first %}{% if credit %}{{ credit.credited_as|default:credit.party.name }}{% else %}Ukjent{% endif %}{% endwith %}</td>
+<td>{% with track=entry.recording.release_tracks.all|first %}{{ track.release.title|default:"—" }}{% endwith %}</td>
+<td class="duration">{{ entry.display_duration }}</td><td><span class="status status-{{ entry.verification_status }}">{{ entry.get_verification_status_display }}</span></td>
+</tr>{% empty %}<tr><td colspan="5" class="empty">Ingen innspillinger samsvarer med utvalget.</td></tr>{% endfor %}
+</tbody></table></div>
+<div class="catalogue-footer"><span>{{ page.paginator.count }} innspillinger i utvalget</span>{% include "workbench/_pagination.html" %}</div>
+</section>
+{% if selected_entry %}{% with entry=selected_entry recording=selected_entry.recording %}
+<aside class="recording-inspector" aria-label="Valgt innspilling">
+<a class="inspector-close" href="{{ close_panel_url }}" aria-label="Lukk detaljpanel">×</a>
+<div class="cover-placeholder large-cover">{% if entry.cover_id %}<img class="catalogue-cover" src="{% url 'workbench:cover_image' entry.cover_id %}" alt="Registrert omslag" loading="lazy">{% endif %}<svg aria-hidden="true"><use href="#i-release"></use></svg><span>Omslag ikke tilgjengelig</span></div>
+<h2>{{ recording.title }}</h2>
+<p class="inspector-artist">{% with credit=recording.contributions.all|first %}{% if credit %}{{ credit.credited_as|default:credit.party.name }}{% else %}Ukjent artist{% endif %}{% endwith %}</p>
+{% if perms.managed_music.view_managedrecording and entry.managed_recording %}<span class="status status-confirmed">Registrert i Forvaltet musikk</span>{% endif %}
+<nav class="inspector-tabs" aria-label="Forhåndsvisning"><a href="#preview-overview">Oversikt</a><a href="#preview-radio">Radio</a>{% if perms.provenance.view_metadataassertion %}<a href="#preview-sources">Kilder</a>{% endif %}</nav>
+<section id="preview-overview" class="inspector-section"><h3>Oversikt</h3><dl><dt>Varighet</dt><dd>{{ entry.display_duration }}</dd><dt>ISRC</dt><dd>{% for identifier in recording.identifiers.all %}{% if identifier.scheme == 'ISRC' %}{{ identifier.normalized_value }}{% endif %}{% empty %}Ikke registrert{% endfor %}</dd></dl>
+{% if perms.catalogue.view_recording %}<a class="button primary inspector-open" href="{% url 'workbench:recording' recording.pk %}?return={{ request.get_full_path|urlencode }}">Åpne innspilling ↗</a>{% endif %}</section>
+<section id="preview-radio" class="inspector-section"><h3>Radiometadata</h3><dl><dt>Språk</dt><dd>{{ entry.language|default:"Ukjent" }}</dd><dt>Sjanger</dt><dd>{{ entry.genre|default:"Ukjent" }}</dd><dt>Kanal</dt><dd>{{ entry.channel|default:"Ikke registrert" }}</dd><dt>Rating</dt><dd>{{ entry.rating|default_if_none:"Ikke registrert" }}</dd></dl>{% if perms.music_library.change_musiclibraryentry %}<a href="{% url 'workbench:radio_edit' recording.pk %}?return={{ request.get_full_path|urlencode }}">Rediger radiometadata</a>{% endif %}</section>
+{% if perms.provenance.view_metadataassertion %}<section id="preview-sources" class="inspector-section"><h3>Kildeopplysninger</h3>{% for assertion in panel_sources %}<div class="inspector-source"><strong>{{ assertion.source_record.source_system }}</strong><span class="status status-{{ assertion.status }}">{{ assertion.get_status_display }}</span><p>{{ assertion.raw_value }}</p></div>{% empty %}<p class="muted">Ingen kildeopplysninger registrert.</p>{% endfor %}</section>{% endif %}
+<details class="inspector-identity"><summary>Permanent identitet</summary><code>{{ recording.pk }}</code><button type="button" class="copy-button" data-copy="{{ recording.pk }}">Kopier UUID</button></details>
+</aside>{% endwith %}{% endif %}
+</div>
+{% endblock %}

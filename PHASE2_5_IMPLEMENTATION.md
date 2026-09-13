@@ -48,3 +48,11 @@ Prøven 13. september 2026 gjenopprettet begge backendene i separate databaser. 
 ## Avgrensning og neste tilkoblingspunkt
 
 Eierskap, andeler, territorier og avtalegrunnlag er ikke implementert. Neste fase kan koble disse til stabil Recording-UUID og eksisterende forvaltningsregistrering uten å gjøre radiometadata eller filtilstedeværelse til eierskapsbevis. OCR, OneTagger-synkronisering, Orchard, TuneTracker, programarkiv og publisering er fortsatt utsatt.
+
+
+### Catalogue inspector (2026-09-13)
+- Musikkarkivet now combines a paginated list with a selected-recording inspector, overview/radio/source tabs, duration and release information. Search, selection and return context remain in the URL.
+- Genre/language filters and allowlisted title/recent sorting. Existing edit forms and permissions are reused. No model or migration changes.
+- Registered recording cover images can be previewed from the configured NAS root. Requires file and location read permissions; resolved paths must remain inside the root. Only bounded JPEG/PNG/WebP rasters are rendered to a private JPEG response. Missing covers use an explicit placeholder. No remote downloads, scanning, audio edits, or verification-status changes. Release-cover fallback is not included.
+- SQLite: full suite 155 passed, including DMP. Inspector filtering, permissions and confined image reads covered. Django system check passed. Actual browser login, record selection, radio tab, light and dark screenshots checked on isolated test data.
+- PostgreSQL 17.11: full suite 155 passed, including DMP; system checks clean. No schema changes requiring an upgrade migration. Mobile layout was not reverified in this increment.
