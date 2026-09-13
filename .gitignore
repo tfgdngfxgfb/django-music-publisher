@@ -109,3 +109,8 @@ venv.bak/
 media/
 .local/
 *.sqlite3
+
+# Never commit imported or copied music files. The exception is a tiny,
+# project-generated silence fixture used by the automated FLAC tests.
+*.flac
+!flac_ingest/test_fixtures/silence.flac
