@@ -1,7 +1,7 @@
 # P7 Archive & Rights / P7 Arkiv og rettigheter
 
 Date: 12 September 2026
-Status: architectural baseline; phase 1 implemented and phase 1.5 stabilized
+Status: architectural baseline; phase 2 operational catalogue implemented
 Audience: P7 product owners, developers and future data-migration partners
 
 ## 1. Recommendation and scope
@@ -86,7 +86,11 @@ rights_project/          New host settings, URLs, operator branding and deployme
 music_publisher/         Historical DMP publishing foundation; focused P7 changes allowed
 rights_core/             UUID conventions, Entity registry, reference vocabularies
 parties/                 Parties, names, artist identities, relationships
-catalogue/               Recordings, releases, tracks, labels, catalogues, assets
+catalogue/               Recordings, releases, tracks, labels, identifiers, duplicates
+music_library/           Musikkarkiv membership and radio metadata
+managed_music/           Explicit managed-music membership
+provenance/              Sources, source records, field assertions and decisions
+media_assets/            Portable file identity and current/historical locations
 rights/                  Scopes, agreements, ownership, grants, revenue splits
 neighbouring_rights/     Representation mandates, claims, submissions, responses
 distribution/           Delivery metadata, release availability, delivery history
@@ -97,7 +101,7 @@ publishing_bridge/      Only new app importing DMP models; work and identity lin
 
 These are bounded modules, not a requirement to create every app in milestone one. Core, parties, catalogue, rights and bridge form the initial domain; audit and exchange supply shared infrastructure. Delay neighbouring-rights and distribution tables until their first workflow, using the interfaces described here.
 
-Dependency direction: parties → core; catalogue → parties/core; rights → catalogue/parties/core; neighbouring_rights and distribution → rights/catalogue/parties; bridge → DMP/catalogue/parties/core. Exchange and audit refer to the core Entity registry instead of importing every domain. Core never imports domain apps. Use explicit migrations, FK relationships and application service calls; avoid cross-app side effects in model signals.
+Implemented dependency direction: parties → core; catalogue → parties/core; music_library → catalogue/core; provenance → core with portable typed UUID targets; managed_music → music_library/catalogue/provenance; media_assets → catalogue/core. Future rights, neighbouring-rights, distribution and bridge apps remain deferred. Use explicit migrations, FK relationships and transaction-protected application services; avoid cross-app side effects in model signals.
 
 The new host configures DMP's required settings explicitly and mounts routes without name collisions. Preserve existing DMP URL names and path behavior where possible, introduce `/rights/` and `/api/rights/v1/`, and test reverse resolution and permission boundaries. Do not enable public or secret playlist surfaces for canonical assets or contract files by inheritance.
 

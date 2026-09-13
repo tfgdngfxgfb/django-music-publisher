@@ -1,0 +1,15 @@
+{% extends "admin/base_site.html" %}
+{% block breadcrumbs %}<div class="breadcrumbs"><a href="{% url 'admin:index' %}">Hjem</a> › <a href="{% url 'admin:catalogue_release_changelist' %}">Utgivelser</a> › <a href="{% url 'admin:catalogue_release_change' release.pk %}">{{ release.title }}</a> › Registrer spor</div>{% endblock %}
+{% block content %}
+<p>Velg en eksisterende innspilling, eller skriv inn tittel for å opprette en ny innspilling og sporkobling samlet. Mulige dubletter stoppes for manuell vurdering.</p>
+<form method="post" novalidate>{% csrf_token %}
+  {{ form.non_field_errors }}
+  <fieldset class="module aligned">
+  {% for field in form %}<div class="form-row"><div>{{ field.errors }}{{ field.label_tag }} {{ field }}{% if field.help_text %}<div class="help">{{ field.help_text }}</div>{% endif %}</div></div>{% endfor %}
+  </fieldset>
+  <div class="submit-row">
+    <input type="submit" value="Lagre spor" class="default">
+    <input type="submit" name="save_and_continue" value="Lagre og registrer neste spor">
+  </div>
+</form>
+{% endblock %}

@@ -6,6 +6,14 @@ from django.core.exceptions import ValidationError
 from django.db import models, router, transaction
 
 
+class VerificationStatus(models.TextChoices):
+    UNVERIFIED = "unverified", "Importert / ikke verifisert"
+    CONFIRMED = "confirmed", "Bekreftet"
+    DISPUTED = "disputed", "Bestridt"
+    REJECTED = "rejected", "Avvist"
+    SUPERSEDED = "superseded", "Erstattet"
+
+
 def validate_not_blank(value):
     """Reject empty or whitespace-only canonical names and titles."""
     if not value or not value.strip():

@@ -43,6 +43,7 @@ def main():
             DJANGO_SUPERUSER_USERNAME="smoke-admin",
             DJANGO_SUPERUSER_EMAIL="",
             DJANGO_SUPERUSER_PASSWORD=password,
+            P7_ALLOW_SMOKE_DATA="true",
         )
         flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
 
@@ -189,6 +190,25 @@ def main():
                     "Edited recording metadata was not persisted",
                 )
                 require(recording_id in html, "Recording UUID changed after edit")
+                manage("create_phase2_smoke_data")
+                searches = (
+                    ("/admin/catalogue/release/?q=LYNOR123", "Operativ LP"),
+                    ("/admin/catalogue/recording/?q=NOP7A2600001", "Operativ master"),
+                    (
+                        "/admin/music_library/musiclibraryentry/?q=Kun+i+Musikkarkivet",
+                        "Kun i Musikkarkivet",
+                    ),
+                    (
+                        "/admin/managed_music/managedrecording/?q=Operativ+master",
+                        "Operativ master",
+                    ),
+                    ("/admin/provenance/metadataassertion/?q=1979", "1979"),
+                    ("/admin/media_assets/fileasset/?q=track01.flac", "track01.flac"),
+                    ("/admin/catalogue/duplicatecandidate/", "Operativ master"),
+                )
+                for path, expected in searches:
+                    result_html, _ = request(path)
+                    require(expected in result_html, f"Admin-søk fant ikke {expected}")
                 html, _ = request("/admin/music_publisher/work/")
                 require(
                     "Musikalsk verk" in html or "Musikalske verk" in html,
@@ -221,6 +241,14 @@ def main():
                                 "reopen",
                                 "edit Unicode title",
                                 "add ISRC with same UUID",
+                                "operational release and track workflow",
+                                "reuse recording on another release",
+                                "music library and managed music invariant",
+                                "radio metadata",
+                                "provenance conflict and decisions",
+                                "file asset and logical location",
+                                "duplicate candidate without merge",
+                                "admin search across phase 2 models",
                                 "DMP admin HTTP 200",
                                 "zero DMP records",
                             ],

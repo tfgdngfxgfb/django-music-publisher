@@ -1,0 +1,13 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static %}
+{% block breadcrumbs %}<div class="breadcrumbs"><a href="{% url 'admin:index' %}">Hjem</a> › <a href="{% url 'admin:app_list' app_label='managed_music' %}">Forvaltet musikk</a> › Legg til</div>{% endblock %}
+{% block content %}
+<p>Denne handlingen legger uttrykkelig innspillingen til i Forvaltet musikk og sørger samtidig for medlemskap i Musikkarkivet.</p>
+<form method="post" novalidate>{% csrf_token %}
+  {{ form.non_field_errors }}
+  <fieldset class="module aligned">
+  {% for field in form %}<div class="form-row"><div>{{ field.errors }}{{ field.label_tag }} {{ field }}{% if field.help_text %}<div class="help">{{ field.help_text }}</div>{% endif %}</div></div>{% endfor %}
+  </fieldset>
+  <div class="submit-row"><input type="submit" value="Legg til i Forvaltet musikk" class="default"></div>
+</form>
+{% endblock %}

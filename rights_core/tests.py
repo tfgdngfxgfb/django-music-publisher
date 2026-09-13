@@ -2,7 +2,7 @@ from unittest.mock import patch
 from io import StringIO
 
 from django.contrib.auth import get_user_model
-from django.core.management import call_command
+from django.core.management import call_command, CommandError
 from django.test import TestCase
 
 
@@ -51,3 +51,9 @@ class DevelopmentAdminCommandTests(TestCase):
             call_command("ensure_dev_admin", verbosity=0)
         user.refresh_from_db()
         self.assertTrue(user.check_password("keep-this-password"))
+
+
+class SmokeDataCommandTests(TestCase):
+    def test_refuses_to_write_without_explicit_smoke_environment(self):
+        with patch.dict("os.environ", {}, clear=True), self.assertRaises(CommandError):
+            call_command("create_phase2_smoke_data", verbosity=0)

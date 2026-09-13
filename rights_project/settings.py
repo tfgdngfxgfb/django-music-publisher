@@ -32,6 +32,10 @@ INSTALLED_APPS = [  # noqa: F405
     "rights_core",
     "parties",
     "catalogue",
+    "provenance",
+    "music_library",
+    "managed_music",
+    "media_assets",
 ]
 ROOT_URLCONF = "rights_project.urls"
 WSGI_APPLICATION = "rights_project.wsgi.application"
@@ -62,3 +66,7 @@ STORAGES = {
 }
 if S3_ENABLED:  # noqa: F405
     STORAGES["default"]["BACKEND"] = "storages.backends.s3.S3Storage"
+
+# Physical roots belong to each installation. FileLocation stores only portable,
+# logical relative paths.
+P7_NAS_ROOT = os.getenv("P7_NAS_ROOT", "")

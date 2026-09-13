@@ -112,9 +112,24 @@ not include the SQLite compatibility adapter.
 
 See `FOUNDATION_STABILIZATION.md <FOUNDATION_STABILIZATION.md>`_ for the phase
 1.5 handover. `IMPLEMENTATION_STATUS.md <IMPLEMENTATION_STATUS.md>`_ records
-phase 1. The approved long-term
-baseline is `ARCHITECTURE.md <ARCHITECTURE.md>`_; this phase intentionally
-implements only the runnable catalogue foundation, not the full rights model.
+phase 1. `PHASE2_IMPLEMENTATION.md <PHASE2_IMPLEMENTATION.md>`_ describes the
+operative catalogue. The approved long-term baseline is
+`ARCHITECTURE.md <ARCHITECTURE.md>`_; the complete rights and agreement model
+remains a later phase.
+
+Operational catalogue workflow
+------------------------------
+
+After login, create or reuse people and artist identities, then create a label
+and release. Open the release and choose **Registrer spor**. Each row can reuse
+an existing recording or create a new recording and track atomically. Potential
+matches must be reviewed and are never merged automatically.
+
+Use **Musikkarkiv** for radio metadata. Use **Forvaltet musikk** only for an
+explicit administrator decision; this workflow guarantees the recording is
+also present in Musikkarkiv. **Kilder og verifikasjon** retains conflicting
+source values and review decisions. **Filer** stores portable file identities
+separately from current and historical locations.
 
 Original Django Music Publisher documentation
 =============================================
