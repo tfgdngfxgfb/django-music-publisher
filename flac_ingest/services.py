@@ -24,7 +24,6 @@ from catalogue.services import create_release_track, find_recording_candidates
 from catalogue.validators import (
     normalize_isrc,
     normalize_trade_item_number,
-    validate_language,
 )
 from managed_music.models import ManagedRecording
 from media_assets.models import FileAsset, FileChecksum, FileLocation
@@ -35,6 +34,7 @@ from music_library.models import (
     MusicLibraryTargetAudience,
     TargetAudience,
 )
+from music_library.validators import validate_radio_language
 from parties.models import ArtistIdentity, Party
 from provenance.models import (
     AppliedMetadataChange,
@@ -222,8 +222,9 @@ def _match_recording(
                         "p7uuid_recovery",
                         [],
                         [
-                            "P7UUID finnes ikke i databasen, men ISRC er allerede "
-                            "knyttet til en annen innspilling."
+                            "Kildedataene bruker en ISRC som allerede er knyttet "
+                            "til en annen innspilling. Dette er en konflikt i "
+                            "kildekatalogen; innspillingene slås ikke sammen automatisk."
                         ],
                         True,
                     )
@@ -241,7 +242,11 @@ def _match_recording(
                 recording,
                 "p7uuid",
                 [],
-                ["P7UUID og ISRC peker mot ulike katalogidentiteter."],
+                [
+                    "P7UUID og ISRC peker mot ulike katalogidentiteter. Dette er "
+                    "en konflikt i kildekatalogen; innspillingene slås ikke sammen "
+                    "automatisk."
+                ],
                 True,
             )
         other_isrc = ExternalIdentifier.objects.filter(
@@ -253,7 +258,11 @@ def _match_recording(
                 recording,
                 "p7uuid",
                 [],
-                ["P7UUID og ISRC peker mot ulike innspillinger."],
+                [
+                    "P7UUID og ISRC peker mot ulike innspillinger. Dette er en "
+                    "konflikt i kildekatalogen; innspillingene slås ikke sammen "
+                    "automatisk."
+                ],
                 True,
             )
         return recording, "p7uuid", [], messages, False
@@ -382,7 +391,7 @@ def _metadata_errors(parsed):
             errors.append(f"En verdi i {field.upper()} er lengre enn 100 tegn.")
     if parsed.get("language"):
         try:
-            validate_language(parsed["language"])
+            validate_radio_language(parsed["language"])
         except ValidationError as error:
             errors.extend(error.messages)
     if parsed.get("energy_invalid"):
@@ -1078,7 +1087,9 @@ def review_item(item, *, parsed, resolution, user, note=""):
             not recording or linked_recording_id != recording.pk
         ):
             raise ValidationError(
-                "ISRC er allerede knyttet til en annen innspilling. Velg den innspillingen eller korriger ISRC."
+                "Kildedataene bruker en ISRC som allerede er knyttet til en annen "
+                "innspilling. Velg den innspillingen, eller fjern ISRC fra den "
+                "tolkede verdien og behold konflikten i kildehistorikken."
             )
     if (
         item.file_asset_id

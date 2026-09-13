@@ -34,3 +34,13 @@ class MusicLibraryTests(TestCase):
         recording = Recording.objects.create(title="Test")
         with self.assertRaises(ValidationError):
             MusicLibraryEntry.objects.create(recording=recording, energy=6)
+
+    def test_onetagger_language_group_is_valid_radio_metadata(self):
+        recording = Recording.objects.create(title="Afrikansk språkgruppe")
+
+        entry = MusicLibraryEntry.objects.create(
+            recording=recording,
+            language="Afrikanske språk",
+        )
+
+        self.assertEqual(entry.language, "Afrikanske språk")

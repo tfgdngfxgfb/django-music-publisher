@@ -3,8 +3,9 @@ from django.core.validators import RegexValidator
 from django.db import models
 
 from catalogue.models import Recording
-from catalogue.validators import validate_language
 from rights_core.models import CanonicalModel, VerificationStatus
+
+from .validators import validate_radio_language
 
 
 code_validator = RegexValidator(
@@ -63,7 +64,7 @@ class MusicLibraryEntry(CanonicalModel):
     )
     genre = models.CharField("sjanger", max_length=100, blank=True)
     language = models.CharField(
-        "språk", max_length=64, blank=True, validators=[validate_language]
+        "språk", max_length=64, blank=True, validators=[validate_radio_language]
     )
     channels = models.ManyToManyField(
         Channel,

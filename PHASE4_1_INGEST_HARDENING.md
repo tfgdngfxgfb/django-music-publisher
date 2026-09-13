@@ -24,6 +24,7 @@ lydfiler ble endret.
 |---|---|---|---|
 | Kanal og målgruppe manglet | StationPlaylist lagret TXXX-data i `COMMENT` | Adapteren leser embedded TXXX og beholder rådata | Direkte adaptertest og reell filprøve |
 | Energy ga unødvendig konflikt | OneTagger bruker 20-trinn | 20/40/60/80/100 mappes til 1–5 | Test av alle fem nivåer |
+| `Afrikanske språk` ble avvist | OneTagger bruker en kontrollert samlebetegnelse, ikke en språkkode | Verdien godtas og bevares som radiometadata og rå kildeverdi | Adapter- og modelltest |
 | Flere sjangre ble redusert til én | `GENRE` ble lest som enkeltverdi | Alle verdier bevares og lagres semikolonseparert i dagens felt | Test med to sjangre; feltet er fortsatt tekst |
 | Én ødelagt/utilgjengelig fil kunne stoppe skann | Lesing, stat og hash var ikke isolert | Forventede filfeil registreres per fil | Test med ødelagt FLAC og lesbar nabofil |
 | Fil kunne endres under skann | Ingen kontroll før/etter lesing | Størrelse og nanosekund-mtime kontrolleres | Ustabil fil får «Prøv igjen» |
@@ -48,16 +49,18 @@ Den nyeste skrivebeskyttede forhåndsvisningen mot en kopi av den aktive
 demodatabasen brukte 1 842 filer og eksplisitt UUID-gjenoppretting. Den ga
 1 296 nye, 513 oppdateringer/etterregistreringer, åtte eksisterende treff og
 25 konflikter. 1 214 forslag kunne gjenbruke UUID fra fil, og 299
-albumfoldere ble identifisert. Konfliktene var 21 P7UUID/ISRC-motstrid, to
-usikre treff og to ikke-standardiserte språkverdier. Ingen originalfiler ble
-skrevet.
+albumfoldere ble identifisert. To av radene skyldtes OneTagger-verdien
+`Afrikanske språk`, som nå støttes. De øvrige konfliktene var reelle
+P7UUID/ISRC-motstrid og usikre treff i kildekatalogen; de er ikke
+programfeil og skal ikke føre til automatisk sammenslåing. Ingen originalfiler
+ble skrevet.
 
 Den tidligere realistiske skannen mot den eldre katalogkopien ga 94 nye, 19
 eksisterende treff, 944 endrede, 686 uendrede, én advarsel, 99 konflikter og
 ingen lesefeil. Konfliktene var
-handlingsbare: 86 usikre metadata-treff, 11 P7UUID/ISRC-konflikter og to
-ikke-standardiserte språkverdier (`Afrikanske språk`). De skal ikke slås
-sammen eller godkjennes automatisk.
+handlingsbare: 86 usikre metadata-treff og 11 P7UUID/ISRC-konflikter. De skal
+ikke slås sammen eller godkjennes automatisk. To tidligere språkavvik for
+`Afrikanske språk` er ikke konflikter etter denne rettelsen.
 
 Skanningen kjøres fortsatt synkront. Knappen låses og viser arbeidsstatus, men
 det finnes ikke live prosentvis fremdrift før svaret er ferdig. Permanent
@@ -82,10 +85,12 @@ autoritetsregler, tillatelser, etterregistrering av Release-struktur og
 bekreftelse av anvendte FLAC-opplysninger. Rettighetsflyten fra Release er
 testet for atomisk opprettelse og serversidetilgang. `manage.py check`,
 migrasjonskontrollen og Ruff er uten feil. Den avsluttende samlede
-regresjonskjøringen bestod: 230 tester på SQLite. DMP-koden ble ikke endret og
-inngår i regresjonskjøringen. PostgreSQL fullsuite ble ikke gjentatt fordi
-migrasjonen er et databaseuavhengig boolsk felt og ingen
-PostgreSQL-spesifikk kode er endret.
+regresjonskjøringen bestod: 230 tester på SQLite. Etter avklaringen av
+OneTagger-samlebetegnelsen bestod 43 målrettede ingest- og
+musikkarkivtester. DMP-koden ble ikke endret og inngår i regresjonskjøringen.
+PostgreSQL fullsuite ble ikke gjentatt fordi migrasjonene bare endrer et
+databaseuavhengig boolsk felt og en validator, og ingen PostgreSQL-spesifikk
+kode er endret.
 
 En innlogget nettleserprøve kontrollerte Musikkarkiv, Utgivelsesliste,
 utgivelsesdetalj med spor og cover, samt skjemaet «Registrer rettigheter» med

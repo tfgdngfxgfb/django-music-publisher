@@ -11,7 +11,7 @@ from catalogue.models import (
     RecordingContribution,
     Release,
 )
-from catalogue.validators import normalize_isrc, validate_language
+from catalogue.validators import normalize_isrc
 from flac_ingest.adapter import normalize_energy
 from media_assets.models import FileAsset, FileLocation
 from music_library.models import (
@@ -21,6 +21,7 @@ from music_library.models import (
     MusicLibraryTargetAudience,
     TargetAudience,
 )
+from music_library.validators import validate_radio_language
 from parties.models import ArtistIdentity, Party
 from provenance.models import SourceSystem
 from rights.summaries import OwnershipCategory
@@ -336,7 +337,7 @@ class FlacIngestReviewForm(forms.Form):
     def clean_language(self):
         value = self.cleaned_data["language"].strip()
         if value:
-            validate_language(value)
+            validate_radio_language(value)
         return value
 
     @staticmethod

@@ -133,6 +133,18 @@ class FlacAdapterTests(FlacTestMixin, TestCase):
         self.assertEqual(snapshot.raw_tags["comment"], comments)
         self.assertNotIn("Rotasjon", snapshot.parsed)
 
+    def test_onetagger_african_languages_group_is_preserved(self):
+        path = self.make_flac(
+            "african-languages.flac",
+            TITLE="Samlebetegnelse",
+            LANGUAGE="Afrikanske språk",
+        )
+
+        snapshot = read_flac(path)
+
+        self.assertEqual(snapshot.parsed["language"], "Afrikanske språk")
+        self.assertEqual(snapshot.raw_tags["language"], ["Afrikanske språk"])
+
     def test_multiple_genres_are_preserved_in_the_interpreted_value(self):
         path = self.make_flac(
             "multiple-genres.flac", GENRE=["Evangelisk", "Viser"]
@@ -196,6 +208,24 @@ class FlacIngestTests(FlacTestMixin, TestCase):
         self.assertLessEqual(len(source_locator), 500)
         self.assertTrue(external_record_id.startswith("flac:"))
         self.assertTrue(source_locator.endswith(".flac"))
+
+    def test_onetagger_language_group_imports_without_manual_review(self):
+        self.make_flac(
+            TITLE="Samlebetegnelse fra OneTagger",
+            LANGUAGE="Afrikanske språk",
+        )
+
+        batch = self.scan()
+        item = batch.items.get()
+
+        self.assertEqual(item.action, FlacIngestItem.Action.NEW)
+        self.assertEqual(item.messages, [])
+        self.assertEqual(self.apply(batch), 1)
+        item.refresh_from_db()
+        self.assertEqual(
+            item.recording.music_library_entry.language,
+            "Afrikanske språk",
+        )
 
     def test_new_tagged_file_creates_operational_catalogue_and_is_idempotent(self):
         self.make_flac(
@@ -608,7 +638,7 @@ class FlacIngestTests(FlacTestMixin, TestCase):
 
         item = batch.items.get()
         self.assertEqual(item.action, FlacIngestItem.Action.CONFLICT)
-        self.assertIn("ISRC er allerede knyttet", item.messages[0])
+        self.assertIn("konflikt i kildekatalogen", item.messages[0])
         self.assertEqual(self.apply(batch), 0)
         self.assertEqual(Recording.objects.count(), 1)
 
