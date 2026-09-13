@@ -19,7 +19,7 @@
 {% if selected_entry %}{% with entry=selected_entry recording=selected_entry.recording %}
 <aside class="recording-inspector" aria-label="Valgt innspilling">
 <a class="inspector-close" href="{{ close_panel_url }}" aria-label="Lukk detaljpanel">×</a>
-<div class="cover-placeholder large-cover">{% if entry.cover_id %}<img class="catalogue-cover" src="{% url 'workbench:cover_image' entry.cover_id %}" alt="Registrert omslag" loading="lazy">{% endif %}<svg aria-hidden="true"><use href="#i-release"></use></svg><span>Omslag ikke tilgjengelig</span></div>
+<div class="cover-placeholder large-cover">{% if entry.cover_id %}<img class="catalogue-cover" src="{% url 'workbench:cover_image' entry.cover_id %}" alt="Registrert omslag" loading="lazy">{% else %}<svg aria-hidden="true"><use href="#i-release"></use></svg><span>Omslag ikke tilgjengelig</span>{% endif %}</div>
 <h2>{{ recording.title }}</h2>
 <p class="inspector-artist">{% with credit=recording.contributions.all|first %}{% if credit %}{{ credit.credited_as|default:credit.party.name }}{% else %}Ukjent artist{% endif %}{% endwith %}</p>
 {% if perms.managed_music.view_managedrecording and entry.managed_recording %}<span class="status status-confirmed">Registrert i Forvaltet musikk</span>{% endif %}

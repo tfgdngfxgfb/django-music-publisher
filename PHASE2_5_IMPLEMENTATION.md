@@ -56,3 +56,13 @@ Eierskap, andeler, territorier og avtalegrunnlag er ikke implementert. Neste fas
 - Registered recording cover images can be previewed from the configured NAS root. Requires file and location read permissions; resolved paths must remain inside the root. Only bounded JPEG/PNG/WebP rasters are rendered to a private JPEG response. Missing covers use an explicit placeholder. No remote downloads, scanning, audio edits, or verification-status changes. Release-cover fallback is not included.
 - SQLite: full suite 155 passed, including DMP. Inspector filtering, permissions and confined image reads covered. Django system check passed. Actual browser login, record selection, radio tab, light and dark screenshots checked on isolated test data.
 - PostgreSQL 17.11: full suite 155 passed, including DMP; system checks clean. No schema changes requiring an upgrade migration. Mobile layout was not reverified in this increment.
+
+### Fast demo-datasett
+
+Kommandoen ``load_demo_data`` oppretter et deterministisk, fiktivt datasett og
+små testfiler. ``run-p7-demo.cmd`` bruker en separat SQLite-database og separat
+filrot under ``.local``. Kommandoen er idempotent og sperret når ``DEBUG=false``.
+Demoen omfatter katalog, radiometadata, forvaltning, kilder, konflikt, mulig
+dublett og filplassering, men oppretter ingen eierskapsopplysninger.
+Kommandoen og idempotensen er testet i full testmatrise: 157 tester bestått på
+både SQLite og PostgreSQL, med ren Django-systemkontroll.

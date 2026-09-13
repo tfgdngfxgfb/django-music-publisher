@@ -20,6 +20,27 @@ you explicitly pass ``-AdminPassword``.
 The account is only intended for local development. Stop the application with
 ``Ctrl+C``. The longer manual setup remains available below.
 
+Demo with fixed test data and files
+-----------------------------------
+
+Double-click ``run-p7-demo.cmd`` to start a separate demo database containing
+only fictional data. The launcher creates five recordings, two releases, four
+tracks, artists, ISRC/EAN/UPC values, radio metadata, one explicitly managed
+recording, source conflicts, a duplicate candidate and registered file
+locations. It also generates a copyright-free two-second WAV test tone, a demo
+cover and UTF-8 JSON/CSV metadata under ``.local\demo-nas``.
+
+The UUIDs and content are fixed, and rerunning the launcher does not create
+duplicates. The demo uses ``.local\p7-demo.sqlite3`` and therefore does not mix
+test records with the ordinary development database. To load the same set into
+an already selected development database instead, run::
+
+   .\.venv\Scripts\python.exe manage.py load_demo_data
+
+The command works only with ``DEBUG=true``. Every visible name includes
+``(demo)`` or otherwise identifies the content as fictional. The generated WAV
+contains a simple test tone and is not a music master.
+
 This fork now contains a runnable master catalogue alongside Django Music
 Publisher. The master catalogue accepts a recording with only a title; no
 musical work, artist, ISRC or rights owner is required. DMP remains available
