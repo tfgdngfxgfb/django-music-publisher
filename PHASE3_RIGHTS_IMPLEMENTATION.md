@@ -45,9 +45,9 @@ brukere kan registrere krav, beslutte dem, erstatte dem og knytte avtale. Django
 tillatelser håndheves på serversiden: visning, oppretting/endring,
 `decide_rightsclaim` og `manage_agreement` er separate fullmakter.
 
-Demo-kommandoen lager fiktive, uverifiserte krav for to påståtte eiere samt
-lokal administrasjon og distribusjon. Ingen demoopplysning presenteres som
-bekreftet juridisk rett.
+Demo-kommandoen lager bare fiktive opplysninger. Fase 3.1 utvider settet med
+tydelig merkede demobeslutninger for alle fem eierskapskategorier og ulike
+dokumentasjonsnivåer; de er prøveinnhold, ikke juridiske rettighetsdata.
 
 ## Migrasjoner og verifikasjon
 

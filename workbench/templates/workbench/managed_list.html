@@ -1,6 +1,38 @@
 {% extends "workbench/base.html" %}
-{% block subtitle %}<p>Innspillinger som uttrykkelig er registrert for forvaltning. Dette er ikke en eierskapsvurdering.</p>{% endblock %}
+{% block subtitle %}<p><span class="term-label">Innspillinger som uttrykkelig er registrert for forvaltning {% include "workbench/_help_tip.html" with tip_id="managed-list" help_term=rights_help.managed %}</span></p>{% endblock %}
 {% block page_actions %}{% if request.user.is_superuser %}<a class="button primary" href="{% url 'workbench:managed_add' %}">Registrer forvaltning</a>{% endif %}{% endblock %}
-{% block content %}{% include "workbench/_filter.html" %}<div class="table-wrap"><table class="data-table"><thead><tr><th>Tittel</th><th>Artist</th><th>ISRC</th><th>Forvaltningsstatus</th><th>Kilde</th><th>Musikkarkiv</th></tr></thead><tbody>
-{% for managed in page %}<tr><td><a href="{% url 'workbench:recording' managed.recording.pk %}?return={{ request.get_full_path|urlencode }}">{{ managed.recording.title }}</a></td><td>{% with contribution=managed.recording.contributions.all|first %}{% if contribution %}{{ contribution.credited_as|default:contribution.party.name }}{% else %}<span class="muted">Ukjent</span>{% endif %}{% endwith %}</td><td>{% for identifier in managed.recording.identifiers.all %}{% if identifier.scheme == 'ISRC' %}<code>{{ identifier.normalized_value }}</code>{% endif %}{% empty %}—{% endfor %}</td><td><span class="status">{{ managed.get_status_display }}</span></td><td>{{ managed.source_system|default:"Ikke registrert" }}</td><td><a href="{% url 'workbench:recording' managed.recording.pk %}?fane=radio">Radio</a>{% if perms.rights.view_rightsclaim %} · <a href="{% url 'workbench:recording' managed.recording.pk %}?fane=rights">Rettigheter</a>{% endif %}</td></tr>{% empty %}<tr><td colspan="6" class="empty">Ingen forvaltede innspillinger samsvarer med utvalget.</td></tr>{% endfor %}
-</tbody></table></div>{% include "workbench/_pagination.html" %}{% endblock %}
+{% block content %}
+<div class="visible-notice"><strong>Forvaltet musikk innebærer ikke at lokal organisasjon eier masteren.</strong> Eierskap, administrasjon og distribusjon vurderes separat.</div>
+{% include "workbench/_filter.html" %}
+<div class="table-wrap">
+  <table class="data-table managed-rights-table">
+    <thead><tr>
+      <th>Tittel</th><th>Artist</th><th>ISRC</th>
+      {% if perms.rights.view_rightsclaim %}
+        <th><span class="term-label">Eierskap {% include "workbench/_help_tip.html" with tip_id="managed-ownership" help_term=rights_help.ownership %}</span></th>
+        <th><span class="term-label">Administrasjon {% include "workbench/_help_tip.html" with tip_id="managed-administration" help_term=rights_help.administration %}</span></th>
+        <th><span class="term-label">Distribusjon {% include "workbench/_help_tip.html" with tip_id="managed-distribution" help_term=rights_help.distribution %}</span></th>
+      {% endif %}
+      <th>Forvaltningsstatus</th><th>Kilde</th><th>Arbeidsflate</th>
+    </tr></thead>
+    <tbody>
+    {% for managed in page %}
+      <tr>
+        <td><a href="{% url 'workbench:recording' managed.recording.pk %}?return={{ request.get_full_path|urlencode }}">{{ managed.recording.title }}</a></td>
+        <td>{% with contribution=managed.recording.contributions.all|first %}{% if contribution %}{{ contribution.credited_as|default:contribution.party.name }}{% else %}<span class="muted">Ukjent</span>{% endif %}{% endwith %}</td>
+        <td>{% for identifier in managed.recording.identifiers.all %}{% if identifier.scheme == 'ISRC' %}<code>{{ identifier.normalized_value }}</code>{% endif %}{% empty %}—{% endfor %}</td>
+        {% if perms.rights.view_rightsclaim %}
+          <td><a class="status status-{{ managed.ownership_summary.status_class }}" href="{% url 'workbench:recording' managed.recording.pk %}?fane=rights&return={{ request.get_full_path|urlencode }}">{{ managed.ownership_summary.label }}</a>{% if managed.ownership_summary.has_unknown_local_share %}<small class="table-note">Lokal andel er ukjent</small>{% endif %}</td>
+          <td>{% if managed.local_administration %}<span class="status status-confirmed">Lokal organisasjon</span>{% else %}<span class="muted">Ikke bekreftet lokalt</span>{% endif %}</td>
+          <td>{% if managed.local_distribution %}<span class="status status-confirmed">Lokal organisasjon</span>{% else %}<span class="muted">Ikke bekreftet lokalt</span>{% endif %}</td>
+        {% endif %}
+        <td><span class="status">{{ managed.get_status_display }}</span></td>
+        <td>{{ managed.source_system|default:"Ikke registrert" }}</td>
+        <td><a href="{% url 'workbench:recording' managed.recording.pk %}?fane=radio">Radio</a>{% if perms.rights.view_rightsclaim %} · <a href="{% url 'workbench:recording' managed.recording.pk %}?fane=rights">Rettigheter</a>{% endif %}</td>
+      </tr>
+    {% empty %}<tr><td colspan="9" class="empty">Ingen forvaltede innspillinger samsvarer med utvalget.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div>
+{% include "workbench/_pagination.html" %}
+{% endblock %}

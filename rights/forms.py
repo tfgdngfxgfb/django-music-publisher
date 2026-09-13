@@ -19,6 +19,7 @@ class RightsClaimForm(forms.ModelForm):
             "territories",
             "valid_from",
             "valid_until",
+            "evidence_strength",
             "source_record",
             "agreement",
             "notes",

@@ -1,0 +1,8 @@
+{% if help_term %}<span class="help-tip">
+  <button class="help-trigger" type="button" aria-expanded="false" aria-controls="help-{{ tip_id }}-{{ help_term.slug }}" aria-label="Hjelp om {{ help_term.title }}">ⓘ</button>
+  <span class="help-popover" id="help-{{ tip_id }}-{{ help_term.slug }}" role="tooltip">
+    <strong>{{ help_term.title }}</strong>
+    <span>{{ help_term.short }}</span>
+    <a href="{% url 'help' %}#{{ help_term.slug }}">Mer hjelp</a>
+  </span>
+</span>{% endif %}

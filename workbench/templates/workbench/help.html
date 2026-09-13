@@ -1,3 +1,55 @@
 {% extends "workbench/base.html" %}
-{% block subtitle %}<p>Kort forklaring av katalogen og arbeidsflytene.</p>{% endblock %}
-{% block content %}<div class="help-grid"><section class="panel"><h2>Innspilling</h2><p>Et bestemt lydopptak eller masteropptak. Opprett det når opptaket må identifiseres, også når verk, ISRC, artist, utgivelse eller eier er ukjent. Gjenbruk samme UUID når metadata endres eller opptaket finnes på flere utgivelser.</p><p>En innspilling dokumenterer ikke eierskap.</p></section><section class="panel"><h2>Musikkarkiv</h2><p>Arbeidsflaten for radiometadata og radiofiler. En arkivpost kan eksistere uten forvaltning. Radiometadata vedlikeholdes her og deles av alle utgivelser som bruker innspillingen.</p></section><section class="panel"><h2>Forvaltet musikk</h2><p>En uttrykkelig registrering av at innspillingen håndteres i forvaltningskatalogen. Den oppretter alltid medlemskap i Musikkarkivet, men betyr ikke «P7 eier masteren».</p></section><section class="panel"><h2>Rettighetskrav</h2><p>En strukturert påstand om mastereierskap, administrasjon eller distribusjon. Part, andel, territorium, periode, kilde og avtalegrunnlag registreres separat. Importerte krav er uverifiserte til en autorisert bruker tar en loggført beslutning.</p><p><strong>Forvaltet ≠ eid · Filbesittelse ≠ eid · Distribusjon ≠ eierskap · Administrasjon ≠ eierskap</strong></p></section><section class="panel"><h2>Avtale</h2><p>Et dokumentert mulig grunnlag med parter og roller. En registrert kontraktfil bekrefter ikke automatisk at et rettighetskrav er juridisk riktig.</p></section><section class="panel"><h2>Utgivelse og spor</h2><p>En utgivelse er en identifiserbar LP, CD, kassett eller digital utgivelse. Et spor er plasseringen av en Recording på denne utgivelsen. Sportittel kan avvike fra innspillingens gjeldende tittel.</p></section><section class="panel"><h2>Person og artistidentitet</h2><p>Party er en virkelig person, gruppe eller organisasjon. ArtistIdentity er et offentlig artist- eller scenenavn. Kreditering innebærer ikke eierskap eller royaltyandel.</p></section><section class="panel"><h2>Kilder</h2><p>En kildeverdi er ikke automatisk katalogens sannhet. «Bekreft» vurderer påstanden. «Bruk» endrer katalogfeltet. «Bekreft og bruk» gjør begge atomisk. Original verdi og historikk bevares.</p></section><section class="panel"><h2>Filer</h2><p>FileAsset er filidentiteten; FileLocation er en registrert plassering. En sti er ikke filidentitet og beviser ikke at filen finnes. Databasebackup inkluderer ikke NAS-filer.</p></section><section class="panel"><h2>Begrepene er forskjellige</h2><p><strong>Work ≠ Recording ≠ Release ≠ Track ≠ lydfil</strong></p><p>Et verk kan ha flere innspillinger. Samme innspilling kan forekomme på flere utgivelser og ha flere filrepresentasjoner.</p></section></div>{% endblock %}
+{% block subtitle %}<p>Felles brukerhjelp for katalog, forvaltning og masterrettigheter.</p>{% endblock %}
+{% block content %}
+<nav class="help-index panel" aria-label="Innhold">
+  <strong>På denne siden</strong>
+  <a href="#grunnbegreper">Grunnbegreper</a>
+  <a href="#eierskapsoversikt">Eierskapsoversikt</a>
+  <a href="#rettighetsbegreper">Rettighetsbegreper</a>
+  <a href="#dokumentasjon">Dokumentasjon og kilder</a>
+  <a href="#rettskjede">Rettighetskjede</a>
+</nav>
+
+<p class="visible-notice"><strong>Forvaltet ≠ eid.</strong> Administrasjon, distribusjon og filbesittelse innebærer heller ikke automatisk mastereierskap.</p>
+
+<section id="grunnbegreper" class="help-section">
+  <div class="section-heading"><div><span class="page-kicker">Katalog</span><h2>Grunnbegreper</h2></div></div>
+  <div class="help-grid">
+    <article class="panel"><h3>Innspilling</h3><p>Et bestemt lydopptak eller masteropptak. Opprett det også når verk, ISRC, artist, utgivelse eller eier er ukjent. Samme UUID gjenbrukes når opptaket finnes på flere utgivelser.</p><p>En innspilling dokumenterer ikke eierskap.</p></article>
+    <article class="panel"><h3>Musikkarkiv</h3><p>Arbeidsflaten for radiometadata og radiofiler. En arkivpost kan eksistere uten forvaltning, og radiometadata deles av alle utgivelser som bruker innspillingen.</p></article>
+    <article class="panel"><h3>Utgivelse og spor</h3><p>En utgivelse er en identifiserbar LP, CD, kassett eller digital utgivelse. Et spor er forekomsten av en innspilling på utgivelsen.</p></article>
+    <article class="panel"><h3>Person og artistidentitet</h3><p>En part er en virkelig person, gruppe eller organisasjon. Artistidentitet er et offentlig artist- eller scenenavn. Kreditering innebærer ikke eierskap.</p></article>
+    <article class="panel"><h3>Filer</h3><p>Filressurs er filidentiteten; filplassering er en registrert plassering. En sti beviser ikke at filen finnes, og filbesittelse beviser ikke eierskap.</p></article>
+    <article class="panel"><h3>Begrepene er forskjellige</h3><p><strong>Verk ≠ innspilling ≠ utgivelse ≠ spor ≠ lydfil</strong></p><p><code>Work ≠ Recording ≠ Release ≠ Track ≠ lydfil</code></p><p>Et verk kan ha flere innspillinger. Samme innspilling kan forekomme på flere utgivelser og ha flere filrepresentasjoner.</p></article>
+  </div>
+</section>
+
+<section id="eierskapsoversikt" class="help-section">
+  <div class="section-heading"><div><span class="page-kicker">Avledet oversikt</span><h2>Eierskapskategorier</h2></div></div>
+  <div class="help-grid ownership-help">
+    <article class="panel"><h3>Heleid av lokal organisasjon</h3><p>Aktive, bekreftede krav viser 100 prosent lokalt eierskap for hele verden, uten bekreftet medeier i samme aktuelle oversikt.</p></article>
+    <article class="panel"><h3>Deleid av lokal organisasjon</h3><p>Lokal organisasjon har bekreftet eierskap, men ikke alene dokumentert 100 prosent. En ukjent lokal andel vises som ukjent.</p></article>
+    <article class="panel"><h3>Ikke eid av lokal organisasjon</h3><p>Brukes bare når aktive, bekreftede verdensomspennende krav med kjente andeler viser 100 prosent eierskap hos andre.</p></article>
+    <article class="panel"><h3>Eierskap uavklart</h3><p>Datagrunnlaget er ikke tilstrekkelig. Manglende krav, uverifiserte kilder og ufullstendige andeler betyr aldri automatisk «ikke eid».</p></article>
+    <article class="panel"><h3>Eierskap bestridt</h3><p>Et aktivt relevant krav er bestridt, eller en klar konflikt hindrer sikker klassifisering.</p></article>
+  </div>
+</section>
+
+<section id="rettighetsbegreper" class="help-section">
+  <div class="section-heading"><div><span class="page-kicker">Masterrettigheter</span><h2>Rettighetsbegreper</h2></div></div>
+  <div class="help-grid">{% for term in rights_help_sections %}<article id="{{ term.slug }}" class="panel help-term"><h3>{{ term.title }}</h3><p>{{ term.long }}</p></article>{% endfor %}</div>
+</section>
+
+<section id="dokumentasjon" class="help-section">
+  <div class="section-heading"><div><span class="page-kicker">Menneskelig vurdering</span><h2>Dokumentasjon og kilder</h2></div></div>
+  <div class="detail-grid">
+    <article class="panel"><h3>Dokumentasjonsstyrke</h3><dl class="help-definitions"><dt>Dokumentert</dt><dd>Direkte dokumentasjon dekker rettighetsforholdet, for eksempel relevant signert avtale eller dokumentert rettskjede.</dd><dt>Sterkt underbygget</dt><dd>Flere uavhengige kilder gir et meget godt grunnlag, men komplett direkte rettskjede mangler.</dd><dt>Sannsynlig</dt><dd>Opplysningen fremstår mer sannsynlig enn alternativene.</dd><dt>Svak indikasjon</dt><dd>Det finnes et signal, men ikke tilstrekkelig grunnlag for en sterk konklusjon.</dd><dt>Ikke vurdert</dt><dd>Ingen menneskelig vurdering av dokumentasjonsstyrken er registrert.</dd></dl></article>
+    <article class="panel"><h3>Kilders typiske verdi</h3><dl class="help-definitions"><dt>Svært sterk dokumentasjon</dt><dd>Signert overdragelses- eller masteravtale, konkret virksomhetsoverdragelse eller dokumentert sammenhengende rettskjede.</dd><dt>Sterk støtte</dt><dd>Historiske produsentregistreringer, konsistent royaltydokumentasjon og flere uavhengige historiske kilder.</dd><dt>Indikasjon</dt><dd>℗-linje, tidligere katalogdatabase, Orchard-/Mudi-felt eller labelinformasjon.</dd><dt>Ikke tilstrekkelig alene</dt><dd>Lydfilbesittelse, radiospilling, distribusjon, label-logo eller medlemskap i Forvaltet musikk.</dd></dl></article>
+  </div>
+</section>
+
+<section id="rettskjede" class="help-section panel">
+  <h2>Rettighetskjede</h2>
+  <p>Flere krav og avtaler kan sammen dokumentere en historisk kjede, for eksempel Lynor → Medio/Mudi → Mudi AS → P7 Rettigheter AS. En bekreftet siste overdragelse dokumenterer ikke automatisk tidligere ledd.</p>
+</section>
+{% endblock %}

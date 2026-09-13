@@ -49,6 +49,29 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
+  const helpTips = [...document.querySelectorAll(".help-tip")];
+  const closeHelpTips = (except = null) => {
+    helpTips.forEach((tip) => {
+      if (tip === except) return;
+      tip.classList.remove("is-open");
+      tip.querySelector(".help-trigger")?.setAttribute("aria-expanded", "false");
+    });
+  };
+  helpTips.forEach((tip) => {
+    const trigger = tip.querySelector(".help-trigger");
+    trigger?.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const open = !tip.classList.contains("is-open");
+      closeHelpTips(tip);
+      tip.classList.toggle("is-open", open);
+      trigger.setAttribute("aria-expanded", String(open));
+    });
+  });
+  document.addEventListener("click", () => closeHelpTips());
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeHelpTips();
+  });
+
   document.querySelectorAll(".recording-autocomplete").forEach((input) => {
     const hiddenName = input.name.replace(
       "existing_recording_search",

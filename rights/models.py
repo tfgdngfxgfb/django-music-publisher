@@ -11,6 +11,8 @@ from parties.models import Party
 from provenance.models import SourceRecord
 from rights_core.models import CanonicalModel, VerificationStatus, validate_not_blank
 
+from .help_content import RIGHTS_HELP
+
 
 class Territory(CanonicalModel):
     code = models.CharField(
@@ -194,6 +196,13 @@ class RightsClaim(CanonicalModel):
         INCLUDE = "include", "Bare angitte territorier"
         EXCLUDE = "exclude", "Hele verden unntatt angitte territorier"
 
+    class EvidenceStrength(models.TextChoices):
+        NOT_ASSESSED = "not_assessed", "Ikke vurdert"
+        WEAK = "weak", "Svak indikasjon"
+        PROBABLE = "probable", "Sannsynlig"
+        STRONG = "strong", "Sterkt underbygget"
+        DOCUMENTED = "documented", "Dokumentert"
+
     recording = models.ForeignKey(
         Recording,
         on_delete=models.PROTECT,
@@ -237,6 +246,13 @@ class RightsClaim(CanonicalModel):
         choices=VerificationStatus.choices,
         default=VerificationStatus.UNVERIFIED,
         editable=False,
+    )
+    evidence_strength = models.CharField(
+        "dokumentasjonsstyrke",
+        max_length=20,
+        choices=EvidenceStrength.choices,
+        default=EvidenceStrength.NOT_ASSESSED,
+        help_text=RIGHTS_HELP["evidence_strength"].short,
     )
     source_record = models.ForeignKey(
         SourceRecord,
@@ -327,6 +343,7 @@ class RightsClaim(CanonicalModel):
                     "agreement_id",
                     "supersedes_id",
                     "status",
+                    "evidence_strength",
                 )
                 .first()
             )
@@ -350,6 +367,7 @@ class RightsClaim(CanonicalModel):
                 "source_record_id",
                 "agreement_id",
                 "supersedes_id",
+                "evidence_strength",
             )
             if (
                 original

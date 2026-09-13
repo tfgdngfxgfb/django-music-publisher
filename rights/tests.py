@@ -28,6 +28,11 @@ from rights.services import (
     link_claim_agreement,
     supersede_rights_claim,
 )
+from rights.summaries import (
+    OwnershipCategory,
+    classify_ownership,
+    has_local_confirmed_right,
+)
 
 
 class RightsDomainTests(TestCase):
@@ -201,6 +206,90 @@ class RightsDomainTests(TestCase):
         claim.share = Decimal("75")
         with self.assertRaises(ValidationError):
             claim.save()
+
+    def test_evidence_strength_is_separate_and_immutable(self):
+        claim = self.claim(evidence_strength=RightsClaim.EvidenceStrength.STRONG)
+        self.assertEqual(claim.status, VerificationStatus.UNVERIFIED)
+        self.assertEqual(
+            claim.evidence_strength, RightsClaim.EvidenceStrength.STRONG
+        )
+        claim.evidence_strength = RightsClaim.EvidenceStrength.DOCUMENTED
+        with self.assertRaises(ValidationError):
+            claim.save()
+
+    def test_ownership_classification_is_conservative(self):
+        self.assertEqual(
+            classify_ownership([], self.owner_a).category,
+            OwnershipCategory.UNRESOLVED,
+        )
+        unverified = self.claim(rights_holder=self.owner_b, share=Decimal("100"))
+        self.assertEqual(
+            classify_ownership([unverified], self.owner_a).category,
+            OwnershipCategory.UNRESOLVED,
+        )
+        decide_rights_claim(
+            unverified, VerificationStatus.CONFIRMED, user=self.user
+        )
+        unverified.refresh_from_db()
+        self.assertEqual(
+            classify_ownership([unverified], self.owner_a).category,
+            OwnershipCategory.NOT_OWNED,
+        )
+
+    def test_local_full_partial_and_unknown_share_are_classified(self):
+        full = self.claim(share=Decimal("100"))
+        decide_rights_claim(full, VerificationStatus.CONFIRMED, user=self.user)
+        full.refresh_from_db()
+        self.assertEqual(
+            classify_ownership([full], self.owner_a).category,
+            OwnershipCategory.FULL,
+        )
+
+        partial_recording = Recording.objects.create(title="Deleid")
+        partial = self.claim(recording=partial_recording, share=Decimal("40"))
+        decide_rights_claim(partial, VerificationStatus.CONFIRMED, user=self.user)
+        partial.refresh_from_db()
+        self.assertEqual(
+            classify_ownership([partial], self.owner_a).category,
+            OwnershipCategory.PARTIAL,
+        )
+
+        unknown_recording = Recording.objects.create(title="Ukjent andel")
+        unknown = self.claim(recording=unknown_recording, share=None)
+        decide_rights_claim(unknown, VerificationStatus.CONFIRMED, user=self.user)
+        unknown.refresh_from_db()
+        summary = classify_ownership([unknown], self.owner_a)
+        self.assertEqual(summary.category, OwnershipCategory.PARTIAL)
+        self.assertTrue(summary.has_unknown_local_share)
+
+    def test_disputed_claim_wins_and_other_right_types_do_not_imply_ownership(self):
+        disputed = self.claim(rights_holder=self.owner_b)
+        decide_rights_claim(disputed, VerificationStatus.DISPUTED, user=self.user)
+        disputed.refresh_from_db()
+        self.assertEqual(
+            classify_ownership([disputed], self.owner_a).category,
+            OwnershipCategory.DISPUTED,
+        )
+
+        administration = self.claim(
+            right_type=RightsClaim.RightType.ADMINISTRATION,
+            rights_holder=self.owner_a,
+        )
+        decide_rights_claim(
+            administration, VerificationStatus.CONFIRMED, user=self.user
+        )
+        administration.refresh_from_db()
+        self.assertEqual(
+            classify_ownership([administration], self.owner_a).category,
+            OwnershipCategory.UNRESOLVED,
+        )
+        self.assertTrue(
+            has_local_confirmed_right(
+                [administration],
+                self.owner_a,
+                RightsClaim.RightType.ADMINISTRATION,
+            )
+        )
 
     def test_agreement_dates_are_validated(self):
         with self.assertRaises(ValidationError):

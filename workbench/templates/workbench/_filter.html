@@ -1,5 +1,10 @@
+{% load workbench_tags %}
 <form class="filter-bar" method="get">
-  {% for field in form %}<label><span>{{ field.label }}</span>{{ field }}</label>{% endfor %}
+  {% for field in form %}
+    {% with help_term=form_help|mapping_value:field.name %}
+    <label><span class="field-label">{{ field.label }}{% if help_term %}{% include "workbench/_help_tip.html" with tip_id=field.auto_id help_term=help_term %}{% endif %}</span>{{ field }}</label>
+    {% endwith %}
+  {% endfor %}
   <button class="button primary" type="submit">Søk og filtrer</button>
   <a class="button" href="{{ request.path }}">Nullstill</a>
 </form>

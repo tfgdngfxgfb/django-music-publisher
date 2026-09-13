@@ -20,7 +20,9 @@ from provenance.models import (
     SourceSystem,
 )
 from provenance.services import ConcurrentCatalogueChange, apply_assertion
-from rights.models import Agreement, RightsClaim
+from rights.models import Agreement, RightsClaim, RightsConfiguration
+from rights.services import decide_rights_claim
+from rights.summaries import OwnershipCategory
 from rights_core.models import VerificationStatus
 
 
@@ -166,10 +168,34 @@ class AuthenticationAndPermissionTests(WorkbenchTestCase):
         response = self.client.get(
             reverse("workbench:recording", args=(recording.pk,)) + "?fane=rights"
         )
-        self.assertContains(response, "Forvaltet av lokal organisasjon:")
+        self.assertContains(response, "Forvaltet av lokal organisasjon")
         self.assertContains(response, "Ja")
-        self.assertContains(response, "Mastereierskap er ikke avklart")
+        self.assertContains(response, "Eierskap er uavklart")
         self.assertNotContains(response, "P7 eier")
+
+    def test_authoritative_help_and_accessible_tooltip_render(self):
+        recording = Recording.objects.create(title="Hjelpetest")
+        create_managed_recording(recording=recording)
+        viewer = self.create_user(
+            permissions=(
+                "catalogue.view_recording",
+                "managed_music.view_managedrecording",
+                "rights.view_rightsclaim",
+            )
+        )
+        self.login(viewer)
+        response = self.client.get(
+            reverse("workbench:recording", args=(recording.pk,)) + "?fane=rights"
+        )
+        self.assertContains(response, 'class="help-tip"')
+        self.assertContains(response, 'aria-expanded="false"')
+        self.assertContains(response, 'role="tooltip"')
+        self.assertContains(response, reverse("help") + "#mastereierskap")
+
+        help_response = self.client.get(reverse("help"))
+        self.assertContains(help_response, "Felles brukerhjelp")
+        self.assertContains(help_response, "Forvaltet ≠ eid")
+        self.assertContains(help_response, 'id="dokumentasjonsstyrke"')
 
     def test_superseding_preserves_hidden_source_and_agreement(self):
         recording = Recording.objects.create(title="Krav med grunnlag")
@@ -209,6 +235,7 @@ class AuthenticationAndPermissionTests(WorkbenchTestCase):
                 "grantor": "",
                 "share": "75",
                 "territory_mode": RightsClaim.TerritoryMode.WORLD,
+                "evidence_strength": RightsClaim.EvidenceStrength.STRONG,
                 "valid_from": "",
                 "valid_until": "",
                 "source_record": "",
@@ -241,6 +268,7 @@ class AuthenticationAndPermissionTests(WorkbenchTestCase):
                 "rights_holder": holder.pk,
                 "share": "",
                 "territory_mode": RightsClaim.TerritoryMode.WORLD,
+                "evidence_strength": RightsClaim.EvidenceStrength.NOT_ASSESSED,
                 "valid_from": "",
                 "valid_until": "",
                 "grantor": "",
@@ -324,6 +352,114 @@ class AuthenticationAndPermissionTests(WorkbenchTestCase):
             reverse("workbench:release", args=(release.pk,)),
             fetch_redirect_response=False,
         )
+
+
+class ManagedRightsOverviewTests(WorkbenchTestCase):
+    def setUp(self):
+        self.local = Party.objects.create(
+            name="Lokal organisasjon", kind=Party.Kind.ORGANIZATION
+        )
+        self.other = Party.objects.create(
+            name="Ekstern eier", kind=Party.Kind.ORGANIZATION
+        )
+        RightsConfiguration.objects.create(local_organization=self.local)
+        self.reviewer = self.create_user(
+            username="oversikt",
+            permissions=(
+                "catalogue.view_recording",
+                "managed_music.view_managedrecording",
+                "rights.view_rightsclaim",
+            ),
+        )
+        self.decision_user = self.create_user(username="beslutter")
+        self.login(self.reviewer)
+
+    def managed_recording(self, title):
+        recording = Recording.objects.create(title=title)
+        create_managed_recording(recording=recording)
+        return recording
+
+    def confirmed_claim(self, recording, holder, share, right_type=None):
+        claim = RightsClaim.objects.create(
+            recording=recording,
+            right_type=right_type or RightsClaim.RightType.OWNERSHIP,
+            rights_holder=holder,
+            share=share,
+            territory_mode=RightsClaim.TerritoryMode.WORLD,
+        )
+        decide_rights_claim(
+            claim, VerificationStatus.CONFIRMED, user=self.decision_user
+        )
+        claim.refresh_from_db()
+        return claim
+
+    def test_managed_list_filters_derived_ownership_categories(self):
+        full = self.managed_recording("Heleid demo")
+        partial = self.managed_recording("Deleid demo")
+        not_owned = self.managed_recording("Ikke eid demo")
+        unresolved = self.managed_recording("Uavklart demo")
+        disputed = self.managed_recording("Bestridt demo")
+        self.confirmed_claim(full, self.local, "100")
+        self.confirmed_claim(partial, self.local, "40")
+        self.confirmed_claim(not_owned, self.other, "100")
+        disputed_claim = RightsClaim.objects.create(
+            recording=disputed,
+            right_type=RightsClaim.RightType.OWNERSHIP,
+            rights_holder=self.other,
+        )
+        decide_rights_claim(
+            disputed_claim,
+            VerificationStatus.DISPUTED,
+            user=self.decision_user,
+        )
+
+        for category, expected, absent in (
+            (OwnershipCategory.FULL, full.title, unresolved.title),
+            (OwnershipCategory.PARTIAL, partial.title, full.title),
+            (OwnershipCategory.NOT_OWNED, not_owned.title, unresolved.title),
+            (OwnershipCategory.UNRESOLVED, unresolved.title, not_owned.title),
+            (OwnershipCategory.DISPUTED, disputed.title, full.title),
+        ):
+            response = self.client.get(
+                reverse("workbench:managed"), {"ownership": category}
+            )
+            self.assertContains(response, expected)
+            self.assertNotContains(response, absent)
+
+    def test_administration_and_distribution_filters_are_independent(self):
+        recording = self.managed_recording("Bare forvaltning")
+        other = self.managed_recording("Lokal admin og distribusjon")
+        self.confirmed_claim(
+            other,
+            self.local,
+            None,
+            RightsClaim.RightType.ADMINISTRATION,
+        )
+        self.confirmed_claim(
+            other,
+            self.local,
+            None,
+            RightsClaim.RightType.DISTRIBUTION,
+        )
+        response = self.client.get(
+            reverse("workbench:managed"),
+            {"local_administration": "yes", "local_distribution": "yes"},
+        )
+        self.assertContains(response, other.title)
+        self.assertNotContains(response, recording.title)
+        self.assertContains(response, "Eierskap uavklart")
+
+    def test_rights_filters_are_not_exposed_without_rights_permission(self):
+        recording = self.managed_recording("Skjermet oversikt")
+        cataloguer = self.create_user(
+            username="uten-rights",
+            permissions=("managed_music.view_managedrecording",),
+        )
+        self.login(cataloguer)
+        response = self.client.get(reverse("workbench:managed"))
+        self.assertContains(response, recording.title)
+        self.assertNotContains(response, 'name="ownership"')
+        self.assertNotContains(response, "Dokumentasjonsstyrke")
 
 
 class CatalogueWorkflowTests(WorkbenchTestCase):

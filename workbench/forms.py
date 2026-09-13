@@ -12,6 +12,7 @@ from media_assets.models import FileAsset, FileLocation
 from music_library.models import MusicLibraryEntry
 from parties.models import ArtistIdentity, Party
 from provenance.models import SourceSystem
+from rights.summaries import OwnershipCategory
 
 
 class SearchForm(forms.Form):
@@ -53,6 +54,29 @@ class MusicLibraryFilterForm(SearchForm):
 
 
 class ManagedFilterForm(SearchForm):
+    ownership = forms.ChoiceField(
+        label="Eierskap",
+        required=False,
+        choices=(("", "Alt forvaltet"), *OwnershipCategory.choices),
+    )
+    local_administration = forms.ChoiceField(
+        label="Administrasjon",
+        required=False,
+        choices=(
+            ("", "Alle"),
+            ("yes", "Administreres av lokal organisasjon"),
+            ("no", "Administreres ikke av lokal organisasjon"),
+        ),
+    )
+    local_distribution = forms.ChoiceField(
+        label="Distribusjon",
+        required=False,
+        choices=(
+            ("", "Alle"),
+            ("yes", "Distribueres av lokal organisasjon"),
+            ("no", "Distribueres ikke av lokal organisasjon"),
+        ),
+    )
     status = forms.ChoiceField(
         label="Status",
         required=False,

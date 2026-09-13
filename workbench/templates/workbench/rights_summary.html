@@ -1,12 +1,37 @@
-<div class="rights-heading panel">
-  <div><strong>Forvaltet av lokal organisasjon:</strong> {% if recording.music_library_entry.managed_recording %}Ja{% else %}Nei{% endif %}</div>
+<section class="rights-heading panel">
+  <div><strong><span class="term-label">Forvaltet av lokal organisasjon {% include "workbench/_help_tip.html" with tip_id="rights-managed" help_term=rights_help.managed %}</span>:</strong> {% if recording.music_library_entry.managed_recording %}Ja{% else %}Nei{% endif %}</div>
   <p class="muted">Forvaltning, administrasjon, distribusjon og filtilstedeværelse dokumenterer ikke i seg selv mastereierskap.</p>
-  {% if local_organization %}<small>Lokal organisasjon: {{ local_organization.name }}</small>{% else %}<small>Lokal organisasjon er ikke konfigurert.</small>{% endif %}
+  {% if local_organization %}<small>Lokal organisasjon: {{ local_organization.name }}</small>{% else %}<small>Lokal organisasjon er ikke konfigurert. Eierskap kan derfor ikke klassifiseres lokalt.</small>{% endif %}
   {% if perms.rights.add_rightsclaim %}<a class="button primary" href="{% url 'workbench:rights_claim_add' recording.pk %}">Nytt rettighetskrav</a>{% endif %}
+</section>
+
+<div class="rights-overview-grid" aria-label="Rettighetsoppsummering">
+  <section class="rights-overview-card ownership-card">
+    <header><h2><span class="term-label">Eierskap {% include "workbench/_help_tip.html" with tip_id="summary-ownership" help_term=rights_help.ownership %}</span></h2><span class="status status-{{ ownership_summary.status_class }}">{{ ownership_summary.label }}</span></header>
+    {% if ownership_summary.local_claims %}
+      {% for claim in ownership_summary.local_claims %}<div class="summary-claim"><strong>{{ claim.rights_holder.name }}</strong><span>{% if claim.share is not None %}{{ claim.share }} %{% else %}Andel ukjent{% endif %} · {{ claim.territory_display }}</span><span>{{ claim.get_status_display }} · {{ claim.get_evidence_strength_display }}</span>{% if claim.agreement %}<small>Avtale: {{ claim.agreement.title }}</small>{% elif claim.source_record %}<small>Kilde: {{ claim.source_record.source_system }}</small>{% endif %}</div>{% endfor %}
+    {% elif ownership_summary.category == "not_owned" %}
+      {% for claim in ownership_summary.other_claims %}<div class="summary-claim"><strong>{{ claim.rights_holder.name }}</strong><span>{% if claim.share is not None %}{{ claim.share }} %{% else %}Andel ukjent{% endif %} · {{ claim.territory_display }}</span><span>{{ claim.get_status_display }} · {{ claim.get_evidence_strength_display }}</span></div>{% endfor %}
+    {% elif ownership_summary.claims %}
+      <p class="muted">Registrerte kildeopplysninger gir ikke grunnlag for en sikker eierskapskonklusjon.</p>
+      {% for claim in ownership_summary.claims|slice:":2" %}<div class="summary-claim"><strong>{{ claim.rights_holder.name }}</strong><span>{{ claim.get_status_display }} · {{ claim.get_evidence_strength_display }}</span>{% if claim.source_record %}<small>Kilde: {{ claim.source_record.source_system }}</small>{% endif %}</div>{% endfor %}
+    {% else %}<p class="critical-state">Eierskap er uavklart. Ingen aktiv, bekreftet eieropplysning er registrert.</p>{% endif %}
+  </section>
+
+  <section class="rights-overview-card administration-card">
+    <header><h2><span class="term-label">Administrasjon {% include "workbench/_help_tip.html" with tip_id="summary-administration" help_term=rights_help.administration %}</span></h2></header>
+    {% for claim in administration_claims %}<div class="summary-claim"><strong>{{ claim.rights_holder.name }}</strong><span>{{ claim.territory_display }}{% if claim.valid_until %} · til {{ claim.valid_until }}{% endif %}</span><span>{{ claim.get_status_display }} · {{ claim.get_evidence_strength_display }}</span>{% if claim.agreement %}<small>Avtale: {{ claim.agreement.title }}</small>{% elif claim.source_record %}<small>Kilde: {{ claim.source_record.source_system }}</small>{% endif %}</div>{% empty %}<p class="muted">Ingen bekreftet administrasjonsrett er registrert.</p>{% endfor %}
+  </section>
+
+  <section class="rights-overview-card distribution-card">
+    <header><h2><span class="term-label">Distribusjon {% include "workbench/_help_tip.html" with tip_id="summary-distribution" help_term=rights_help.distribution %}</span></h2></header>
+    {% for claim in distribution_claims %}<div class="summary-claim"><strong>{{ claim.rights_holder.name }}</strong><span>{{ claim.territory_display }}{% if claim.valid_until %} · til {{ claim.valid_until }}{% endif %}</span><span>{{ claim.get_status_display }} · {{ claim.get_evidence_strength_display }}</span>{% if claim.agreement %}<small>Avtale: {{ claim.agreement.title }}</small>{% elif claim.source_record %}<small>Kilde: {{ claim.source_record.source_system }}</small>{% endif %}</div>{% empty %}<p class="muted">Ingen bekreftet distribusjonsrett er registrert.</p>{% endfor %}
+  </section>
 </div>
 
-{% include "workbench/rights_claim_group.html" with heading="Bekreftet mastereierskap" claims=ownership_claims empty_label="Mastereierskap er ikke avklart." %}
-{% include "workbench/rights_claim_group.html" with heading="Bekreftet administrasjon" claims=administration_claims empty_label="Ingen bekreftet administrasjonsrett er registrert." %}
-{% include "workbench/rights_claim_group.html" with heading="Bekreftet distribusjon" claims=distribution_claims empty_label="Ingen bekreftet distribusjonsrett er registrert." %}
-{% include "workbench/rights_claim_group.html" with heading="Uavklarte eller bestridte krav" claims=unresolved_claims empty_label="Ingen uavklarte eller bestridte krav." %}
-{% include "workbench/rights_claim_group.html" with heading="Avviste og erstattede krav" claims=historical_claims empty_label="Ingen avviste eller erstattede krav." %}
+<div class="section-heading"><div><span class="page-kicker">Revisjonsspor</span><h2>Detaljerte rettighetskrav</h2></div><p>Alle krav og beslutninger bevares nedenfor.</p></div>
+{% include "workbench/rights_claim_group.html" with group_id="ownership" heading="Bekreftet mastereierskap" claims=ownership_claims empty_label="Eierskap er uavklart." %}
+{% include "workbench/rights_claim_group.html" with group_id="administration" heading="Bekreftet administrasjon" claims=administration_claims empty_label="Ingen bekreftet administrasjonsrett er registrert." %}
+{% include "workbench/rights_claim_group.html" with group_id="distribution" heading="Bekreftet distribusjon" claims=distribution_claims empty_label="Ingen bekreftet distribusjonsrett er registrert." %}
+{% include "workbench/rights_claim_group.html" with group_id="unresolved" heading="Uavklarte eller bestridte krav" claims=unresolved_claims empty_label="Ingen uavklarte eller bestridte krav." %}
+{% include "workbench/rights_claim_group.html" with group_id="historical" heading="Avviste og erstattede krav" claims=historical_claims empty_label="Ingen avviste eller erstattede krav." %}

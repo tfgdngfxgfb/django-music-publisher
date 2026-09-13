@@ -14,6 +14,7 @@ from music_library.models import MusicLibraryEntry
 from parties.models import Party
 from provenance.models import MetadataAssertion
 from rights.models import Agreement, RightsClaim, RightsConfiguration
+from rights.summaries import OwnershipCategory, classify_ownership
 
 
 class DevelopmentAdminCommandTests(TestCase):
@@ -80,9 +81,10 @@ class DemoDataTests(TestCase):
 
             self.assertEqual(self._counts(), counts)
             self.assertEqual(counts["recordings"], 5)
-            self.assertEqual(counts["managed"], 1)
+            self.assertEqual(counts["library"], 5)
+            self.assertEqual(counts["managed"], 5)
             self.assertEqual(counts["duplicates"], 1)
-            self.assertEqual(counts["rights_claims"], 4)
+            self.assertEqual(counts["rights_claims"], 10)
             self.assertEqual(counts["agreements"], 1)
             self.assertEqual(counts["rights_configuration"], 1)
             self.assertTrue(
@@ -90,6 +92,23 @@ class DemoDataTests(TestCase):
                     pk="70000000-0000-4000-8000-000000000030",
                     title="Nordlys over byen (demo)",
                 ).exists()
+            )
+            local = RightsConfiguration.objects.get().local_organization
+            categories = {
+                Recording.objects.get(pk=demo_id).title: classify_ownership(
+                    RightsClaim.objects.filter(recording_id=demo_id), local
+                ).category
+                for demo_id in (
+                    "70000000-0000-4000-8000-000000000030",
+                    "70000000-0000-4000-8000-000000000031",
+                    "70000000-0000-4000-8000-000000000032",
+                    "70000000-0000-4000-8000-000000000033",
+                    "70000000-0000-4000-8000-000000000034",
+                )
+            }
+            self.assertEqual(
+                set(categories.values()),
+                set(OwnershipCategory.values),
             )
             self.assertTrue(
                 Path(

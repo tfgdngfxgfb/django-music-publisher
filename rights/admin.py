@@ -102,10 +102,11 @@ class RightsClaimAdmin(CanonicalAdmin):
         "share",
         "territory_mode",
         "status",
+        "evidence_strength",
         "valid_from",
         "valid_until",
     )
-    list_filter = ("right_type", "status", "territory_mode")
+    list_filter = ("right_type", "status", "evidence_strength", "territory_mode")
     search_fields = (
         "recording__title",
         "rights_holder__name",

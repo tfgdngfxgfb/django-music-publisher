@@ -11,6 +11,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
@@ -42,6 +43,7 @@ from rights.models import (
     RightsConfiguration,
     Territory,
 )
+from rights.services import decide_rights_claim
 from rights_core.models import VerificationStatus
 
 
@@ -98,6 +100,13 @@ class Command(BaseCommand):
                 "local_organization": local_organization,
             },
         )
+        reviewer, created = get_user_model().objects.get_or_create(
+            username="p7-demo-rights-reviewer",
+            defaults={"is_active": False},
+        )
+        if created:
+            reviewer.set_unusable_password()
+            reviewer.save(update_fields=("password",))
         soloist, _ = ArtistIdentity.objects.get_or_create(
             pk=demo_uuid(10),
             defaults={"party": person, "display_name": "INGRID SOL (demo)"},
@@ -202,6 +211,7 @@ class Command(BaseCommand):
             (81, recordings[1], "Visesang", "nb", "P7 Kristen Riksradio", 4, 2),
             (82, recordings[2], "Pop", "en", "P7 Kristen Riksradio", 3, 3),
             (83, recordings[4], "", "", "", None, None),
+            (84, recordings[3], "Pop", "nb", "P7 Kristen Riksradio", 3, 3),
         )
         for (
             number,
@@ -230,14 +240,16 @@ class Command(BaseCommand):
                 },
             )
             library_entries.append(entry)
-        ManagedRecording.objects.get_or_create(
-            pk=demo_uuid(90),
-            defaults={
-                "library_entry": library_entries[0],
-                "status": ManagedRecording.Status.ACTIVE,
-                "notes": "Demopost. Angir forvaltning, ikke dokumentert eierskap.",
-            },
-        )
+        entries_by_recording = {entry.recording_id: entry for entry in library_entries}
+        for offset, recording in enumerate(recordings):
+            ManagedRecording.objects.get_or_create(
+                pk=demo_uuid(90 + offset),
+                defaults={
+                    "library_entry": entries_by_recording[recording.pk],
+                    "status": ManagedRecording.Status.ACTIVE,
+                    "notes": "Demopost. Angir forvaltning, ikke dokumentert eierskap.",
+                },
+            )
 
         physical, _ = SourceSystem.objects.get_or_create(
             pk=demo_uuid(100),
@@ -302,12 +314,13 @@ class Command(BaseCommand):
 
         self._file_records(recordings[0], album, root, paths)
         self._rights_records(
-            recordings[0],
+            recordings,
             group,
             organization,
             local_organization,
             cover_source,
             import_source,
+            reviewer,
         )
         self.stdout.write(self.style.SUCCESS("Det faste demo-datasettet er klart."))
         self.stdout.write(f"Demofiler: {root}")
@@ -501,13 +514,15 @@ class Command(BaseCommand):
 
     def _rights_records(
         self,
-        recording,
+        recordings,
         artist_group,
         catalogue_company,
         local_organization,
         physical_source,
         imported_source,
+        reviewer,
     ):
+        recording = recordings[0]
         agreement, _ = Agreement.objects.get_or_create(
             pk=demo_uuid(200),
             defaults={
@@ -552,6 +567,73 @@ class Command(BaseCommand):
             agreement=agreement,
         )
         self._claim(
+            230,
+            recordings[0],
+            RightsClaim.RightType.OWNERSHIP,
+            local_organization,
+            share="100.00",
+            source=physical_source,
+            agreement=agreement,
+            evidence_strength=RightsClaim.EvidenceStrength.DOCUMENTED,
+            decision=VerificationStatus.CONFIRMED,
+            reviewer=reviewer,
+        )
+        self._claim(
+            231,
+            recordings[1],
+            RightsClaim.RightType.OWNERSHIP,
+            local_organization,
+            share="40.00",
+            source=physical_source,
+            evidence_strength=RightsClaim.EvidenceStrength.STRONG,
+            decision=VerificationStatus.CONFIRMED,
+            reviewer=reviewer,
+        )
+        self._claim(
+            232,
+            recordings[2],
+            RightsClaim.RightType.OWNERSHIP,
+            catalogue_company,
+            share="100.00",
+            source=physical_source,
+            evidence_strength=RightsClaim.EvidenceStrength.DOCUMENTED,
+            decision=VerificationStatus.CONFIRMED,
+            reviewer=reviewer,
+        )
+        self._claim(
+            233,
+            recordings[2],
+            RightsClaim.RightType.ADMINISTRATION,
+            local_organization,
+            grantor=catalogue_company,
+            source=physical_source,
+            evidence_strength=RightsClaim.EvidenceStrength.STRONG,
+            decision=VerificationStatus.CONFIRMED,
+            reviewer=reviewer,
+        )
+        self._claim(
+            234,
+            recordings[2],
+            RightsClaim.RightType.DISTRIBUTION,
+            local_organization,
+            grantor=catalogue_company,
+            source=imported_source,
+            evidence_strength=RightsClaim.EvidenceStrength.PROBABLE,
+            decision=VerificationStatus.CONFIRMED,
+            reviewer=reviewer,
+        )
+        self._claim(
+            235,
+            recordings[4],
+            RightsClaim.RightType.OWNERSHIP,
+            artist_group,
+            share="100.00",
+            source=imported_source,
+            evidence_strength=RightsClaim.EvidenceStrength.WEAK,
+            decision=VerificationStatus.DISPUTED,
+            reviewer=reviewer,
+        )
+        self._claim(
             211,
             recording,
             RightsClaim.RightType.OWNERSHIP,
@@ -593,6 +675,9 @@ class Command(BaseCommand):
         territories=(),
         source=None,
         agreement=None,
+        evidence_strength=RightsClaim.EvidenceStrength.NOT_ASSESSED,
+        decision=None,
+        reviewer=None,
     ):
         claim, _ = RightsClaim.objects.get_or_create(
             pk=demo_uuid(number),
@@ -605,6 +690,7 @@ class Command(BaseCommand):
                 "territory_mode": territory_mode,
                 "source_record": source,
                 "agreement": agreement,
+                "evidence_strength": evidence_strength,
                 "notes": "Uverifisert, fiktivt rettighetskrav for prøvebruk.",
             },
         )
@@ -612,4 +698,11 @@ class Command(BaseCommand):
             ClaimTerritory.objects.get_or_create(
                 pk=demo_uuid(220 + number - 210 + index * 10),
                 defaults={"claim": claim, "territory": territory},
+            )
+        if decision and claim.status == VerificationStatus.UNVERIFIED:
+            decide_rights_claim(
+                claim,
+                decision,
+                user=reviewer,
+                note="Fiktiv demobeslutning for prøvebruk.",
             )

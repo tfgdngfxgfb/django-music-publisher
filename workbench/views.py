@@ -43,6 +43,7 @@ from rights.forms import (
     RightsClaimForm,
     RightsDecisionForm,
 )
+from rights.help_content import RIGHTS_FORM_HELP, RIGHTS_HELP, RIGHTS_HELP_SECTIONS
 from rights.models import Agreement, RightsClaim
 from rights.services import (
     create_rights_claim,
@@ -50,6 +51,13 @@ from rights.services import (
     get_local_organization,
     link_claim_agreement,
     supersede_rights_claim,
+)
+from rights.summaries import (
+    OwnershipCategory,
+    classify_ownership,
+    has_local_confirmed_right,
+    local_confirmed_right_recording_ids,
+    ownership_summaries_for_recordings,
 )
 from rights_core.models import VerificationStatus
 
@@ -106,6 +114,7 @@ def _page_context(section, title, **extra):
         "section": section,
         "section_label": labels.get(section, "Katalogarbeid"),
         "title": title,
+        "rights_help": RIGHTS_HELP,
         **extra,
     }
 
@@ -381,6 +390,14 @@ def library_add(request):
 @permission_required("managed_music.view_managedrecording", raise_exception=True)
 def managed_list(request):
     form = ManagedFilterForm(request.GET)
+    can_view_rights = request.user.has_perm("rights.view_rightsclaim")
+    if not can_view_rights:
+        for field_name in (
+            "ownership",
+            "local_administration",
+            "local_distribution",
+        ):
+            form.fields.pop(field_name)
     queryset = (
         ManagedRecording.objects.select_related(
             "library_entry__recording", "source_system"
@@ -389,9 +406,19 @@ def managed_list(request):
             "library_entry__recording__identifiers",
             "library_entry__recording__contributions__party",
             "library_entry__recording__contributions__artist_identity",
+            Prefetch(
+                "library_entry__recording__rights_claims",
+                RightsClaim.objects.select_related(
+                    "rights_holder",
+                    "grantor",
+                    "agreement",
+                    "source_record__source_system",
+                ).prefetch_related("territories", "decisions__decided_by"),
+            ),
         )
         .order_by("library_entry__recording__title", "id")
     )
+    local_organization = get_local_organization() if can_view_rights else None
     if form.is_valid():
         q = form.cleaned_data.get("q")
         if q:
@@ -406,7 +433,68 @@ def managed_list(request):
             queryset = queryset.filter(status=form.cleaned_data["status"])
         if form.cleaned_data.get("source"):
             queryset = queryset.filter(source_system=form.cleaned_data["source"])
+        if can_view_rights:
+            ownership = form.cleaned_data.get("ownership")
+            recording_ids = tuple(
+                queryset.values_list(
+                    "library_entry__recording_id", flat=True
+                ).distinct()
+            )
+            if ownership:
+                summaries = ownership_summaries_for_recordings(
+                    recording_ids, local_organization
+                )
+                matching_ids = [
+                    recording_id
+                    for recording_id, summary in summaries.items()
+                    if summary.category == ownership
+                ]
+                queryset = queryset.filter(
+                    library_entry__recording_id__in=matching_ids
+                )
+            for field_name, right_type in (
+                (
+                    "local_administration",
+                    RightsClaim.RightType.ADMINISTRATION,
+                ),
+                ("local_distribution", RightsClaim.RightType.DISTRIBUTION),
+            ):
+                selected = form.cleaned_data.get(field_name)
+                if not selected:
+                    continue
+                recording_ids = tuple(
+                    queryset.values_list(
+                        "library_entry__recording_id", flat=True
+                    ).distinct()
+                )
+                matching_ids = local_confirmed_right_recording_ids(
+                    recording_ids, local_organization, right_type
+                )
+                lookup = {"library_entry__recording_id__in": matching_ids}
+                queryset = (
+                    queryset.filter(**lookup)
+                    if selected == "yes"
+                    else queryset.exclude(**lookup)
+                )
     page, query = _paginate(request, queryset)
+    rows = list(page.object_list)
+    page.object_list = rows
+    if can_view_rights:
+        for managed in rows:
+            claims = tuple(managed.recording.rights_claims.all())
+            managed.ownership_summary = classify_ownership(
+                claims, local_organization
+            )
+            managed.local_administration = has_local_confirmed_right(
+                claims,
+                local_organization,
+                RightsClaim.RightType.ADMINISTRATION,
+            )
+            managed.local_distribution = has_local_confirmed_right(
+                claims,
+                local_organization,
+                RightsClaim.RightType.DISTRIBUTION,
+            )
     return render(
         request,
         "workbench/managed_list.html",
@@ -414,9 +502,16 @@ def managed_list(request):
             "managed",
             "Forvaltet musikk",
             form=form,
+            form_help={
+                "ownership": RIGHTS_HELP["ownership"],
+                "local_administration": RIGHTS_HELP["administration"],
+                "local_distribution": RIGHTS_HELP["distribution"],
+            },
             page=page,
             page_query=query,
             sources=SourceSystem.objects.all(),
+            local_organization=local_organization,
+            ownership_categories=OwnershipCategory.choices,
         ),
     )
 
@@ -679,13 +774,19 @@ def recording_detail(request, pk):
         entity_uuid=recording.pk,
     ).select_related("assertion__source_record__source_system", "changed_by")
     rights_claims = []
+    local_organization = None
+    ownership_summary = None
     if request.user.has_perm("rights.view_rightsclaim"):
+        local_organization = get_local_organization()
         rights_claims = list(
             RightsClaim.objects.filter(recording=recording)
             .select_related(
                 "rights_holder", "grantor", "agreement", "source_record__source_system"
             )
             .prefetch_related("territories", "decisions__decided_by")
+        )
+        ownership_summary = classify_ownership(
+            rights_claims, local_organization
         )
     return render(
         request,
@@ -727,7 +828,8 @@ def recording_detail(request, pk):
                 if claim.status
                 in {VerificationStatus.REJECTED, VerificationStatus.SUPERSEDED}
             ],
-            local_organization=get_local_organization(),
+            local_organization=local_organization,
+            ownership_summary=ownership_summary,
             return_url=_safe_return(request, reverse("workbench:library")),
         ),
     )
@@ -771,6 +873,7 @@ def rights_claim_add(request, pk):
             f"Nytt rettighetskrav — {recording.title}",
             introduction="Et nytt krav er uverifisert til en autorisert bruker tar en beslutning.",
             form=form,
+            form_help=RIGHTS_FORM_HELP,
             submit_label="Registrer krav",
             cancel_url=reverse("workbench:recording", args=(recording.pk,))
             + "?fane=rights",
@@ -833,6 +936,7 @@ def rights_claim_supersede(request, pk):
         "territories": previous.territories.all(),
         "valid_from": previous.valid_from,
         "valid_until": previous.valid_until,
+        "evidence_strength": previous.evidence_strength,
         "source_record": previous.source_record,
         "agreement": previous.agreement,
         "notes": previous.notes,
@@ -877,6 +981,7 @@ def rights_claim_supersede(request, pk):
             "Erstatt rettighetskrav",
             introduction="Det tidligere kravet og beslutningshistorikken blir bevart.",
             form=form,
+            form_help=RIGHTS_FORM_HELP,
             submit_label="Opprett erstatningskrav",
             cancel_url=reverse("workbench:recording", args=(previous.recording_id,))
             + "?fane=rights",
@@ -916,6 +1021,7 @@ def rights_claim_link_agreement(request, pk):
             "rights",
             "Knytt avtale",
             form=form,
+            form_help={"agreement": RIGHTS_HELP["agreement"]},
             submit_label="Knytt avtale",
             cancel_url=reverse("workbench:recording", args=(claim.recording_id,))
             + "?fane=rights",
@@ -1499,7 +1605,15 @@ def file_location_add(request, pk):
 
 @staff
 def help_page(request):
-    return render(request, "workbench/help.html", _page_context("help", "Hjelp"))
+    return render(
+        request,
+        "workbench/help.html",
+        _page_context(
+            "help",
+            "Hjelp",
+            rights_help_sections=RIGHTS_HELP_SECTIONS,
+        ),
+    )
 
 
 @staff
