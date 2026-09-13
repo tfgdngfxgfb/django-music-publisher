@@ -10,6 +10,7 @@ from django.urls import reverse
 
 from catalogue.models import ExternalIdentifier, Recording, Release, ReleaseTrack
 from media_assets.models import FileAsset, FileLocation
+from managed_music.models import ManagedRecording
 from managed_music.services import create_managed_recording
 from music_library.models import Channel, MusicLibraryEntry, TargetAudience
 from parties.models import Party
@@ -47,6 +48,13 @@ class WorkbenchTestCase(TestCase):
 
     def login(self, user):
         self.client.force_login(user)
+
+    def configure_local_organization(self):
+        local = Party.objects.create(
+            name="Lokal testorganisasjon", kind=Party.Kind.ORGANIZATION
+        )
+        RightsConfiguration.objects.create(local_organization=local)
+        return local
 
     def assertion(self, recording, *, field_name, value):
         source = SourceSystem.objects.create(name="LP-cover", kind="physical")
@@ -129,8 +137,8 @@ class AuthenticationAndPermissionTests(WorkbenchTestCase):
         self.login(viewer)
         detail = reverse("workbench:recording", args=(recording.pk,)) + "?fane=rights"
         response = self.client.get(detail)
-        self.assertContains(response, "Rettighetshaver")
-        self.assertContains(response, "Importert / ikke verifisert")
+        self.assertContains(response, "Rettighetskontroll er derfor skjult")
+        self.assertNotContains(response, "Rettighetshaver")
         self.assertNotContains(response, ">Bekreft<")
         response = self.client.post(
             reverse("workbench:rights_claim_decide", args=(claim.pk,)),
@@ -153,14 +161,18 @@ class AuthenticationAndPermissionTests(WorkbenchTestCase):
             reverse("workbench:rights_claim_decide", args=(claim.pk,)),
             {"action": "confirm", "note": "Kontrollert dokumentasjon"},
         )
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 403)
         claim.refresh_from_db()
-        self.assertEqual(claim.status, VerificationStatus.CONFIRMED)
-        self.assertEqual(claim.decisions.get().decided_by, reviewer)
+        self.assertEqual(claim.status, VerificationStatus.UNVERIFIED)
+        self.assertFalse(claim.decisions.exists())
 
     def test_managed_recording_page_does_not_claim_ownership(self):
+        self.configure_local_organization()
         recording = Recording.objects.create(title="Forvaltet uten eier")
-        create_managed_recording(recording=recording)
+        create_managed_recording(
+            recording=recording,
+            relationship_type=RightsClaim.RightType.ADMINISTRATION,
+        )
         viewer = self.create_user(
             permissions=("catalogue.view_recording", "rights.view_rightsclaim")
         )
@@ -174,8 +186,12 @@ class AuthenticationAndPermissionTests(WorkbenchTestCase):
         self.assertNotContains(response, "P7 eier")
 
     def test_authoritative_help_and_accessible_tooltip_render(self):
+        self.configure_local_organization()
         recording = Recording.objects.create(title="Hjelpetest")
-        create_managed_recording(recording=recording)
+        create_managed_recording(
+            recording=recording,
+            relationship_type=RightsClaim.RightType.ADMINISTRATION,
+        )
         viewer = self.create_user(
             permissions=(
                 "catalogue.view_recording",
@@ -250,7 +266,12 @@ class AuthenticationAndPermissionTests(WorkbenchTestCase):
         self.assertEqual(replacement.agreement, agreement)
 
     def test_claim_creation_and_agreement_management_permissions(self):
+        self.configure_local_organization()
         recording = Recording.objects.create(title="Nytt krav")
+        create_managed_recording(
+            recording=recording,
+            relationship_type=RightsClaim.RightType.ADMINISTRATION,
+        )
         holder = Party.objects.create(name="Kravpart", kind=Party.Kind.ORGANIZATION)
         cataloguer = self.create_user(
             permissions=(
@@ -279,7 +300,12 @@ class AuthenticationAndPermissionTests(WorkbenchTestCase):
         )
         self.assertEqual(response.status_code, 302)
         self.assertEqual(
-            RightsClaim.objects.get().status, VerificationStatus.UNVERIFIED
+            RightsClaim.objects.get(
+                recording=recording,
+                rights_holder=holder,
+                right_type=RightsClaim.RightType.OWNERSHIP,
+            ).status,
+            VerificationStatus.UNVERIFIED,
         )
         self.assertEqual(
             self.client.post(
@@ -376,7 +402,10 @@ class ManagedRightsOverviewTests(WorkbenchTestCase):
 
     def managed_recording(self, title):
         recording = Recording.objects.create(title=title)
-        create_managed_recording(recording=recording)
+        create_managed_recording(
+            recording=recording,
+            relationship_type=RightsClaim.RightType.ADMINISTRATION,
+        )
         return recording
 
     def confirmed_claim(self, recording, holder, share, right_type=None):
@@ -460,6 +489,75 @@ class ManagedRightsOverviewTests(WorkbenchTestCase):
         self.assertContains(response, recording.title)
         self.assertNotContains(response, 'name="ownership"')
         self.assertNotContains(response, "Dokumentasjonsstyrke")
+
+
+class ReleaseRightsWorkflowTests(WorkbenchTestCase):
+    def setUp(self):
+        self.local = self.configure_local_organization()
+        self.release = Release.objects.create(title="Rettighetsutgivelse")
+        self.first = Recording.objects.create(title="Første spor")
+        self.second = Recording.objects.create(title="Andre spor")
+        ReleaseTrack.objects.create(
+            release=self.release, recording=self.first, sequence_number=1
+        )
+        ReleaseTrack.objects.create(
+            release=self.release, recording=self.second, sequence_number=2
+        )
+
+    def post_data(self):
+        return {
+            "recordings": (str(self.first.pk), str(self.second.pk)),
+            "right_type": RightsClaim.RightType.DISTRIBUTION,
+            "rights_holder": str(self.local.pk),
+            "grantor": "",
+            "share": "",
+            "territory_mode": RightsClaim.TerritoryMode.WORLD,
+            "valid_from": "",
+            "valid_until": "",
+            "evidence_strength": RightsClaim.EvidenceStrength.NOT_ASSESSED,
+            "source_record": "",
+            "agreement": "",
+            "notes": "Felles grunnlag fra utgivelsen",
+        }
+
+    def test_admin_creates_one_recording_claim_per_selected_release_recording(self):
+        admin = self.create_user(superuser=True)
+        self.login(admin)
+        response = self.client.post(
+            reverse("workbench:release_rights_add", args=(self.release.pk,)),
+            self.post_data(),
+        )
+        self.assertRedirects(
+            response,
+            reverse("workbench:release", args=(self.release.pk,)),
+        )
+        self.assertEqual(ManagedRecording.objects.count(), 2)
+        self.assertEqual(
+            RightsClaim.objects.filter(
+                right_type=RightsClaim.RightType.DISTRIBUTION,
+                rights_holder=self.local,
+                status=VerificationStatus.UNVERIFIED,
+            ).count(),
+            2,
+        )
+
+    def test_rights_user_cannot_indirectly_register_unmanaged_recordings(self):
+        rights_user = self.create_user(
+            permissions=(
+                "catalogue.view_release",
+                "rights.view_rightsclaim",
+                "rights.add_rightsclaim",
+            )
+        )
+        self.login(rights_user)
+        response = self.client.post(
+            reverse("workbench:release_rights_add", args=(self.release.pk,)),
+            self.post_data(),
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Bare en administrator")
+        self.assertFalse(ManagedRecording.objects.exists())
+        self.assertFalse(RightsClaim.objects.exists())
 
 
 class CatalogueWorkflowTests(WorkbenchTestCase):

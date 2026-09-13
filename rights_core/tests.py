@@ -84,7 +84,7 @@ class DemoDataTests(TestCase):
             self.assertEqual(counts["library"], 5)
             self.assertEqual(counts["managed"], 5)
             self.assertEqual(counts["duplicates"], 1)
-            self.assertEqual(counts["rights_claims"], 10)
+            self.assertEqual(counts["rights_claims"], 12)
             self.assertEqual(counts["agreements"], 1)
             self.assertEqual(counts["rights_configuration"], 1)
             self.assertTrue(

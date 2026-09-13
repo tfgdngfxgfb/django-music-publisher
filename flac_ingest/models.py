@@ -26,6 +26,14 @@ class FlacIngestBatch(CanonicalModel):
         validators=[validate_logical_path],
     )
     recursive = models.BooleanField("inkluder undermapper", default=True)
+    allow_uuid_recovery = models.BooleanField(
+        "tillat gjenoppretting fra P7UUID",
+        default=False,
+        help_text=(
+            "Eksplisitt administratoroverstyring for test, regenerering eller "
+            "kontrollert reimport. Skal vurderes før operativ produksjonsbruk."
+        ),
+    )
     status = models.CharField(
         "status", max_length=20, choices=Status.choices, default=Status.PREVIEW
     )

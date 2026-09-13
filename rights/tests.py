@@ -40,6 +40,12 @@ class RightsDomainTests(TestCase):
         self.recording = Recording.objects.create(title="Testmaster")
         self.owner_a = Party.objects.create(name="Eier A", kind=Party.Kind.ORGANIZATION)
         self.owner_b = Party.objects.create(name="Eier B", kind=Party.Kind.PERSON)
+        self.local_organization = Party.objects.create(
+            name="Lokal organisasjon", kind=Party.Kind.ORGANIZATION
+        )
+        RightsConfiguration.objects.create(
+            local_organization=self.local_organization
+        )
         self.user = get_user_model().objects.create_user(username="rights-reviewer")
 
     def claim(self, **overrides):
@@ -130,9 +136,9 @@ class RightsDomainTests(TestCase):
             claim.save()
 
     def test_local_organization_uses_explicit_party_configuration(self):
-        configuration = RightsConfiguration.objects.create(
-            local_organization=self.owner_a
-        )
+        configuration = RightsConfiguration.objects.get()
+        configuration.local_organization = self.owner_a
+        configuration.save()
         self.assertEqual(configuration.local_organization, self.owner_a)
         with self.assertRaises(ValidationError):
             RightsConfiguration.objects.create(local_organization=self.owner_b)
@@ -187,12 +193,26 @@ class RightsDomainTests(TestCase):
         )
 
     def test_managed_recording_does_not_create_ownership(self):
-        managed = create_managed_recording(recording=self.recording)
+        managed = create_managed_recording(
+            recording=self.recording,
+            relationship_type=RightsClaim.RightType.ADMINISTRATION,
+        )
         FileAsset.objects.create(
             filename="master.wav", role=FileAsset.Role.EDITED_WAV_MASTER
         )
         self.assertEqual(managed.recording, self.recording)
-        self.assertFalse(RightsClaim.objects.exists())
+        self.assertFalse(
+            RightsClaim.objects.filter(
+                right_type=RightsClaim.RightType.OWNERSHIP
+            ).exists()
+        )
+        self.assertTrue(
+            RightsClaim.objects.filter(
+                right_type=RightsClaim.RightType.ADMINISTRATION,
+                rights_holder=self.local_organization,
+                status=VerificationStatus.UNVERIFIED,
+            ).exists()
+        )
         claim = self.claim()
         decide_rights_claim(claim, VerificationStatus.CONFIRMED, user=self.user)
         self.assertTrue(

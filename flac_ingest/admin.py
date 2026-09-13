@@ -7,8 +7,15 @@ from .models import FlacIngestBatch, FlacIngestItem, FlacSyncLog
 
 @admin.register(FlacIngestBatch)
 class FlacIngestBatchAdmin(CanonicalAdmin):
-    list_display = ("relative_root", "status", "recursive", "created_by", "created_at")
-    list_filter = ("status", "recursive")
+    list_display = (
+        "relative_root",
+        "status",
+        "recursive",
+        "allow_uuid_recovery",
+        "created_by",
+        "created_at",
+    )
+    list_filter = ("status", "recursive", "allow_uuid_recovery")
 
 
 @admin.register(FlacIngestItem)

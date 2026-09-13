@@ -1,7 +1,8 @@
+from datetime import date
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import models, transaction
 
 from catalogue.models import Recording
 from rights_core.models import VerificationStatus
@@ -83,6 +84,37 @@ def decide_rights_claim(claim, decision, *, user, note=""):
     claim.status = decision
     claim._allow_status_transition = True
     claim.save(update_fields=("status",))
+    configuration = RightsConfiguration.objects.first()
+    if configuration:
+        from managed_music.models import ManagedRecording
+
+        managed = ManagedRecording.objects.filter(
+            library_entry__recording_id=claim.recording_id
+        ).first()
+        if managed:
+            has_current_local_basis = (
+                RightsClaim.objects.filter(
+                    recording_id=claim.recording_id,
+                    rights_holder_id=configuration.local_organization_id,
+                    right_type__in=RightsClaim.RightType.values,
+                    status=VerificationStatus.CONFIRMED,
+                )
+                .filter(
+                    models.Q(valid_from__isnull=True)
+                    | models.Q(valid_from__lte=date.today()),
+                    models.Q(valid_until__isnull=True)
+                    | models.Q(valid_until__gte=date.today()),
+                )
+                .exists()
+            )
+            next_status = (
+                ManagedRecording.Status.ACTIVE
+                if has_current_local_basis
+                else ManagedRecording.Status.PENDING
+            )
+            if managed.status != next_status:
+                managed.status = next_status
+                managed.save(update_fields=("status",))
     return result
 
 
@@ -133,3 +165,70 @@ def get_local_organization():
         "local_organization"
     ).first()
     return configuration.local_organization if configuration else None
+
+
+@transaction.atomic
+def create_release_rights_claims(
+    *,
+    release,
+    recordings,
+    allow_managed_registration=False,
+    **claim_values,
+):
+    """Create recording claims from one release-level registration workflow."""
+    recording_ids = {recording.pk for recording in recordings}
+    if not recording_ids:
+        raise ValidationError("Velg minst én innspilling fra utgivelsen.")
+    release_recording_ids = set(
+        release.tracks.filter(recording_id__in=recording_ids).values_list(
+            "recording_id", flat=True
+        )
+    )
+    if release_recording_ids != recording_ids:
+        raise ValidationError("Alle valgte innspillinger må tilhøre utgivelsen.")
+
+    configuration = RightsConfiguration.objects.select_related(
+        "local_organization"
+    ).first()
+    from managed_music.models import ManagedRecording
+    from music_library.models import MusicLibraryEntry
+
+    selected_recordings = list(
+        Recording.objects.filter(pk__in=recording_ids).order_by("pk")
+    )
+    managed_recording_ids = set(
+        ManagedRecording.objects.filter(
+            library_entry__recording_id__in=recording_ids
+        ).values_list("library_entry__recording_id", flat=True)
+    )
+    claims = []
+    for recording in selected_recordings:
+        is_managed = recording.pk in managed_recording_ids
+        if not is_managed:
+            if not allow_managed_registration:
+                raise ValidationError(
+                    f"«{recording.title}» er ikke i Forvaltet musikk. Bare en "
+                    "administrator kan registrere forvaltning fra utgivelsen."
+                )
+            if (
+                not configuration
+                or claim_values.get("rights_holder")
+                != configuration.local_organization
+            ):
+                raise ValidationError(
+                    "En ny forvaltningsregistrering må bygge på et krav for "
+                    "konfigurert lokal organisasjon."
+                )
+            entry, _created = MusicLibraryEntry.objects.get_or_create(
+                recording=recording
+            )
+            source_record = claim_values.get("source_record")
+            ManagedRecording.objects.create(
+                library_entry=entry,
+                source_system=(
+                    source_record.source_system if source_record else None
+                ),
+                notes=f"Registrert uttrykkelig fra utgivelsen «{release.title}».",
+            )
+        claims.append(create_rights_claim(recording=recording, **claim_values))
+    return claims

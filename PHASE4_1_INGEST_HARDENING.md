@@ -32,6 +32,10 @@ lydfiler ble endret.
 | Store resultater var tunge å kontrollere | Få filtre og ny skann krevde ny start | Nye/endrede/uendrede/advarsler/konflikter/feil kan filtreres; hele, feilede eller valgte filer kan skannes på nytt | Workbench- og permissionstester |
 | To databaseoppslag per filplassering | Plassering ble slått opp inne i løkken | Aktuelle plasseringer lastes én gang, med chunking for valgte filer | Reell skann: 1 842 filer på 39 sekunder |
 | Anvendte FLAC-verdier fylte listen «Uverifiserte opplysninger» | Kildepåstanden beholdt standardstatus etter at autoritetsregelen allerede hadde anvendt verdien | Nye anvendte FLAC-påstander bekreftes med beslutningshistorikk. Eldre FLAC-påstander kan bekreftes eksplisitt fra Kontroll | Test skiller FLAC-metadata fra andre kilder og rettighetskrav |
+| Radioposten sto som uverifisert etter vellykket FLAC-import | Påstandene ble bekreftet, men `MusicLibraryEntry` beholdt gammel status | Anvendt FLAC-radiometadata setter radioposten til bekreftet | Regresjonstest ved ny import og etterbekreftelse |
+| Tom testdatabase avviste kjente `P7UUID` | UUID-en tilhørte en tidligere testdatabase | Superbruker kan uttrykkelig aktivere gjenoppretting og opprette Recording med samme UUID; ISRC-motstrid forblir konflikt | Fire tester dekker normal avvisning, gjenoppretting, idempotens, ISRC-konflikt og serversidetilgang |
+| Utgivelser ble sjelden opprettet | Release-matching krevde for mye komplett tagmetadata, og allerede leste filer ble hoppet over | Albumfolder brukes som stabil importkontekst. Disc/CD-undermapper grupperes under parent, cover registreres som filreferanse, og en versjonsmarkør gjør at eldre filer behandles én gang for etterregistrering | Tester dekker manglende `ALBUM`, flere discer, etterregistrering, samme albumtittel i ulike mapper og cover |
+| Uforvaltede innspillinger viste irrelevant rettighetskontroll | Recording-siden viste krav uavhengig av operativt repertoar | Rettighetsfanen og rettighetshandlinger skjules og avvises for uforvaltet musikk. Innmelding i Forvaltet musikk krever valg av lokalt eierskap, administrasjon eller distribusjon | Permission-, service- og Workbench-tester |
 
 Automatisk bekreftelse gjelder bare metadata som ingest faktisk anvender etter
 autoritetsreglene: katalogmetadata for ikke-forvaltet musikk og radiometadata
@@ -40,23 +44,49 @@ rettighetskrav.
 
 ## Resultat og kjente begrensninger
 
-Siste realistiske skann ga 94 nye, 19 eksisterende treff, 944 endrede, 686
-uendrede, én advarsel, 99 konflikter og ingen lesefeil. Konfliktene var
+Den nyeste skrivebeskyttede forhåndsvisningen mot en kopi av den aktive
+demodatabasen brukte 1 842 filer og eksplisitt UUID-gjenoppretting. Den ga
+1 296 nye, 513 oppdateringer/etterregistreringer, åtte eksisterende treff og
+25 konflikter. 1 214 forslag kunne gjenbruke UUID fra fil, og 299
+albumfoldere ble identifisert. Konfliktene var 21 P7UUID/ISRC-motstrid, to
+usikre treff og to ikke-standardiserte språkverdier. Ingen originalfiler ble
+skrevet.
+
+Den tidligere realistiske skannen mot den eldre katalogkopien ga 94 nye, 19
+eksisterende treff, 944 endrede, 686 uendrede, én advarsel, 99 konflikter og
+ingen lesefeil. Konfliktene var
 handlingsbare: 86 usikre metadata-treff, 11 P7UUID/ISRC-konflikter og to
 ikke-standardiserte språkverdier (`Afrikanske språk`). De skal ikke slås
 sammen eller godkjennes automatisk.
 
 Skanningen kjøres fortsatt synkront. Knappen låses og viser arbeidsstatus, men
 det finnes ikke live prosentvis fremdrift før svaret er ferdig. Permanent
-watcher, køsystem og automatisk bakgrunnsskann er fortsatt utsatt. En tom
-database vil med hensikt avvise P7UUID-er som peker på en annen katalogbase.
+watcher, køsystem og automatisk bakgrunnsskann er fortsatt utsatt. Normal
+innlesing avviser fremdeles P7UUID-er som peker på en annen katalogbase;
+gjenoppretting må aktiveres uttrykkelig av superbruker og er merket for ny
+vurdering før produksjonsbruk.
+
+Rettighetskrav lagres fortsatt mot Recording, siden masterretten gjelder
+innspillingen og samme Recording kan finnes på originalutgivelse, gjenutgivelse
+og samlealbum. Arbeidsflyten kan nå startes fra en Release: brukeren velger
+berørte spor og oppretter like krav med felles kilde/avtale i én transaksjon.
+Samme Recording på flere spor behandles én gang. Bare administrator kan samtidig
+føre en uforvaltet Recording inn i Forvaltet musikk, og kravet må da gjelde
+konfigurert lokal organisasjon. Selve Release arver eller beviser ikke eierskap.
 
 ## Verifikasjon
 
-De målrettede FLAC-ingesttestene dekker 30 tilfeller, blant annet ødelagte og
+De målrettede FLAC-ingesttestene dekker blant annet ødelagte og
 tagløse filer, lange felt, endring under lesing, forsvunnet fil, idempotens,
-autoritetsregler, tillatelser og bekreftelse av anvendte FLAC-opplysninger.
-`manage.py check` og migrasjonskontrollen er uten feil. Den avsluttende samlede
-regresjonskjøringen bestod: 219 tester på SQLite. DMP-koden ble ikke endret og
-inngår i denne kjøringen. PostgreSQL fullsuite ble ikke gjentatt fordi endringen
-bare har en databaseuavhengig choice-migrasjon og ingen PostgreSQL-spesifikk kode.
+autoritetsregler, tillatelser, etterregistrering av Release-struktur og
+bekreftelse av anvendte FLAC-opplysninger. Rettighetsflyten fra Release er
+testet for atomisk opprettelse og serversidetilgang. `manage.py check`,
+migrasjonskontrollen og Ruff er uten feil. Den avsluttende samlede
+regresjonskjøringen bestod: 230 tester på SQLite. DMP-koden ble ikke endret og
+inngår i regresjonskjøringen. PostgreSQL fullsuite ble ikke gjentatt fordi
+migrasjonen er et databaseuavhengig boolsk felt og ingen
+PostgreSQL-spesifikk kode er endret.
+
+En innlogget nettleserprøve kontrollerte Musikkarkiv, Utgivelsesliste,
+utgivelsesdetalj med spor og cover, samt skjemaet «Registrer rettigheter» med
+forhåndsvalgte unike innspillinger. Ingen rettighetsdata ble lagret i prøven.

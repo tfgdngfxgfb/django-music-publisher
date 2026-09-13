@@ -718,6 +718,17 @@ class Command(BaseCommand):
             decision=VerificationStatus.DISPUTED,
             reviewer=reviewer,
         )
+        for number, managed_recording in ((236, recordings[3]), (237, recordings[4])):
+            self._claim(
+                number,
+                managed_recording,
+                RightsClaim.RightType.DISTRIBUTION,
+                local_organization,
+                source=physical_source,
+                evidence_strength=RightsClaim.EvidenceStrength.STRONG,
+                decision=VerificationStatus.CONFIRMED,
+                reviewer=reviewer,
+            )
         self._claim(
             211,
             recording,

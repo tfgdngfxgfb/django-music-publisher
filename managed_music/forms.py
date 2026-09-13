@@ -4,9 +4,7 @@ from catalogue.models import Recording
 from catalogue.services import find_recording_candidates
 from parties.models import ArtistIdentity
 from provenance.models import SourceSystem
-
-from .models import ManagedRecording
-
+from rights.models import RightsClaim
 
 class ManagedRecordingCreationForm(forms.Form):
     recording = forms.ModelChoiceField(
@@ -24,8 +22,21 @@ class ManagedRecordingCreationForm(forms.Form):
         required=False,
         help_text="Bruk bare når forslagene er kontrollert og ikke er samme innspilling.",
     )
-    status = forms.ChoiceField(
-        label="Forvaltningsstatus", choices=ManagedRecording.Status.choices
+    relationship_type = forms.ChoiceField(
+        label="Hvorfor skal innspillingen forvaltes?",
+        choices=RightsClaim.RightType.choices,
+        help_text=(
+            "Oppretter et uverifisert rettighetskrav for lokal organisasjon. "
+            "Kravet må deretter kontrolleres og bekreftes."
+        ),
+    )
+    ownership_share = forms.DecimalField(
+        label="Lokal eierandel i prosent",
+        required=False,
+        min_value=0,
+        max_value=100,
+        max_digits=5,
+        decimal_places=2,
     )
     source_system = forms.ModelChoiceField(
         SourceSystem.objects.all(), label="Kilde", required=False
@@ -65,4 +76,12 @@ class ManagedRecordingCreationForm(forms.Form):
                     "new_recording_title",
                     f"Mulig dublett: {suggestions}. Velg eksisterende eller marker «Opprett ny likevel».",
                 )
+        relationship_type = data.get("relationship_type")
+        share = data.get("ownership_share")
+        if relationship_type == RightsClaim.RightType.OWNERSHIP and share is None:
+            self.add_error("ownership_share", "Angi eierandelen som skal vurderes.")
+        elif relationship_type and relationship_type != RightsClaim.RightType.OWNERSHIP and share is not None:
+            self.add_error(
+                "ownership_share", "Andel brukes bare for mastereierskap."
+            )
         return data

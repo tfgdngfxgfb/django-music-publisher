@@ -1,6 +1,7 @@
 from django import forms
 from django.core.exceptions import ValidationError
 
+from catalogue.models import Recording
 from media_assets.models import FileAsset
 
 from .models import Agreement, AgreementDocument, AgreementParty, RightsClaim
@@ -29,6 +30,7 @@ class RightsClaimForm(forms.ModelForm):
             "valid_until": forms.DateInput(attrs={"type": "date"}),
             "territories": forms.CheckboxSelectMultiple,
         }
+        labels = {"territories": "Territorier"}
 
     def clean(self):
         data = super().clean()
@@ -39,6 +41,29 @@ class RightsClaimForm(forms.ModelForm):
         except ValidationError as error:
             self.add_error("territories", error)
         return data
+
+
+class ReleaseRightsClaimForm(RightsClaimForm):
+    recordings = forms.ModelMultipleChoiceField(
+        queryset=Recording.objects.none(),
+        label="Spor/innspillinger som omfattes",
+        widget=forms.CheckboxSelectMultiple,
+        help_text=(
+            "Det opprettes ett krav per unik innspilling. Utgivelsen brukes som "
+            "arbeidskontekst, ikke som eier av masterrettigheten."
+        ),
+    )
+
+    def __init__(self, *args, release, **kwargs):
+        super().__init__(*args, **kwargs)
+        queryset = (
+            Recording.objects.filter(release_tracks__release=release)
+            .distinct()
+            .order_by("title", "id")
+        )
+        self.fields["recordings"].queryset = queryset
+        self.initial.setdefault("recordings", queryset)
+        self.order_fields(("recordings", *self._meta.fields))
 
 
 class RightsDecisionForm(forms.Form):

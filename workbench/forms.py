@@ -199,9 +199,20 @@ class FlacScanForm(forms.Form):
     recursive = forms.BooleanField(
         label="Ta med undermapper", required=False, initial=True
     )
+    allow_uuid_recovery = forms.BooleanField(
+        label="Gjenopprett manglende innspillinger fra P7UUID",
+        required=False,
+        help_text=(
+            "Administratoroverstyring for test eller kontrollert reimport. "
+            "En gyldig P7UUID som ikke finnes i databasen brukes på den nye "
+            "innspillingen. Identitetskonflikter blir fortsatt stoppet."
+        ),
+    )
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, user=None, **kwargs):
         super().__init__(*args, **kwargs)
+        if not user or not user.is_superuser:
+            self.fields.pop("allow_uuid_recovery")
         configured = str(getattr(settings, "P7_MUSIC_ROOT", "") or "").strip()
         choices = []
         if configured:

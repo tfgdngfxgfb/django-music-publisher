@@ -20,7 +20,7 @@ RIGHTS_HELP = {
         "forvaltet-musikk",
         "Forvaltet musikk",
         "Innspillingen inngår i organisasjonens forvaltede repertoar. Det betyr ikke i seg selv at organisasjonen eier masteren.",
-        "Forvaltet musikk er en uttrykkelig repertoarregistrering. Den kan bygge på eierskap, administrasjon eller distribusjon, men registreringen er ikke i seg selv et rettighetsbevis.",
+        "Forvaltet musikk er en uttrykkelig repertoarregistrering som må bygge på minst ett lokalt krav om eierskap, administrasjon eller distribusjon. Kravet opprettes uverifisert og må vurderes separat. Innspillinger utenfor Forvaltet musikk behandles i den operative arbeidsflaten som ikke eid eller forvaltet av lokal organisasjon, og rettighetskontrollen skjules der.",
     ),
     "ownership": _term(
         "mastereierskap",

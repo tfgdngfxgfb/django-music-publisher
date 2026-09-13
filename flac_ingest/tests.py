@@ -240,6 +240,7 @@ class FlacIngestTests(FlacTestMixin, TestCase):
         )
         entry = recording.music_library_entry
         self.assertEqual(entry.energy, 3)
+        self.assertEqual(entry.verification_status, VerificationStatus.CONFIRMED)
         self.assertEqual(
             set(entry.channels.values_list("name", flat=True)), {"P7 Riks", "P7 Ung"}
         )
@@ -348,6 +349,41 @@ class FlacIngestTests(FlacTestMixin, TestCase):
             list(entry.channels.values_list("name", flat=True)), ["P7 Evangelisk"]
         )
 
+    def test_release_context_version_backfills_structure_for_existing_file(self):
+        self.make_flac(
+            "Artist/Album/01.flac",
+            TITLE="Eksisterende radiospor",
+            ARTIST="Testartist",
+            ALBUM="Album",
+            TRACKNUMBER="1",
+        )
+        first = self.scan()
+        self.assertEqual(self.apply(first), 1)
+        first_item = first.items.get()
+        asset = first_item.file_asset
+        asset.release_track = None
+        asset.technical_metadata.pop("release_context_version", None)
+        asset.save(update_fields=("release_track", "technical_metadata"))
+        first_item.release_track = None
+        first_item.release = None
+        first_item.save(update_fields=("release_track", "release"))
+        ReleaseTrack.objects.all().delete()
+        Release.objects.all().delete()
+
+        second = self.scan()
+        self.assertEqual(second.items.get().action, FlacIngestItem.Action.UPDATED)
+        self.assertEqual(self.apply(second), 1)
+        asset.refresh_from_db()
+        self.assertIsNotNone(asset.release_track_id)
+        self.assertEqual(Release.objects.count(), 1)
+        self.assertEqual(ReleaseTrack.objects.count(), 1)
+        self.assertEqual(
+            asset.technical_metadata["release_context_version"], 1
+        )
+
+        third = self.scan()
+        self.assertEqual(third.items.get().action, FlacIngestItem.Action.UNCHANGED)
+
     def test_broken_file_is_isolated_from_readable_files(self):
         self.make_flac("good.flac", TITLE="Lesbar")
         (self.root / "broken.flac").write_bytes(b"not a flac file")
@@ -436,7 +472,12 @@ class FlacIngestTests(FlacTestMixin, TestCase):
         recording_ids = set(batch.items.values_list("recording_id", flat=True))
         self.assertEqual(len(recording_ids), 1)
         self.assertEqual(Recording.objects.count(), 1)
-        self.assertEqual(ExternalIdentifier.objects.count(), 1)
+        self.assertEqual(
+            ExternalIdentifier.objects.filter(
+                scheme=ExternalIdentifier.Scheme.ISRC
+            ).count(),
+            1,
+        )
         self.assertEqual(FileAsset.objects.count(), 2)
 
     def test_managed_catalogue_is_protected_but_radio_metadata_updates(self):
@@ -508,6 +549,69 @@ class FlacIngestTests(FlacTestMixin, TestCase):
         self.assertEqual(batch.status, batch.Status.PARTIAL)
         self.assertEqual(Recording.objects.count(), 2)
 
+    def test_missing_p7uuid_stays_a_conflict_without_recovery_override(self):
+        missing_uuid = uuid4()
+        self.make_flac(TITLE="Ukjent UUID", P7UUID=str(missing_uuid))
+
+        item = self.scan().items.get()
+
+        self.assertEqual(item.action, FlacIngestItem.Action.CONFLICT)
+        self.assertIn("P7UUID peker ikke", item.messages[0])
+        self.assertFalse(Recording.objects.filter(pk=missing_uuid).exists())
+
+    def test_administrator_can_restore_recording_with_uuid_from_file(self):
+        restored_uuid = uuid4()
+        self.make_flac(
+            TITLE="Gjenopprettet innspilling",
+            P7UUID=str(restored_uuid),
+            ISRC="NO-P7T-26-00888",
+        )
+        with override_settings(P7_MUSIC_ROOT=str(self.root)):
+            batch = scan_directory(
+                relative_root=".",
+                recursive=True,
+                user=self.user,
+                allow_uuid_recovery=True,
+            )
+
+        item = batch.items.get()
+        self.assertTrue(batch.allow_uuid_recovery)
+        self.assertEqual(item.action, FlacIngestItem.Action.NEW)
+        self.assertEqual(item.match_method, "p7uuid_recovery")
+        self.assertEqual(self.apply(batch), 1)
+        item.refresh_from_db()
+        self.assertEqual(item.recording_id, restored_uuid)
+        self.assertEqual(Recording.objects.get().pk, restored_uuid)
+
+        repeated = self.scan()
+        self.assertEqual(repeated.items.get().action, FlacIngestItem.Action.UNCHANGED)
+
+    def test_uuid_recovery_does_not_override_existing_isrc_identity(self):
+        existing = Recording.objects.create(title="Eksisterende ISRC")
+        ExternalIdentifier.objects.create(
+            recording=existing,
+            scheme=ExternalIdentifier.Scheme.ISRC,
+            value="NO-P7T-26-00889",
+        )
+        self.make_flac(
+            TITLE="Motstridende UUID",
+            P7UUID=str(uuid4()),
+            ISRC="NO-P7T-26-00889",
+        )
+        with override_settings(P7_MUSIC_ROOT=str(self.root)):
+            batch = scan_directory(
+                relative_root=".",
+                recursive=True,
+                user=self.user,
+                allow_uuid_recovery=True,
+            )
+
+        item = batch.items.get()
+        self.assertEqual(item.action, FlacIngestItem.Action.CONFLICT)
+        self.assertIn("ISRC er allerede knyttet", item.messages[0])
+        self.assertEqual(self.apply(batch), 0)
+        self.assertEqual(Recording.objects.count(), 1)
+
     def test_missing_release_metadata_creates_recording_without_release(self):
         self.make_flac(TITLE="Kun innspilling", ARTIST="Uavklart")
         batch = self.scan()
@@ -515,6 +619,79 @@ class FlacIngestTests(FlacTestMixin, TestCase):
         self.assertEqual(Recording.objects.count(), 1)
         self.assertEqual(Release.objects.count(), 0)
         self.assertEqual(ReleaseTrack.objects.count(), 0)
+
+    def test_album_artist_year_and_track_build_one_release_without_barcode(self):
+        shared = {
+            "ALBUM": "Album uten katalognummer",
+            "ALBUMARTIST": "Samlet artist",
+            "DATE": "1978-04-03",
+        }
+        self.make_flac("album/01.flac", TITLE="Første spor", TRACKNUMBER="1", **shared)
+        self.make_flac("album/02.flac", TITLE="Andre spor", TRACKNUMBER="2", **shared)
+
+        batch = self.scan()
+        self.assertEqual(self.apply(batch), 2)
+
+        release = Release.objects.get()
+        self.assertEqual(release.title, "Album uten katalognummer")
+        self.assertEqual(release.release_year, 1978)
+        self.assertEqual(release.verification_status, VerificationStatus.CONFIRMED)
+        self.assertEqual(release.tracks.count(), 2)
+        self.assertTrue(
+            release.identifiers.filter(
+                scheme=ExternalIdentifier.Scheme.EXTERNAL,
+                namespace="p7-flac-release-signature-v1",
+            ).exists()
+        )
+
+    def test_same_album_title_with_different_artist_does_not_merge_releases(self):
+        common = {"ALBUM": "Samme albumtittel", "DATE": "1984", "TRACKNUMBER": "1"}
+        self.make_flac(
+            "Artist A/Album/artist-a.flac",
+            TITLE="Spor A",
+            ALBUMARTIST="Artist A",
+            **common,
+        )
+        self.make_flac(
+            "Artist B/Album/artist-b.flac",
+            TITLE="Spor B",
+            ALBUMARTIST="Artist B",
+            **common,
+        )
+
+        batch = self.scan()
+        self.assertEqual(self.apply(batch), 2)
+
+        self.assertEqual(Release.objects.count(), 2)
+        self.assertEqual(ReleaseTrack.objects.count(), 2)
+
+    def test_folder_supplies_album_and_groups_multi_disc_with_cover(self):
+        album_folder = self.root / "Artist" / "Album fra mappe"
+        album_folder.mkdir(parents=True)
+        (album_folder / "cover.jpg").write_bytes(b"syntetisk testbilde")
+        self.make_flac(
+            "Artist/Album fra mappe/CD 1/01.flac",
+            TITLE="Første disk",
+            TRACKNUMBER="1",
+        )
+        self.make_flac(
+            "Artist/Album fra mappe/CD 2/01.flac",
+            TITLE="Andre disk",
+            TRACKNUMBER="1",
+        )
+
+        batch = self.scan()
+        self.assertEqual(self.apply(batch), 2)
+
+        release = Release.objects.get()
+        self.assertEqual(release.title, "Album fra mappe")
+        self.assertEqual(
+            list(release.tracks.order_by("disc_number").values_list("disc_number", flat=True)),
+            [1, 2],
+        )
+        cover = FileAsset.objects.get(release=release, role=FileAsset.Role.COVER_IMAGE)
+        self.assertEqual(cover.filename, "cover.jpg")
+        self.assertEqual(cover.locations.get().relative_path, "Artist/Album fra mappe/cover.jpg")
 
     def test_path_must_stay_inside_configured_root(self):
         with override_settings(P7_MUSIC_ROOT=str(self.root)):
@@ -645,6 +822,24 @@ class FlacWorkbenchPermissionTests(FlacTestMixin, TestCase):
         self.assertEqual(item.action, FlacIngestItem.Action.CONFLICT)
         self.assertIsNone(item.reviewed_at)
 
+    def test_non_superuser_cannot_enable_uuid_recovery_in_service(self):
+        staff = get_user_model().objects.create_user(
+            username="uuid-staff", password="test", is_staff=True
+        )
+        self.make_flac(TITLE="Beskyttet UUID", P7UUID=str(uuid4()))
+
+        with override_settings(P7_MUSIC_ROOT=str(self.root)):
+            with self.assertRaisesMessage(
+                ValidationError, "Bare en administrator kan gjenopprette"
+            ):
+                scan_directory(
+                    relative_root=".",
+                    recursive=True,
+                    user=staff,
+                    allow_uuid_recovery=True,
+                )
+        self.assertEqual(FlacIngestBatch.objects.count(), 0)
+
     def test_selected_rescan_creates_a_new_batch_with_only_selected_files(self):
         self.make_flac("first.flac", TITLE="Første")
         self.make_flac("second.flac", TITLE="Andre")
@@ -695,6 +890,9 @@ class FlacWorkbenchPermissionTests(FlacTestMixin, TestCase):
         ).first()
         flac_assertion.status = VerificationStatus.UNVERIFIED
         flac_assertion.save(update_fields=("status",))
+        library_entry = Recording.objects.get().music_library_entry
+        library_entry.verification_status = VerificationStatus.UNVERIFIED
+        library_entry.save(update_fields=("verification_status",))
 
         manual_source = SourceSystem.objects.create(
             name="Manuell prøve", kind=SourceSystem.Kind.MANUAL
@@ -726,12 +924,24 @@ class FlacWorkbenchPermissionTests(FlacTestMixin, TestCase):
         )
         flac_assertion.refresh_from_db()
         unrelated.refresh_from_db()
+        library_entry.refresh_from_db()
         self.assertEqual(flac_assertion.status, VerificationStatus.CONFIRMED)
+        self.assertEqual(
+            library_entry.verification_status, VerificationStatus.CONFIRMED
+        )
         self.assertEqual(unrelated.status, VerificationStatus.UNVERIFIED)
         self.assertTrue(
             flac_assertion.decisions.filter(
                 note__contains="tidligere anvendt FLAC-kildedata"
             ).exists()
+        )
+
+        library_entry.verification_status = VerificationStatus.UNVERIFIED
+        library_entry.save(update_fields=("verification_status",))
+        self.client.post(reverse("workbench:confirm_flac_metadata"))
+        library_entry.refresh_from_db()
+        self.assertEqual(
+            library_entry.verification_status, VerificationStatus.CONFIRMED
         )
 
     def test_preview_can_filter_nonblocking_warnings(self):

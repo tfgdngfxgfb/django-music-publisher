@@ -57,11 +57,13 @@ from rights.forms import (
     AgreementPartyForm,
     ClaimAgreementForm,
     RightsClaimForm,
+    ReleaseRightsClaimForm,
     RightsDecisionForm,
 )
 from rights.help_content import RIGHTS_FORM_HELP, RIGHTS_HELP, RIGHTS_HELP_SECTIONS
 from rights.models import Agreement, RightsClaim
 from rights.services import (
+    create_release_rights_claims,
     create_rights_claim,
     decide_rights_claim,
     get_local_organization,
@@ -551,7 +553,7 @@ def managed_list(request):
 @staff
 @permission_required("flac_ingest.add_flacingestbatch", raise_exception=True)
 def flac_ingest_start(request):
-    form = FlacScanForm(request.POST or None)
+    form = FlacScanForm(request.POST or None, user=request.user)
     if request.method == "POST" and form.is_valid():
         try:
             batch = scan_directory(user=request.user, **form.cleaned_data)
@@ -733,6 +735,9 @@ def flac_ingest_rescan(request, pk):
             relative_root=batch.relative_root,
             recursive=batch.recursive,
             relative_paths=relative_paths,
+            allow_uuid_recovery=(
+                batch.allow_uuid_recovery and request.user.is_superuser
+            ),
             user=request.user,
         )
     except (ImproperlyConfigured, ValidationError) as error:
@@ -793,7 +798,10 @@ def managed_add(request):
             form=form,
             submit_label="Registrer forvaltning",
             cancel_url=reverse("workbench:managed"),
-            introduction="Dette registrerer forvaltning, ikke at P7 eier masteren.",
+            introduction=(
+                "Velg hvilket lokalt rettighetsforhold som begrunner forvaltningen. "
+                "Det opprettes som uverifisert og må bekreftes separat."
+            ),
         ),
     )
 
@@ -925,6 +933,58 @@ def release_detail(request, pk):
 
 
 @staff
+@permission_required(
+    ("catalogue.view_release", "rights.view_rightsclaim", "rights.add_rightsclaim"),
+    raise_exception=True,
+)
+def release_rights_add(request, pk):
+    release = get_object_or_404(Release, pk=pk)
+    form = ReleaseRightsClaimForm(request.POST or None, release=release)
+    if not request.user.has_perm("rights.view_agreement"):
+        form.fields["agreement"].queryset = Agreement.objects.none()
+    if not request.user.has_perm("provenance.view_sourcerecord"):
+        form.fields["source_record"].queryset = form.fields[
+            "source_record"
+        ].queryset.none()
+    if request.method == "POST" and form.is_valid():
+        data = form.cleaned_data.copy()
+        recordings = data.pop("recordings")
+        territories = data.pop("territories")
+        try:
+            claims = create_release_rights_claims(
+                release=release,
+                recordings=recordings,
+                territories=territories,
+                allow_managed_registration=request.user.is_superuser,
+                **data,
+            )
+        except ValidationError as error:
+            form.add_error(None, error)
+        else:
+            messages.success(
+                request,
+                f"{len(claims)} rettighetskrav ble registrert som ikke verifisert.",
+            )
+            return redirect("workbench:release", pk=release.pk)
+    return render(
+        request,
+        "workbench/form.html",
+        _page_context(
+            "releases",
+            f"Registrer rettigheter — {release.title}",
+            introduction=(
+                "Velg sporene som omfattes. Utgivelsen er arbeidskontekst; "
+                "kravene lagres på de unike innspillingene."
+            ),
+            form=form,
+            form_help=RIGHTS_FORM_HELP,
+            submit_label="Registrer rettighetskrav",
+            cancel_url=reverse("workbench:release", args=(release.pk,)),
+        ),
+    )
+
+
+@staff
 @permission_required("catalogue.change_release", raise_exception=True)
 @permission_required("catalogue.add_releasetrack", raise_exception=True)
 def release_tracks(request, pk):
@@ -1023,6 +1083,7 @@ def _recording_queryset():
         Prefetch("file_assets", FileAsset.objects.prefetch_related("locations")),
         "music_library_entry__channels",
         "music_library_entry__target_audiences",
+        "music_library_entry__managed_recording",
     )
 
 
@@ -1030,9 +1091,13 @@ def _recording_queryset():
 @permission_required("catalogue.view_recording", raise_exception=True)
 def recording_detail(request, pk):
     recording = get_object_or_404(_recording_queryset(), pk=pk)
+    library_entry = getattr(recording, "music_library_entry", None)
+    is_managed = bool(
+        library_entry and getattr(library_entry, "managed_recording", None)
+    )
     tab = request.GET.get("fane", "overview")
     allowed_tabs = {"overview", "radio", "releases", "contributors", "files", "sources"}
-    if request.user.has_perm("rights.view_rightsclaim"):
+    if is_managed and request.user.has_perm("rights.view_rightsclaim"):
         allowed_tabs.add("rights")
     if tab not in allowed_tabs:
         tab = "overview"
@@ -1051,7 +1116,7 @@ def recording_detail(request, pk):
     rights_claims = []
     local_organization = None
     ownership_summary = None
-    if request.user.has_perm("rights.view_rightsclaim"):
+    if is_managed and request.user.has_perm("rights.view_rightsclaim"):
         local_organization = get_local_organization()
         rights_claims = list(
             RightsClaim.objects.filter(recording=recording)
@@ -1105,6 +1170,7 @@ def recording_detail(request, pk):
             ],
             local_organization=local_organization,
             ownership_summary=ownership_summary,
+            is_managed=is_managed,
             return_url=_safe_return(request, reverse("workbench:library")),
         ),
     )
@@ -1117,6 +1183,12 @@ def recording_detail(request, pk):
 )
 def rights_claim_add(request, pk):
     recording = get_object_or_404(Recording, pk=pk)
+    if not ManagedRecording.objects.filter(
+        library_entry__recording_id=recording.pk
+    ).exists():
+        return HttpResponseForbidden(
+            "Rettighetskrav håndteres i arbeidsflaten først når innspillingen er registrert i Forvaltet musikk."
+        )
     form = RightsClaimForm(request.POST or None)
     if not request.user.has_perm("rights.view_agreement"):
         form.fields["agreement"].queryset = Agreement.objects.none()
@@ -1163,6 +1235,12 @@ def rights_claim_add(request, pk):
 )
 def rights_claim_decide(request, pk):
     claim = get_object_or_404(RightsClaim, pk=pk)
+    if not ManagedRecording.objects.filter(
+        library_entry__recording_id=claim.recording_id
+    ).exists():
+        return HttpResponseForbidden(
+            "Rettighetskravet er ikke tilgjengelig i arbeidsflaten fordi innspillingen ikke er forvaltet."
+        )
     form = RightsDecisionForm(request.POST)
     if form.is_valid():
         decisions = {

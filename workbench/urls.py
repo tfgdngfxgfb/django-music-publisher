@@ -35,6 +35,11 @@ urlpatterns = [
     path("utgivelser/ny/", views.release_add, name="release_add"),
     path("utgivelser/<uuid:pk>/", views.release_detail, name="release"),
     path(
+        "utgivelser/<uuid:pk>/rettigheter/ny/",
+        views.release_rights_add,
+        name="release_rights_add",
+    ),
+    path(
         "utgivelser/<uuid:pk>/identifikator/",
         views.release_identifier_add,
         name="release_identifier_add",

@@ -2,6 +2,7 @@
 {% block eyebrow %}<a class="back-link" href="{% url 'workbench:flac_ingest_start' %}">← Ny skanning</a>{% endblock %}
 {% block subtitle %}<p>{{ batch.relative_root }} · {{ total_count }} filer · Opprettet av {{ batch.created_by }}</p>{% endblock %}
 {% block content %}
+{% if batch.allow_uuid_recovery %}<div class="notice warning"><strong>Gjenopprettingsmodus er aktiv.</strong> Manglende innspillinger kan opprettes med P7UUID fra filen. Kontroller forhåndsvisningen før import.</div>{% endif %}
 <div class="ingest-summary" aria-label="Oppsummering">
   <a href="?status=new" {% if selected_action == 'new' %}aria-current="page"{% endif %}><strong>{{ counts.new|default:0 }}</strong><span>Nye innspillinger</span></a>
   <a href="?status=matched" {% if selected_action == 'matched' %}aria-current="page"{% endif %}><strong>{{ counts.matched|default:0 }}</strong><span>Eksisterende treff</span></a>

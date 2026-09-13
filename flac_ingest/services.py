@@ -1,6 +1,9 @@
 import json
 import logging
+import mimetypes
+import re
 from datetime import datetime
+from hashlib import sha256
 from pathlib import Path, PurePosixPath
 
 from django.conf import settings
@@ -54,6 +57,11 @@ from .adapter import (
 from .models import FlacIngestBatch, FlacIngestItem, FlacSyncLog
 
 SOURCE_SYSTEM_NAME = "P7 radio-FLAC"
+RELEASE_SIGNATURE_NAMESPACE = "p7-flac-release-signature-v1"
+RELEASE_CONTEXT_VERSION = 1
+DISC_FOLDER_PATTERN = re.compile(
+    r"^(?:cd|disc|disk|plate)\s*[-_. ]*([1-9][0-9]*)\b", re.IGNORECASE
+)
 logger = logging.getLogger(__name__)
 
 
@@ -170,7 +178,13 @@ def _candidate_payload(matches):
     ]
 
 
-def _match_recording(parsed, technical, *, catalogue_has_recordings=True):
+def _match_recording(
+    parsed,
+    technical,
+    *,
+    catalogue_has_recordings=True,
+    allow_uuid_recovery=False,
+):
     messages = []
     p7uuid = parsed.get("p7uuid")
     if parsed.get("p7uuid_invalid"):
@@ -191,6 +205,35 @@ def _match_recording(parsed, technical, *, catalogue_has_recordings=True):
     if p7uuid:
         recording = Recording.objects.filter(pk=p7uuid).first()
         if not recording:
+            if allow_uuid_recovery:
+                conflicting_isrc = (
+                    ExternalIdentifier.objects.filter(
+                        scheme=ExternalIdentifier.Scheme.ISRC,
+                        normalized_value=file_isrc,
+                    )
+                    .select_related("recording")
+                    .first()
+                    if file_isrc
+                    else None
+                )
+                if conflicting_isrc:
+                    return (
+                        conflicting_isrc.recording,
+                        "p7uuid_recovery",
+                        [],
+                        [
+                            "P7UUID finnes ikke i databasen, men ISRC er allerede "
+                            "knyttet til en annen innspilling."
+                        ],
+                        True,
+                    )
+                return (
+                    None,
+                    "p7uuid_recovery",
+                    [],
+                    ["Ny innspilling vil gjenbruke P7UUID fra filen."],
+                    False,
+                )
             return None, "", [], ["P7UUID peker ikke til en innspilling."], True
         existing_isrc = _recording_isrc(recording)
         if file_isrc and existing_isrc and file_isrc != existing_isrc:
@@ -260,33 +303,63 @@ def _release_identifier(parsed):
     return scheme, normalize_trade_item_number(raw, scheme)
 
 
-def _find_release(parsed):
-    if not parsed.get("album"):
-        return None
+def _release_signature(parsed):
+    """Return a conservative adapter identity when industry IDs are absent."""
+    folder = str(parsed.get("release_folder", "")).strip()
+    if folder and folder != ".":
+        return sha256(folder.casefold().encode("utf-8")).hexdigest()
+    year = _year(parsed.get("date"))
+    if not (
+        parsed.get("album")
+        and parsed.get("album_artist")
+        and year
+        and parsed.get("track_number")
+    ):
+        return ""
+    values = (
+        parsed["album"].strip().casefold(),
+        parsed["album_artist"].strip().casefold(),
+        str(year),
+    )
+    return sha256(json.dumps(values, ensure_ascii=False).encode("utf-8")).hexdigest()
+
+
+def _release_candidates(parsed):
+    releases = {}
     try:
         identifier = _release_identifier(parsed)
     except ValidationError:
-        return None
+        identifier = None
     if identifier:
         scheme, normalized = identifier
-        found = (
-            ExternalIdentifier.objects.filter(
-                scheme=scheme, normalized_value=normalized
-            )
-            .select_related("release")
-            .first()
-        )
-        if found:
-            return found.release
+        for release in Release.objects.filter(
+            identifiers__scheme=scheme,
+            identifiers__normalized_value=normalized,
+        ):
+            releases[release.pk] = release
     catalogue_number = parsed.get("catalogue_number", "")
-    if catalogue_number:
-        matches = Release.objects.filter(
-            title__iexact=parsed["album"], catalogue_number__iexact=catalogue_number
-        )[:2]
-        matches = list(matches)
-        if len(matches) == 1:
-            return matches[0]
-    return None
+    if parsed.get("album") and catalogue_number:
+        for release in Release.objects.filter(
+            title__iexact=parsed["album"],
+            catalogue_number__iexact=catalogue_number,
+        )[:2]:
+            releases[release.pk] = release
+    signature = _release_signature(parsed)
+    if signature:
+        for release in Release.objects.filter(
+            identifiers__scheme=ExternalIdentifier.Scheme.EXTERNAL,
+            identifiers__namespace=RELEASE_SIGNATURE_NAMESPACE,
+            identifiers__normalized_value=signature,
+        ):
+            releases[release.pk] = release
+    return list(releases.values())
+
+
+def _find_release(parsed):
+    if not parsed.get("album"):
+        return None
+    matches = _release_candidates(parsed)
+    return matches[0] if len(matches) == 1 else None
 
 
 def _metadata_errors(parsed):
@@ -317,6 +390,23 @@ def _metadata_errors(parsed):
     if parsed.get("gender_invalid"):
         errors.append("GENDER har en ukjent kontrollert verdi.")
     return errors
+
+
+def _with_release_folder_context(parsed, relative_path):
+    """Add adapter-only release context from P7's archive folder convention."""
+    result = dict(parsed)
+    file_folder = PurePosixPath(relative_path).parent
+    album_folder = file_folder
+    disc_match = DISC_FOLDER_PATTERN.match(file_folder.name)
+    if disc_match and file_folder.parent.name:
+        album_folder = file_folder.parent
+        if not result.get("disc_number"):
+            result["disc_number"] = int(disc_match.group(1))
+    if album_folder.name:
+        result["release_folder"] = str(album_folder)
+        if not result.get("album"):
+            result["album"] = album_folder.name
+    return result
 
 
 def _stable_snapshot(path):
@@ -385,7 +475,19 @@ def _existing_locations(relative_root, relative_paths):
     return result
 
 
-def scan_directory(*, relative_root=".", recursive=True, user, relative_paths=None):
+def scan_directory(
+    *,
+    relative_root=".",
+    recursive=True,
+    user,
+    relative_paths=None,
+    allow_uuid_recovery=False,
+):
+    # RECOVERY OVERRIDE: keep administrator-only and review before production use.
+    if allow_uuid_recovery and not user.is_superuser:
+        raise ValidationError(
+            "Bare en administrator kan gjenopprette innspillinger fra P7UUID."
+        )
     root, folder = resolve_music_path(relative_root)
     if not folder.is_dir():
         raise ValidationError("Valgt innlesingsmappe finnes ikke.")
@@ -398,6 +500,7 @@ def scan_directory(*, relative_root=".", recursive=True, user, relative_paths=No
         import_batch=provenance_batch,
         relative_root=str(PurePosixPath(relative_root or ".")),
         recursive=recursive,
+        allow_uuid_recovery=allow_uuid_recovery,
         created_by=user,
     )
     candidates = _candidate_paths(root, folder, recursive, relative_paths)
@@ -439,6 +542,8 @@ def scan_directory(*, relative_root=".", recursive=True, user, relative_paths=No
             and existing_asset.source_modified_at
             and existing_asset.technical_metadata.get("tag_adapter_version")
             == TAG_ADAPTER_VERSION
+            and existing_asset.technical_metadata.get("release_context_version")
+            == RELEASE_CONTEXT_VERSION
             and abs((existing_asset.source_modified_at - modified).total_seconds())
             < 0.001
         ):
@@ -486,10 +591,16 @@ def scan_directory(*, relative_root=".", recursive=True, user, relative_paths=No
                 stat,
             )
             continue
+        parsed = _with_release_folder_context(snapshot.parsed, relative_path)
+        technical = {
+            **snapshot.technical,
+            "release_context_version": RELEASE_CONTEXT_VERSION,
+        }
         recording, method, candidates, messages, conflict = _match_recording(
-            snapshot.parsed,
-            snapshot.technical,
+            parsed,
+            technical,
             catalogue_has_recordings=catalogue_has_recordings,
+            allow_uuid_recovery=allow_uuid_recovery,
         )
         if existing_asset and existing_asset.recording_id:
             path_recording = existing_asset.recording
@@ -501,19 +612,25 @@ def scan_directory(*, relative_root=".", recursive=True, user, relative_paths=No
             elif not conflict:
                 recording = path_recording
                 method = "file_location"
-        if not snapshot.parsed.get("title"):
+        if not parsed.get("title"):
             conflict = True
             messages.append("TITLE mangler; innspilling opprettes ikke fra filnavnet.")
-        metadata_errors = _metadata_errors(snapshot.parsed)
+        metadata_errors = _metadata_errors(parsed)
         if metadata_errors:
             conflict = True
             messages.extend(metadata_errors)
-        if snapshot.parsed.get("barcode"):
+        if parsed.get("barcode"):
             try:
-                _release_identifier(snapshot.parsed)
+                _release_identifier(parsed)
             except ValidationError as error:
                 messages.extend(error.messages)
                 conflict = True
+        release_candidates = _release_candidates(parsed)
+        if len(release_candidates) > 1:
+            messages.append(
+                "Utgivelsesidentifikatorene peker mot ulike utgivelser."
+            )
+            conflict = True
         action = (
             FlacIngestItem.Action.CONFLICT
             if conflict
@@ -530,15 +647,15 @@ def scan_directory(*, relative_root=".", recursive=True, user, relative_paths=No
         if recording and database_is_catalogue_authority(recording):
             differences = []
             if (
-                snapshot.parsed.get("title")
-                and snapshot.parsed["title"] != recording.title
+                parsed.get("title")
+                and parsed["title"] != recording.title
             ):
                 differences.append("TITLE avviker fra databaseverdien")
             existing_isrc = _recording_isrc(recording)
             if (
-                snapshot.parsed.get("isrc")
+                parsed.get("isrc")
                 and existing_isrc
-                and normalize_isrc(snapshot.parsed["isrc"]) != existing_isrc
+                and normalize_isrc(parsed["isrc"]) != existing_isrc
             ):
                 differences.append("ISRC avviker fra databaseverdien")
             messages.extend(differences)
@@ -548,15 +665,15 @@ def scan_directory(*, relative_root=".", recursive=True, user, relative_paths=No
             action=action,
             match_method=method,
             raw_tags=snapshot.raw_tags,
-            parsed_metadata=snapshot.parsed,
-            technical_metadata=snapshot.technical,
+            parsed_metadata=parsed,
+            technical_metadata=technical,
             file_size=stat.st_size,
             source_modified_at=modified,
             sha256=checksum,
             candidates=candidates,
             messages=messages,
             recording=recording,
-            release=_find_release(snapshot.parsed),
+            release=(release_candidates[0] if len(release_candidates) == 1 else None),
             file_asset=existing_asset,
         )
     return batch
@@ -573,18 +690,41 @@ def _year(value):
 def _release_is_sufficient(parsed):
     return bool(
         parsed.get("album")
-        and (parsed.get("barcode") or parsed.get("catalogue_number"))
+        and (
+            parsed.get("barcode")
+            or parsed.get("catalogue_number")
+            or _release_signature(parsed)
+        )
     )
 
 
 def _resolve_or_create_release(parsed):
+    candidates = _release_candidates(parsed)
+    if len(candidates) > 1:
+        raise ValidationError(
+            "Utgivelsesidentifikatorene peker mot ulike utgivelser."
+        )
     release = _find_release(parsed)
-    if release or not _release_is_sufficient(parsed):
+    signature = _release_signature(parsed)
+    if release:
+        if signature and not release.identifiers.filter(
+            scheme=ExternalIdentifier.Scheme.EXTERNAL,
+            namespace=RELEASE_SIGNATURE_NAMESPACE,
+        ).exists():
+            ExternalIdentifier.objects.create(
+                release=release,
+                scheme=ExternalIdentifier.Scheme.EXTERNAL,
+                namespace=RELEASE_SIGNATURE_NAMESPACE,
+                value=signature,
+            )
+        return release
+    if not _release_is_sufficient(parsed):
         return release
     release = Release.objects.create(
         title=parsed["album"],
         release_year=_year(parsed.get("date")),
         catalogue_number=parsed.get("catalogue_number", ""),
+        verification_status=VerificationStatus.CONFIRMED,
     )
     identifier = _release_identifier(parsed) if parsed.get("barcode") else None
     if identifier:
@@ -592,7 +732,83 @@ def _resolve_or_create_release(parsed):
         ExternalIdentifier.objects.create(
             release=release, scheme=scheme, value=parsed["barcode"]
         )
+    if signature:
+        ExternalIdentifier.objects.create(
+            release=release,
+            scheme=ExternalIdentifier.Scheme.EXTERNAL,
+            namespace=RELEASE_SIGNATURE_NAMESPACE,
+            value=signature,
+        )
     return release
+
+
+def _attach_release_cover(release, parsed):
+    """Register one unambiguous cover file from the album folder, without writing it."""
+    folder_value = str(parsed.get("release_folder", "")).strip()
+    if not release or not folder_value or folder_value == ".":
+        return None
+    _root, folder = resolve_music_path(folder_value)
+    try:
+        images = sorted(
+            (
+                path
+                for path in folder.iterdir()
+                if path.is_file()
+                and path.suffix.casefold() in {".jpg", ".jpeg", ".png", ".webp"}
+            ),
+            key=lambda path: path.name.casefold(),
+        )
+    except OSError:
+        return None
+    preferred = [
+        path
+        for path in images
+        if path.stem.casefold() in {"cover", "folder", "front", "album"}
+    ]
+    candidate = preferred[0] if len(preferred) == 1 else (images[0] if len(images) == 1 else None)
+    if not candidate:
+        return None
+    root = music_root()
+    relative_path = candidate.relative_to(root).as_posix()
+    location = (
+        FileLocation.objects.filter(
+            storage_type=FileLocation.StorageType.NAS,
+            relative_path=relative_path,
+            is_current=True,
+        )
+        .select_related("asset")
+        .first()
+    )
+    if location:
+        if location.asset.release_id not in {None, release.pk}:
+            raise ValidationError(
+                "Coverfilen er allerede knyttet til en annen utgivelse."
+            )
+        return location.asset
+    try:
+        stat = candidate.stat()
+        checksum = file_sha256(candidate)
+    except OSError:
+        return None
+    asset = FileAsset.objects.create(
+        release=release,
+        filename=candidate.name,
+        mime_type=mimetypes.guess_type(candidate.name)[0] or "",
+        size_bytes=stat.st_size,
+        sha256=checksum,
+        role=FileAsset.Role.COVER_IMAGE,
+        source_modified_at=datetime.fromtimestamp(
+            stat.st_mtime, tz=timezone.get_current_timezone()
+        ),
+    )
+    FileLocation.objects.create(
+        asset=asset,
+        storage_type=FileLocation.StorageType.NAS,
+        relative_path=relative_path,
+        status=FileLocation.Status.ACTIVE,
+        verification_status=FileLocation.VerificationStatus.UNCHECKED,
+    )
+    return asset
 
 
 def _release_track(release, recording, parsed, duration_ms):
@@ -665,9 +881,22 @@ def _assertion(source_record, entity_type, entity, field, value, *, user):
 @transaction.atomic
 def confirm_existing_flac_assertions(*, user):
     """Confirm legacy FLAC assertions created before automatic confirmation."""
-    assertions = MetadataAssertion.objects.filter(
+    flac_assertions = MetadataAssertion.objects.filter(
         source_record__source_system__name=SOURCE_SYSTEM_NAME,
         source_record__external_record_id__startswith="flac:",
+    )
+    library_entry_ids = set(
+        flac_assertions.filter(
+            entity_type=MetadataAssertion.EntityType.MUSIC_LIBRARY_ENTRY
+        ).values_list("entity_uuid", flat=True)
+    )
+    library_entry_ids.update(
+        FlacIngestItem.objects.filter(
+            applied_at__isnull=False,
+            recording__music_library_entry__isnull=False,
+        ).values_list("recording__music_library_entry__pk", flat=True)
+    )
+    assertions = flac_assertions.filter(
         status=VerificationStatus.UNVERIFIED,
     ).order_by("pk")
     count = 0
@@ -681,6 +910,10 @@ def confirm_existing_flac_assertions(*, user):
         assertion.status = VerificationStatus.CONFIRMED
         assertion.save(update_fields=("status",))
         count += 1
+    for entry in MusicLibraryEntry.objects.filter(pk__in=library_entry_ids):
+        if entry.verification_status != VerificationStatus.CONFIRMED:
+            entry.verification_status = VerificationStatus.CONFIRMED
+            entry.save(update_fields=("verification_status",))
     return count
 
 
@@ -897,6 +1130,17 @@ def apply_item(item, *, user):
         },
     )
     recording = item.recording
+    if (
+        recording is None
+        and item.batch.allow_uuid_recovery
+        and item.match_method == "p7uuid_recovery"
+        and parsed.get("p7uuid")
+    ):
+        recording = (
+            Recording.objects.select_for_update()
+            .filter(pk=parsed["p7uuid"])
+            .first()
+        )
     # Several files in the same preview may carry the same previously unseen
     # ISRC. The first applied row creates the Recording; later rows must
     # re-check the identifier boundary instead of creating a duplicate.
@@ -916,10 +1160,19 @@ def apply_item(item, *, user):
             recording = identifier.recording
     is_new = recording is None
     if is_new:
+        recording_values = {
+            "title": parsed["title"],
+            "duration_ms": item.technical_metadata.get("duration_ms"),
+            "recording_kind": Recording.Kind.SOUND,
+        }
+        if (
+            item.batch.allow_uuid_recovery
+            and item.match_method == "p7uuid_recovery"
+            and parsed.get("p7uuid")
+        ):
+            recording_values["pk"] = parsed["p7uuid"]
         recording = Recording.objects.create(
-            title=parsed["title"],
-            duration_ms=item.technical_metadata.get("duration_ms"),
-            recording_kind=Recording.Kind.SOUND,
+            **recording_values
         )
         title_assertion = _assertion(
             source_record,
@@ -978,6 +1231,8 @@ def apply_item(item, *, user):
             for name in parsed.get(field, []):
                 _credit(recording, role, name, source_record)
     release = None if catalogue_authority else _resolve_or_create_release(parsed)
+    if release and not catalogue_authority:
+        _attach_release_cover(release, parsed)
     known_track = item.file_asset.release_track if item.file_asset else None
     release_track = (
         known_track
@@ -1032,6 +1287,9 @@ def apply_item(item, *, user):
             user=user,
         )
         _log_applied(assertion, entry, before, parsed[field], user, base)
+    if entry.verification_status != VerificationStatus.CONFIRMED:
+        entry.verification_status = VerificationStatus.CONFIRMED
+        entry.save(update_fields=("verification_status",))
     _root, absolute = resolve_music_path(item.relative_path)
     location = (
         FileLocation.objects.filter(
@@ -1268,7 +1526,14 @@ def sync_file_asset(asset_id, *, p7uuid_only=False):
             stat.st_mtime, tz=timezone.get_current_timezone()
         )
         asset.metadata_read_at = timezone.now()
-        asset.technical_metadata = snapshot.technical
+        release_context_version = asset.technical_metadata.get(
+            "release_context_version"
+        )
+        asset.technical_metadata = dict(snapshot.technical)
+        if release_context_version:
+            asset.technical_metadata["release_context_version"] = (
+                release_context_version
+            )
         asset.synced_at = timezone.now()
         FileChecksum.objects.get_or_create(
             asset=asset,
