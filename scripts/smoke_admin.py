@@ -117,11 +117,7 @@ def main():
                     and urllib.parse.parse_qs(parsed.query).get("next") == ["/"],
                     "Startadressen videresendte ikke til innlogging med riktig returadresse",
                 )
-                help_html, _ = request("/hjelp/")
-                require(
-                    "Work ≠ Recording ≠ Release ≠ Track ≠ lydfil" in help_html,
-                    "Hjelpesiden mangler domeneforklaringen",
-                )
+
                 def csrf(html):
                     return re.search(
                         r'name="csrfmiddlewaretoken" value="([^"]+)"', html
@@ -138,7 +134,7 @@ def main():
                 )
                 require(
                     urllib.parse.urlparse(url).path == "/"
-                    and "Startside" in html
+                    and "<h1>Start</h1>" in html
                     and all(
                         label in html
                         for label in (
@@ -150,6 +146,21 @@ def main():
                         )
                     ),
                     "Innlogging returnerte ikke til den integrerte startsiden",
+                )
+                help_html, _ = request("/hjelp/")
+                require(
+                    "Work ≠ Recording ≠ Release ≠ Track ≠ lydfil" in help_html,
+                    "Hjelpesiden mangler domeneforklaringen",
+                )
+                library_html, _ = request("/arbeid/musikkarkiv/")
+                require(
+                    "Radiometadata" in library_html,
+                    "Musikkarkivet er ikke tilgjengelig",
+                )
+                releases_html, _ = request("/arbeid/utgivelser/")
+                require(
+                    "Ny utgivelse" in releases_html,
+                    "Utgivelseslisten er ikke tilgjengelig",
                 )
                 html, _ = request("/admin/")
                 require("Katalog" in html, "Administrasjonen er ikke tilgjengelig")
@@ -250,6 +261,7 @@ def main():
                                 "start redirects to login with next",
                                 "CSRF login returns to integrated home",
                                 "permission-aware integrated navigation",
+                                "workbench library and release lists",
                                 "admin",
                                 "title-only save",
                                 "reopen",

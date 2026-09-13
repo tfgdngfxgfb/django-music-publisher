@@ -31,7 +31,7 @@ check out its branch explicitly:
 
 .. code-block:: powershell
 
-   git clone --branch feature/operational-catalogue https://github.com/tfgdngfxgfb/django-music-publisher.git
+   git clone --branch feature/catalogue-workbench https://github.com/tfgdngfxgfb/django-music-publisher.git
    cd django-music-publisher
    python -m venv .venv
    .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
@@ -47,10 +47,13 @@ automatically; existing environment variables take precedence. Do not overwrite
 an existing local ``.env`` when updating your checkout.
 
 Open http://127.0.0.1:8000/ . If necessary, the application asks you to log in
-and then returns you to its integrated start page. The page uses the same
-navigation and access rules as the administration interface. Choose
+and then returns you to the Norwegian catalogue workbench. Daily work uses the
+shared navigation for **Musikkarkiv**, **Forvaltet musikk**, **Utgivelser**,
+**Artister/personer**, **Kontroll**, **Filer** and **Hjelp**. The interface has
+light and dark themes and uses the same permissions and domain services as
+Django administration. Choose
 **Katalog → Innspillinger → Legg til innspilling**, enter a title, leave the
-other fields as they are, and click **Save**. Click the saved title to reopen
+other fields as they are, and click **Lagre**. Click the saved title to reopen
 and edit it. Administration is also available directly at
 http://127.0.0.1:8000/admin/ .
 
@@ -118,6 +121,9 @@ phase 1. `PHASE2_IMPLEMENTATION.md <PHASE2_IMPLEMENTATION.md>`_ describes the
 operative catalogue. The approved long-term baseline is
 `ARCHITECTURE.md <ARCHITECTURE.md>`_; the complete rights and agreement model
 remains a later phase.
+
+`PHASE2_5_IMPLEMENTATION.md <PHASE2_5_IMPLEMENTATION.md>`_ documents the
+catalogue workbench, source-value audit and database backup/restore procedure.
 
 Operational catalogue workflow
 ------------------------------
