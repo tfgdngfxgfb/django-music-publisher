@@ -35,6 +35,22 @@ from provenance.services import (
     correct_assertion,
     decide_assertion,
 )
+from rights.forms import (
+    AgreementDocumentForm,
+    AgreementForm,
+    AgreementPartyForm,
+    ClaimAgreementForm,
+    RightsClaimForm,
+    RightsDecisionForm,
+)
+from rights.models import Agreement, RightsClaim
+from rights.services import (
+    create_rights_claim,
+    decide_rights_claim,
+    get_local_organization,
+    link_claim_agreement,
+    supersede_rights_claim,
+)
 from rights_core.models import VerificationStatus
 
 from .forms import (
@@ -83,6 +99,7 @@ def _page_context(section, title, **extra):
         "parties": "Artister og personer",
         "control": "Kvalitetskontroll",
         "files": "Filregister",
+        "rights": "Rettigheter og avtaler",
         "help": "Brukerhjelp",
     }
     return {
@@ -134,6 +151,21 @@ def home(request):
                     "url": reverse("workbench:control") + "?type=konflikter",
                 },
             )
+        )
+    if request.user.has_perm("rights.view_rightsclaim") and request.user.has_perm(
+        "managed_music.view_managedrecording"
+    ):
+        tasks.append(
+            {
+                "label": "Uavklarte rettighetskrav",
+                "count": RightsClaim.objects.filter(
+                    status__in=(
+                        VerificationStatus.UNVERIFIED,
+                        VerificationStatus.DISPUTED,
+                    )
+                ).count(),
+                "url": reverse("workbench:managed"),
+            }
         )
     return render(
         request,
@@ -574,7 +606,10 @@ def _recording_queryset():
 def recording_detail(request, pk):
     recording = get_object_or_404(_recording_queryset(), pk=pk)
     tab = request.GET.get("fane", "overview")
-    if tab not in {"overview", "radio", "releases", "contributors", "files", "sources"}:
+    allowed_tabs = {"overview", "radio", "releases", "contributors", "files", "sources"}
+    if request.user.has_perm("rights.view_rightsclaim"):
+        allowed_tabs.add("rights")
+    if tab not in allowed_tabs:
         tab = "overview"
     assertions = (
         MetadataAssertion.objects.filter(
@@ -588,6 +623,15 @@ def recording_detail(request, pk):
         entity_type=MetadataAssertion.EntityType.RECORDING,
         entity_uuid=recording.pk,
     ).select_related("assertion__source_record__source_system", "changed_by")
+    rights_claims = []
+    if request.user.has_perm("rights.view_rightsclaim"):
+        rights_claims = list(
+            RightsClaim.objects.filter(recording=recording)
+            .select_related(
+                "rights_holder", "grantor", "agreement", "source_record__source_system"
+            )
+            .prefetch_related("territories", "decisions__decided_by")
+        )
     return render(
         request,
         "workbench/recording_detail.html",
@@ -598,7 +642,367 @@ def recording_detail(request, pk):
             tab=tab,
             assertions=assertions,
             applied_changes=changes,
+            ownership_claims=[
+                claim
+                for claim in rights_claims
+                if claim.right_type == RightsClaim.RightType.OWNERSHIP
+                and claim.status == VerificationStatus.CONFIRMED
+            ],
+            administration_claims=[
+                claim
+                for claim in rights_claims
+                if claim.right_type == RightsClaim.RightType.ADMINISTRATION
+                and claim.status == VerificationStatus.CONFIRMED
+            ],
+            distribution_claims=[
+                claim
+                for claim in rights_claims
+                if claim.right_type == RightsClaim.RightType.DISTRIBUTION
+                and claim.status == VerificationStatus.CONFIRMED
+            ],
+            unresolved_claims=[
+                claim
+                for claim in rights_claims
+                if claim.status
+                in {VerificationStatus.UNVERIFIED, VerificationStatus.DISPUTED}
+            ],
+            historical_claims=[
+                claim
+                for claim in rights_claims
+                if claim.status
+                in {VerificationStatus.REJECTED, VerificationStatus.SUPERSEDED}
+            ],
+            local_organization=get_local_organization(),
             return_url=_safe_return(request, reverse("workbench:library")),
+        ),
+    )
+
+
+@staff
+@permission_required(
+    ("catalogue.view_recording", "rights.view_rightsclaim", "rights.add_rightsclaim"),
+    raise_exception=True,
+)
+def rights_claim_add(request, pk):
+    recording = get_object_or_404(Recording, pk=pk)
+    form = RightsClaimForm(request.POST or None)
+    if not request.user.has_perm("rights.view_agreement"):
+        form.fields["agreement"].queryset = Agreement.objects.none()
+    if not request.user.has_perm("provenance.view_sourcerecord"):
+        form.fields["source_record"].queryset = form.fields[
+            "source_record"
+        ].queryset.none()
+    if request.method == "POST" and form.is_valid():
+        data = form.cleaned_data.copy()
+        territories = data.pop("territories")
+        try:
+            create_rights_claim(
+                recording=recording, territories=territories, **data
+            )
+        except ValidationError as error:
+            form.add_error(None, error)
+        else:
+            messages.success(
+                request, "Rettighetskravet ble registrert som ikke verifisert."
+            )
+            return redirect(
+                reverse("workbench:recording", args=(recording.pk,)) + "?fane=rights"
+            )
+    return render(
+        request,
+        "workbench/form.html",
+        _page_context(
+            "rights",
+            f"Nytt rettighetskrav — {recording.title}",
+            introduction="Et nytt krav er uverifisert til en autorisert bruker tar en beslutning.",
+            form=form,
+            submit_label="Registrer krav",
+            cancel_url=reverse("workbench:recording", args=(recording.pk,))
+            + "?fane=rights",
+        ),
+    )
+
+
+@staff
+@require_POST
+@permission_required(
+    ("rights.view_rightsclaim", "rights.decide_rightsclaim"), raise_exception=True
+)
+def rights_claim_decide(request, pk):
+    claim = get_object_or_404(RightsClaim, pk=pk)
+    form = RightsDecisionForm(request.POST)
+    if form.is_valid():
+        decisions = {
+            "confirm": VerificationStatus.CONFIRMED,
+            "dispute": VerificationStatus.DISPUTED,
+            "reject": VerificationStatus.REJECTED,
+        }
+        try:
+            decide_rights_claim(
+                claim,
+                decisions[form.cleaned_data["action"]],
+                user=request.user,
+                note=form.cleaned_data["note"],
+            )
+        except ValidationError as error:
+            messages.error(request, "; ".join(error.messages))
+        else:
+            messages.success(request, "Rettighetsbeslutningen ble loggført.")
+    else:
+        messages.error(request, "Rettighetsbeslutningen var ikke gyldig.")
+    return redirect(
+        _safe_return(
+            request,
+            reverse("workbench:recording", args=(claim.recording_id,)) + "?fane=rights",
+        )
+    )
+
+
+@staff
+@permission_required(
+    (
+        "rights.view_rightsclaim",
+        "rights.add_rightsclaim",
+        "rights.decide_rightsclaim",
+    ),
+    raise_exception=True,
+)
+def rights_claim_supersede(request, pk):
+    previous = get_object_or_404(RightsClaim, pk=pk)
+    initial = {
+        "right_type": previous.right_type,
+        "rights_holder": previous.rights_holder,
+        "grantor": previous.grantor,
+        "share": previous.share,
+        "territory_mode": previous.territory_mode,
+        "territories": previous.territories.all(),
+        "valid_from": previous.valid_from,
+        "valid_until": previous.valid_until,
+        "source_record": previous.source_record,
+        "agreement": previous.agreement,
+        "notes": previous.notes,
+    }
+    form = RightsClaimForm(request.POST or None, initial=initial)
+    form.fields["right_type"].disabled = True
+    if not request.user.has_perm("rights.view_agreement"):
+        form.fields["agreement"].queryset = Agreement.objects.filter(
+            pk=previous.agreement_id
+        )
+        form.fields["agreement"].disabled = True
+    if not request.user.has_perm("provenance.view_sourcerecord"):
+        form.fields["source_record"].queryset = form.fields[
+            "source_record"
+        ].queryset.filter(pk=previous.source_record_id)
+        form.fields["source_record"].disabled = True
+    if request.method == "POST" and form.is_valid():
+        data = form.cleaned_data.copy()
+        territories = data.pop("territories")
+        data.pop("right_type", None)
+        try:
+            replacement = supersede_rights_claim(
+                previous,
+                user=request.user,
+                territories=territories,
+                note="Erstattet gjennom arbeidsgrensesnittet",
+                **data,
+            )
+        except ValidationError as error:
+            form.add_error(None, error)
+        else:
+            messages.success(request, "Det tidligere kravet er bevart og erstattet.")
+            return redirect(
+                reverse("workbench:recording", args=(replacement.recording_id,))
+                + "?fane=rights"
+            )
+    return render(
+        request,
+        "workbench/form.html",
+        _page_context(
+            "rights",
+            "Erstatt rettighetskrav",
+            introduction="Det tidligere kravet og beslutningshistorikken blir bevart.",
+            form=form,
+            submit_label="Opprett erstatningskrav",
+            cancel_url=reverse("workbench:recording", args=(previous.recording_id,))
+            + "?fane=rights",
+        ),
+    )
+
+
+@staff
+@permission_required(
+    (
+        "rights.view_rightsclaim",
+        "rights.change_rightsclaim",
+        "rights.manage_agreement",
+    ),
+    raise_exception=True,
+)
+def rights_claim_link_agreement(request, pk):
+    claim = get_object_or_404(RightsClaim, pk=pk)
+    form = ClaimAgreementForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        link_claim_agreement(
+            claim,
+            form.cleaned_data["agreement"],
+            user=request.user,
+            note=form.cleaned_data["note"],
+        )
+        messages.success(
+            request, "Avtalen ble knyttet til kravet og handlingen loggført."
+        )
+        return redirect(
+            reverse("workbench:recording", args=(claim.recording_id,)) + "?fane=rights"
+        )
+    return render(
+        request,
+        "workbench/form.html",
+        _page_context(
+            "rights",
+            "Knytt avtale",
+            form=form,
+            submit_label="Knytt avtale",
+            cancel_url=reverse("workbench:recording", args=(claim.recording_id,))
+            + "?fane=rights",
+        ),
+    )
+
+
+@staff
+@permission_required("rights.view_agreement", raise_exception=True)
+def agreement_list(request):
+    form = SearchForm(request.GET)
+    agreements = Agreement.objects.prefetch_related("party_roles__party").order_by(
+        "title", "id"
+    )
+    if form.is_valid() and form.cleaned_data.get("q"):
+        q = form.cleaned_data["q"]
+        agreements = agreements.filter(
+            Q(title__icontains=q)
+            | Q(internal_reference__icontains=q)
+            | Q(party_roles__party__name__icontains=q)
+        ).distinct()
+    page, query = _paginate(request, agreements)
+    return render(
+        request,
+        "workbench/agreement_list.html",
+        _page_context("rights", "Avtaler", form=form, page=page, page_query=query),
+    )
+
+
+@staff
+@permission_required("rights.view_agreement", raise_exception=True)
+def agreement_detail(request, pk):
+    agreement = get_object_or_404(
+        Agreement.objects.prefetch_related(
+            "party_roles__party",
+            "document_links__file_asset",
+            "rights_claims__recording",
+        ),
+        pk=pk,
+    )
+    return render(
+        request,
+        "workbench/agreement_detail.html",
+        _page_context("rights", agreement.title, agreement=agreement),
+    )
+
+
+@staff
+@permission_required(
+    ("rights.view_agreement", "rights.manage_agreement"), raise_exception=True
+)
+def agreement_add(request):
+    form = AgreementForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        agreement = form.save()
+        messages.success(request, "Avtalen ble registrert.")
+        return redirect("workbench:agreement", pk=agreement.pk)
+    return render(
+        request,
+        "workbench/form.html",
+        _page_context(
+            "rights",
+            "Ny avtale",
+            form=form,
+            submit_label="Registrer avtale",
+            cancel_url=reverse("workbench:agreements"),
+        ),
+    )
+
+
+@staff
+@permission_required(
+    ("rights.view_agreement", "rights.manage_agreement"), raise_exception=True
+)
+def agreement_edit(request, pk):
+    agreement = get_object_or_404(Agreement, pk=pk)
+    form = AgreementForm(request.POST or None, instance=agreement)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, "Avtalen ble oppdatert.")
+        return redirect("workbench:agreement", pk=agreement.pk)
+    return render(
+        request,
+        "workbench/form.html",
+        _page_context(
+            "rights",
+            f"Rediger avtale — {agreement.title}",
+            form=form,
+            submit_label="Lagre avtale",
+            cancel_url=reverse("workbench:agreement", args=(agreement.pk,)),
+        ),
+    )
+
+
+@staff
+@permission_required(
+    ("rights.view_agreement", "rights.manage_agreement"), raise_exception=True
+)
+def agreement_party_add(request, pk):
+    agreement = get_object_or_404(Agreement, pk=pk)
+    form = AgreementPartyForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        role = form.save(commit=False)
+        role.agreement = agreement
+        role.save()
+        messages.success(request, "Avtaleparten ble registrert.")
+        return redirect("workbench:agreement", pk=agreement.pk)
+    return render(
+        request,
+        "workbench/form.html",
+        _page_context(
+            "rights",
+            f"Ny avtalepart — {agreement.title}",
+            form=form,
+            submit_label="Registrer avtalepart",
+            cancel_url=reverse("workbench:agreement", args=(agreement.pk,)),
+        ),
+    )
+
+
+@staff
+@permission_required(
+    ("rights.view_agreement", "rights.manage_agreement"), raise_exception=True
+)
+def agreement_document_add(request, pk):
+    agreement = get_object_or_404(Agreement, pk=pk)
+    form = AgreementDocumentForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        document = form.save(commit=False)
+        document.agreement = agreement
+        document.save()
+        messages.success(request, "Avtaledokumentet ble knyttet til avtalen.")
+        return redirect("workbench:agreement", pk=agreement.pk)
+    return render(
+        request,
+        "workbench/form.html",
+        _page_context(
+            "rights",
+            f"Knytt dokument — {agreement.title}",
+            form=form,
+            submit_label="Knytt dokument",
+            cancel_url=reverse("workbench:agreement", args=(agreement.pk,)),
         ),
     )
 

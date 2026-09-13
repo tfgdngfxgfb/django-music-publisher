@@ -13,6 +13,7 @@ from media_assets.models import FileAsset, FileLocation
 from music_library.models import MusicLibraryEntry
 from parties.models import Party
 from provenance.models import MetadataAssertion
+from rights.models import Agreement, RightsClaim, RightsConfiguration
 
 
 class DevelopmentAdminCommandTests(TestCase):
@@ -81,6 +82,9 @@ class DemoDataTests(TestCase):
             self.assertEqual(counts["recordings"], 5)
             self.assertEqual(counts["managed"], 1)
             self.assertEqual(counts["duplicates"], 1)
+            self.assertEqual(counts["rights_claims"], 4)
+            self.assertEqual(counts["agreements"], 1)
+            self.assertEqual(counts["rights_configuration"], 1)
             self.assertTrue(
                 Recording.objects.filter(
                     pk="70000000-0000-4000-8000-000000000030",
@@ -117,4 +121,7 @@ class DemoDataTests(TestCase):
             "duplicates": DuplicateCandidate.objects.count(),
             "assets": FileAsset.objects.count(),
             "locations": FileLocation.objects.count(),
+            "rights_claims": RightsClaim.objects.count(),
+            "agreements": Agreement.objects.count(),
+            "rights_configuration": RightsConfiguration.objects.count(),
         }

@@ -1,0 +1,17 @@
+<section class="panel rights-group">
+  <h2>{{ heading }}</h2>
+  <div class="table-wrap"><table class="data-table"><thead><tr><th>Part</th><th>Andel</th><th>Territorium</th><th>Periode</th><th>Grunnlag</th><th>Status og handling</th></tr></thead><tbody>
+  {% for claim in claims %}<tr>
+    <td><strong>{{ claim.rights_holder.name }}</strong>{% if claim.grantor %}<small>Fra {{ claim.grantor.name }}</small>{% endif %}</td>
+    <td>{% if claim.share is not None %}{{ claim.share }} %{% else %}Ukjent{% endif %}</td>
+    <td>{{ claim.territory_display }}</td>
+    <td>{{ claim.valid_from|default:"Ukjent start" }} – {{ claim.valid_until|default:"Ingen registrert sluttdato" }}</td>
+    <td>{% if claim.agreement %}{% if perms.rights.view_agreement %}<a href="{% url 'workbench:agreement' claim.agreement.pk %}">{{ claim.agreement.title }}</a>{% else %}{{ claim.agreement.title }}{% endif %}{% endif %}{% if claim.source_record %}<small>{{ claim.source_record.source_system }}</small>{% endif %}{% if not claim.agreement and not claim.source_record %}Ikke registrert{% endif %}</td>
+    <td><span class="status status-{{ claim.status }}">{{ claim.get_status_display }}</span>
+      {% if perms.rights.decide_rightsclaim and claim.status != 'superseded' %}<form method="post" action="{% url 'workbench:rights_claim_decide' claim.pk %}" class="inline-actions rights-actions">{% csrf_token %}<input type="hidden" name="return" value="{{ request.get_full_path }}"><input name="note" aria-label="Begrunnelse" placeholder="Begrunnelse"><button class="button" name="action" value="confirm">Bekreft</button><button class="button" name="action" value="dispute">Bestrid</button><button class="button danger" name="action" value="reject">Avvis</button></form>{% endif %}
+      <div class="secondary-actions">{% if perms.rights.add_rightsclaim and perms.rights.decide_rightsclaim %}<a href="{% url 'workbench:rights_claim_supersede' claim.pk %}">Erstatt</a>{% endif %}{% if perms.rights.change_rightsclaim and perms.rights.manage_agreement %}<a href="{% url 'workbench:rights_claim_link_agreement' claim.pk %}">Knytt avtale</a>{% endif %}</div>
+      {% if claim.decisions.all %}<details><summary>Beslutningshistorikk</summary>{% for decision in claim.decisions.all %}<p><strong>{{ decision.get_decision_display }}</strong> · {{ decision.created_at }} · {{ decision.decided_by }}<br>{{ decision.note }}</p>{% endfor %}</details>{% endif %}
+    </td>
+  </tr>{% empty %}<tr><td colspan="6" class="empty">{{ empty_label }}</td></tr>{% endfor %}
+  </tbody></table></div>
+</section>

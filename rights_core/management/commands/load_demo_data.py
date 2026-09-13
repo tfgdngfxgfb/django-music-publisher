@@ -33,6 +33,15 @@ from provenance.models import (
     SourceRecord,
     SourceSystem,
 )
+from rights.models import (
+    Agreement,
+    AgreementDocument,
+    AgreementParty,
+    ClaimTerritory,
+    RightsClaim,
+    RightsConfiguration,
+    Territory,
+)
 from rights_core.models import VerificationStatus
 
 
@@ -73,6 +82,20 @@ class Command(BaseCommand):
             defaults={
                 "name": "Aurora Musikk AS (demo)",
                 "kind": Party.Kind.ORGANIZATION,
+            },
+        )
+        local_organization, _ = Party.objects.get_or_create(
+            pk=demo_uuid(4),
+            defaults={
+                "name": "P7 Demoorganisasjon",
+                "kind": Party.Kind.ORGANIZATION,
+            },
+        )
+        RightsConfiguration.objects.get_or_create(
+            singleton=True,
+            defaults={
+                "id": demo_uuid(5),
+                "local_organization": local_organization,
             },
         )
         soloist, _ = ArtistIdentity.objects.get_or_create(
@@ -278,6 +301,14 @@ class Command(BaseCommand):
         )
 
         self._file_records(recordings[0], album, root, paths)
+        self._rights_records(
+            recordings[0],
+            group,
+            organization,
+            local_organization,
+            cover_source,
+            import_source,
+        )
         self.stdout.write(self.style.SUCCESS("Det faste demo-datasettet er klart."))
         self.stdout.write(f"Demofiler: {root}")
         self.stdout.write("Kjør samme kommando igjen uten å opprette duplikater.")
@@ -321,6 +352,7 @@ class Command(BaseCommand):
             "cover": root / "P7-Demo" / "Aurora" / "P7-DEMO-001" / "Cover",
             "audio": root / "P7-Demo" / "Aurora" / "P7-DEMO-001" / "Audio",
             "metadata": root / "P7-Demo" / "Aurora" / "P7-DEMO-001" / "Metadata",
+            "documents": root / "P7-Demo" / "Aurora" / "P7-DEMO-001" / "Documents",
         }
         for folder in folders.values():
             folder.mkdir(parents=True, exist_ok=True)
@@ -386,7 +418,19 @@ class Command(BaseCommand):
                     "Visesang",
                 )
             )
-        return {"cover": cover, "audio": audio, "json": json_path, "csv": csv_path}
+        agreement = folders["documents"] / "demo-rights-agreement.txt"
+        agreement.write_text(
+            "P7 DEMO – IKKE EN VIRKELIG AVTALE\n\n"
+            "Denne filen finnes bare for å teste kobling mellom avtale og dokumentasjon.\n",
+            encoding="utf-8",
+        )
+        return {
+            "cover": cover,
+            "audio": audio,
+            "json": json_path,
+            "csv": csv_path,
+            "agreement": agreement,
+        }
 
     def _file_records(self, recording, release, root, paths):
         assets = (
@@ -415,6 +459,14 @@ class Command(BaseCommand):
                 "application/json",
             ),
             (153, None, release, paths["csv"], FileAsset.Role.DOCUMENT, "text/csv"),
+            (
+                154,
+                None,
+                None,
+                paths["agreement"],
+                FileAsset.Role.DOCUMENT,
+                "text/plain",
+            ),
         )
         for offset, recording_target, release_target, path, role, mime in assets:
             digest = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -445,4 +497,119 @@ class Command(BaseCommand):
                     "status": FileLocation.Status.ACTIVE,
                     "verification_status": FileLocation.VerificationStatus.VERIFIED,
                 },
+            )
+
+    def _rights_records(
+        self,
+        recording,
+        artist_group,
+        catalogue_company,
+        local_organization,
+        physical_source,
+        imported_source,
+    ):
+        agreement, _ = Agreement.objects.get_or_create(
+            pk=demo_uuid(200),
+            defaults={
+                "title": "Demoavtale for Nordlys over byen",
+                "internal_reference": "RIGHTS-DEMO-001",
+                "agreement_type": Agreement.Type.LICENSE,
+                "status": Agreement.Status.DRAFT,
+                "notes": "Fiktiv avtale. Skal aldri brukes som rettighetsbevis.",
+            },
+        )
+        AgreementParty.objects.get_or_create(
+            pk=demo_uuid(201),
+            defaults={
+                "agreement": agreement,
+                "party": artist_group,
+                "role": AgreementParty.Role.LICENSOR,
+            },
+        )
+        AgreementParty.objects.get_or_create(
+            pk=demo_uuid(202),
+            defaults={
+                "agreement": agreement,
+                "party": local_organization,
+                "role": AgreementParty.Role.LICENSEE,
+            },
+        )
+        AgreementDocument.objects.get_or_create(
+            pk=demo_uuid(203),
+            defaults={
+                "agreement": agreement,
+                "file_asset": FileAsset.objects.get(pk=demo_uuid(154)),
+                "description": "Fiktiv testavtale",
+            },
+        )
+        self._claim(
+            210,
+            recording,
+            RightsClaim.RightType.OWNERSHIP,
+            catalogue_company,
+            share="60.00",
+            source=physical_source,
+            agreement=agreement,
+        )
+        self._claim(
+            211,
+            recording,
+            RightsClaim.RightType.OWNERSHIP,
+            artist_group,
+            share="40.00",
+            source=imported_source,
+        )
+        self._claim(
+            212,
+            recording,
+            RightsClaim.RightType.ADMINISTRATION,
+            local_organization,
+            grantor=artist_group,
+            source=physical_source,
+            agreement=agreement,
+        )
+        self._claim(
+            213,
+            recording,
+            RightsClaim.RightType.DISTRIBUTION,
+            local_organization,
+            grantor=artist_group,
+            territory_mode=RightsClaim.TerritoryMode.INCLUDE,
+            territories=Territory.objects.filter(code__in=("NO", "SE", "DK")),
+            source=physical_source,
+            agreement=agreement,
+        )
+
+    def _claim(
+        self,
+        number,
+        recording,
+        right_type,
+        holder,
+        *,
+        share=None,
+        grantor=None,
+        territory_mode=RightsClaim.TerritoryMode.WORLD,
+        territories=(),
+        source=None,
+        agreement=None,
+    ):
+        claim, _ = RightsClaim.objects.get_or_create(
+            pk=demo_uuid(number),
+            defaults={
+                "recording": recording,
+                "right_type": right_type,
+                "rights_holder": holder,
+                "grantor": grantor,
+                "share": share,
+                "territory_mode": territory_mode,
+                "source_record": source,
+                "agreement": agreement,
+                "notes": "Uverifisert, fiktivt rettighetskrav for prøvebruk.",
+            },
+        )
+        for index, territory in enumerate(territories):
+            ClaimTerritory.objects.get_or_create(
+                pk=demo_uuid(220 + number - 210 + index * 10),
+                defaults={"claim": claim, "territory": territory},
             )

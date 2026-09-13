@@ -781,3 +781,13 @@ code {
 .catalogue-cover { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: var(--surface, #fff); }
 .inspector-section[hidden] { display: none; }
 .inspector-tabs a[aria-current="true"] { color: var(--accent, #087f83); border-bottom: 2px solid currentColor; }
+
+.rights-heading { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.rights-heading p { flex: 1 1 28rem; margin: 0; }
+.rights-heading small { flex-basis: 100%; }
+.rights-group .data-table td { vertical-align: top; }
+.rights-group td small { display: block; margin-top: .3rem; color: var(--muted); }
+.rights-actions { margin-top: .65rem; align-items: stretch; flex-wrap: wrap; }
+.rights-actions input { min-width: 11rem; flex: 1; }
+.secondary-actions { display: flex; gap: .8rem; margin-top: .6rem; font-size: .9rem; }
+.rights-group details { margin-top: .65rem; font-size: .85rem; }

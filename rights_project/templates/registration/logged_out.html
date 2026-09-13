@@ -1,0 +1,12 @@
+{% extends "admin/base_site.html" %}
+
+{% block title %}Logget ut | {{ site_title|default:"P7 Arkiv og rettigheter" }}{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs"><a href="{% url 'admin:index' %}">Hjem</a></div>
+{% endblock %}
+
+{% block content %}
+<p>Du er nå logget ut av P7 Arkiv og rettigheter.</p>
+<p><a href="{% url 'admin:login' %}">Logg inn igjen</a></p>
+{% endblock %}

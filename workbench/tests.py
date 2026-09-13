@@ -10,7 +10,9 @@ from django.urls import reverse
 
 from catalogue.models import Recording, Release, ReleaseTrack
 from media_assets.models import FileAsset, FileLocation
+from managed_music.services import create_managed_recording
 from music_library.models import MusicLibraryEntry
+from parties.models import Party
 from provenance.models import (
     AppliedMetadataChange,
     MetadataAssertion,
@@ -18,6 +20,7 @@ from provenance.models import (
     SourceSystem,
 )
 from provenance.services import ConcurrentCatalogueChange, apply_assertion
+from rights.models import Agreement, RightsClaim
 from rights_core.models import VerificationStatus
 
 
@@ -58,6 +61,12 @@ class WorkbenchTestCase(TestCase):
 
 
 class AuthenticationAndPermissionTests(WorkbenchTestCase):
+    def test_logout_page_is_norwegian(self):
+        self.login(self.create_user())
+        response = self.client.post(reverse("admin:logout"))
+        self.assertContains(response, "Du er nå logget ut")
+        self.assertNotContains(response, "Thanks for spending")
+
     def test_root_login_preserves_internal_destination(self):
         response = self.client.get(reverse("workbench:releases"))
         parsed = urlparse(response.url)
@@ -87,6 +96,195 @@ class AuthenticationAndPermissionTests(WorkbenchTestCase):
         self.assertEqual(response.status_code, 403)
         release.refresh_from_db()
         self.assertEqual(release.title, "Beskyttet")
+
+    def test_rights_decisions_are_enforced_on_direct_post(self):
+        recording = Recording.objects.create(title="Rettighetsbeskyttet")
+        holder = Party.objects.create(
+            name="Rettighetshaver", kind=Party.Kind.ORGANIZATION
+        )
+        claim = RightsClaim.objects.create(
+            recording=recording,
+            right_type=RightsClaim.RightType.OWNERSHIP,
+            rights_holder=holder,
+        )
+        viewer = self.create_user(
+            permissions=("catalogue.view_recording", "rights.view_rightsclaim")
+        )
+        self.login(viewer)
+        detail = reverse("workbench:recording", args=(recording.pk,)) + "?fane=rights"
+        response = self.client.get(detail)
+        self.assertContains(response, "Rettighetshaver")
+        self.assertContains(response, "Importert / ikke verifisert")
+        self.assertNotContains(response, ">Bekreft<")
+        response = self.client.post(
+            reverse("workbench:rights_claim_decide", args=(claim.pk,)),
+            {"action": "confirm"},
+        )
+        self.assertEqual(response.status_code, 403)
+        claim.refresh_from_db()
+        self.assertEqual(claim.status, VerificationStatus.UNVERIFIED)
+
+        reviewer = self.create_user(
+            username="rights-reviewer",
+            permissions=(
+                "catalogue.view_recording",
+                "rights.view_rightsclaim",
+                "rights.decide_rightsclaim",
+            ),
+        )
+        self.login(reviewer)
+        response = self.client.post(
+            reverse("workbench:rights_claim_decide", args=(claim.pk,)),
+            {"action": "confirm", "note": "Kontrollert dokumentasjon"},
+        )
+        self.assertEqual(response.status_code, 302)
+        claim.refresh_from_db()
+        self.assertEqual(claim.status, VerificationStatus.CONFIRMED)
+        self.assertEqual(claim.decisions.get().decided_by, reviewer)
+
+    def test_managed_recording_page_does_not_claim_ownership(self):
+        recording = Recording.objects.create(title="Forvaltet uten eier")
+        create_managed_recording(recording=recording)
+        viewer = self.create_user(
+            permissions=("catalogue.view_recording", "rights.view_rightsclaim")
+        )
+        self.login(viewer)
+        response = self.client.get(
+            reverse("workbench:recording", args=(recording.pk,)) + "?fane=rights"
+        )
+        self.assertContains(response, "Forvaltet av lokal organisasjon:")
+        self.assertContains(response, "Ja")
+        self.assertContains(response, "Mastereierskap er ikke avklart")
+        self.assertNotContains(response, "P7 eier")
+
+    def test_superseding_preserves_hidden_source_and_agreement(self):
+        recording = Recording.objects.create(title="Krav med grunnlag")
+        holder = Party.objects.create(
+            name="Dokumentert part", kind=Party.Kind.ORGANIZATION
+        )
+        source_system = SourceSystem.objects.create(
+            name="Historisk import", kind=SourceSystem.Kind.IMPORT
+        )
+        source_record = SourceRecord.objects.create(
+            source_system=source_system, external_record_id="H-1"
+        )
+        agreement = Agreement.objects.create(
+            title="Skjermet avtale", agreement_type=Agreement.Type.LICENSE
+        )
+        claim = RightsClaim.objects.create(
+            recording=recording,
+            right_type=RightsClaim.RightType.OWNERSHIP,
+            rights_holder=holder,
+            source_record=source_record,
+            agreement=agreement,
+        )
+        reviewer = self.create_user(
+            permissions=(
+                "catalogue.view_recording",
+                "rights.view_rightsclaim",
+                "rights.add_rightsclaim",
+                "rights.decide_rightsclaim",
+            )
+        )
+        self.login(reviewer)
+        response = self.client.post(
+            reverse("workbench:rights_claim_supersede", args=(claim.pk,)),
+            {
+                "right_type": RightsClaim.RightType.DISTRIBUTION,
+                "rights_holder": holder.pk,
+                "grantor": "",
+                "share": "75",
+                "territory_mode": RightsClaim.TerritoryMode.WORLD,
+                "valid_from": "",
+                "valid_until": "",
+                "source_record": "",
+                "agreement": "",
+                "notes": "Ny vurdering",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        replacement = RightsClaim.objects.get(supersedes=claim)
+        self.assertEqual(replacement.right_type, RightsClaim.RightType.OWNERSHIP)
+        self.assertEqual(replacement.source_record, source_record)
+        self.assertEqual(replacement.agreement, agreement)
+
+    def test_claim_creation_and_agreement_management_permissions(self):
+        recording = Recording.objects.create(title="Nytt krav")
+        holder = Party.objects.create(name="Kravpart", kind=Party.Kind.ORGANIZATION)
+        cataloguer = self.create_user(
+            permissions=(
+                "catalogue.view_recording",
+                "rights.view_rightsclaim",
+                "rights.add_rightsclaim",
+                "rights.view_agreement",
+            )
+        )
+        self.login(cataloguer)
+        response = self.client.post(
+            reverse("workbench:rights_claim_add", args=(recording.pk,)),
+            {
+                "right_type": RightsClaim.RightType.OWNERSHIP,
+                "rights_holder": holder.pk,
+                "share": "",
+                "territory_mode": RightsClaim.TerritoryMode.WORLD,
+                "valid_from": "",
+                "valid_until": "",
+                "grantor": "",
+                "source_record": "",
+                "agreement": "",
+                "notes": "Historisk opplysning",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            RightsClaim.objects.get().status, VerificationStatus.UNVERIFIED
+        )
+        self.assertEqual(
+            self.client.post(
+                reverse("workbench:agreement_add"),
+                {
+                    "title": "Ikke tillatt",
+                    "agreement_type": Agreement.Type.LICENSE,
+                    "status": Agreement.Status.DRAFT,
+                },
+            ).status_code,
+            403,
+        )
+
+        manager = self.create_user(
+            username="agreement-manager",
+            permissions=("rights.view_agreement", "rights.manage_agreement"),
+        )
+        self.login(manager)
+        response = self.client.post(
+            reverse("workbench:agreement_add"),
+            {
+                "title": "Tillatt avtale",
+                "internal_reference": "A-1",
+                "agreement_type": Agreement.Type.LICENSE,
+                "effective_date": "",
+                "expiry_date": "",
+                "status": Agreement.Status.DRAFT,
+                "notes": "",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        agreement = Agreement.objects.get(title="Tillatt avtale")
+        response = self.client.post(
+            reverse("workbench:agreement_edit", args=(agreement.pk,)),
+            {
+                "title": "Oppdatert avtale",
+                "internal_reference": "A-1",
+                "agreement_type": Agreement.Type.LICENSE,
+                "effective_date": "",
+                "expiry_date": "",
+                "status": Agreement.Status.ACTIVE,
+                "notes": "Kontrollert",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        agreement.refresh_from_db()
+        self.assertEqual(agreement.title, "Oppdatert avtale")
 
     def test_external_return_url_is_not_used(self):
         user = self.create_user(superuser=True)

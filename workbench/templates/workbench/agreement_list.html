@@ -1,0 +1,9 @@
+{% extends "workbench/base.html" %}
+{% block subtitle %}<p>Avtalegrunnlag og dokumentasjon</p>{% endblock %}
+{% block page_actions %}{% if perms.rights.manage_agreement %}<a class="button primary" href="{% url 'workbench:agreement_add' %}">Ny avtale</a>{% endif %}{% endblock %}
+{% block content %}
+{% include "workbench/_filter.html" %}
+<section class="panel"><div class="table-wrap"><table class="data-table"><thead><tr><th>Avtale</th><th>Referanse</th><th>Type</th><th>Parter</th><th>Status</th><th>Periode</th></tr></thead><tbody>
+{% for agreement in page %}<tr><td><a href="{% url 'workbench:agreement' agreement.pk %}">{{ agreement.title }}</a></td><td>{{ agreement.internal_reference|default:"—" }}</td><td>{{ agreement.get_agreement_type_display }}</td><td>{% for role in agreement.party_roles.all %}{{ role.party.name }} ({{ role.get_role_display }}){% if not forloop.last %}, {% endif %}{% empty %}Ikke registrert{% endfor %}</td><td><span class="status">{{ agreement.get_status_display }}</span></td><td>{{ agreement.effective_date|default:"Ukjent" }} – {{ agreement.expiry_date|default:"Ingen registrert sluttdato" }}</td></tr>{% empty %}<tr><td colspan="6" class="empty">Ingen avtaler registrert.</td></tr>{% endfor %}
+</tbody></table></div></section>{% include "workbench/_pagination.html" %}
+{% endblock %}

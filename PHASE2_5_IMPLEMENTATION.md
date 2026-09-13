@@ -62,7 +62,9 @@ Eierskap, andeler, territorier og avtalegrunnlag er ikke implementert. Neste fas
 Kommandoen ``load_demo_data`` oppretter et deterministisk, fiktivt datasett og
 små testfiler. ``run-p7-demo.cmd`` bruker en separat SQLite-database og separat
 filrot under ``.local``. Kommandoen er idempotent og sperret når ``DEBUG=false``.
-Demoen omfatter katalog, radiometadata, forvaltning, kilder, konflikt, mulig
-dublett og filplassering, men oppretter ingen eierskapsopplysninger.
+Fase-2.5-demoen omfattet katalog, radiometadata, forvaltning, kilder, konflikt,
+mulig dublett og filplassering. Fase 3 utvider samme kommando med tydelig merkede,
+uverifiserte rettighetskrav og en prøveavtale; se
+`PHASE3_RIGHTS_IMPLEMENTATION.md`.
 Kommandoen og idempotensen er testet i full testmatrise: 157 tester bestått på
 både SQLite og PostgreSQL, med ren Django-systemkontroll.

@@ -36,6 +36,7 @@ INSTALLED_APPS = [  # noqa: F405
     "music_library",
     "managed_music",
     "media_assets",
+    "rights",
     "workbench",
 ]
 ROOT_URLCONF = "rights_project.urls"

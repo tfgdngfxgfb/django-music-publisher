@@ -1,0 +1,12 @@
+<div class="rights-heading panel">
+  <div><strong>Forvaltet av lokal organisasjon:</strong> {% if recording.music_library_entry.managed_recording %}Ja{% else %}Nei{% endif %}</div>
+  <p class="muted">Forvaltning, administrasjon, distribusjon og filtilstedeværelse dokumenterer ikke i seg selv mastereierskap.</p>
+  {% if local_organization %}<small>Lokal organisasjon: {{ local_organization.name }}</small>{% else %}<small>Lokal organisasjon er ikke konfigurert.</small>{% endif %}
+  {% if perms.rights.add_rightsclaim %}<a class="button primary" href="{% url 'workbench:rights_claim_add' recording.pk %}">Nytt rettighetskrav</a>{% endif %}
+</div>
+
+{% include "workbench/rights_claim_group.html" with heading="Bekreftet mastereierskap" claims=ownership_claims empty_label="Mastereierskap er ikke avklart." %}
+{% include "workbench/rights_claim_group.html" with heading="Bekreftet administrasjon" claims=administration_claims empty_label="Ingen bekreftet administrasjonsrett er registrert." %}
+{% include "workbench/rights_claim_group.html" with heading="Bekreftet distribusjon" claims=distribution_claims empty_label="Ingen bekreftet distribusjonsrett er registrert." %}
+{% include "workbench/rights_claim_group.html" with heading="Uavklarte eller bestridte krav" claims=unresolved_claims empty_label="Ingen uavklarte eller bestridte krav." %}
+{% include "workbench/rights_claim_group.html" with heading="Avviste og erstattede krav" claims=historical_claims empty_label="Ingen avviste eller erstattede krav." %}

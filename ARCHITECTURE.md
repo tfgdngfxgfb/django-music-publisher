@@ -101,7 +101,7 @@ publishing_bridge/      Only new app importing DMP models; work and identity lin
 
 These are bounded modules, not a requirement to create every app in milestone one. Core, parties, catalogue, rights and bridge form the initial domain; audit and exchange supply shared infrastructure. Delay neighbouring-rights and distribution tables until their first workflow, using the interfaces described here.
 
-Implemented dependency direction: parties → core; catalogue → parties/core; music_library → catalogue/core; provenance → core with portable typed UUID targets; managed_music → music_library/catalogue/provenance; media_assets → catalogue/core. Future rights, neighbouring-rights, distribution and bridge apps remain deferred. Use explicit migrations, FK relationships and transaction-protected application services; avoid cross-app side effects in model signals.
+Implemented dependency direction: parties → core; catalogue → parties/core; music_library → catalogue/core; provenance → core with portable typed UUID targets; managed_music → music_library/catalogue/provenance; media_assets → catalogue/core; rights → catalogue/parties/provenance/media_assets/core. Neighbouring-rights, delivery integrations and the publishing bridge remain deferred. Use explicit migrations, FK relationships and transaction-protected application services; avoid cross-app side effects in model signals.
 
 The new host configures DMP's required settings explicitly and mounts routes without name collisions. Preserve existing DMP URL names and path behavior where possible, introduce `/rights/` and `/api/rights/v1/`, and test reverse resolution and permission boundaries. Do not enable public or secret playlist surfaces for canonical assets or contract files by inheritance.
 

@@ -140,8 +140,9 @@ See `FOUNDATION_STABILIZATION.md <FOUNDATION_STABILIZATION.md>`_ for the phase
 1.5 handover. `IMPLEMENTATION_STATUS.md <IMPLEMENTATION_STATUS.md>`_ records
 phase 1. `PHASE2_IMPLEMENTATION.md <PHASE2_IMPLEMENTATION.md>`_ describes the
 operative catalogue. The approved long-term baseline is
-`ARCHITECTURE.md <ARCHITECTURE.md>`_; the complete rights and agreement model
-remains a later phase.
+`ARCHITECTURE.md <ARCHITECTURE.md>`_.
+`PHASE3_RIGHTS_IMPLEMENTATION.md <PHASE3_RIGHTS_IMPLEMENTATION.md>`_ describes
+the implemented master-rights claim and agreement foundation.
 
 `PHASE2_5_IMPLEMENTATION.md <PHASE2_5_IMPLEMENTATION.md>`_ documents the
 catalogue workbench, source-value audit and database backup/restore procedure.
@@ -159,6 +160,12 @@ explicit administrator decision; this workflow guarantees the recording is
 also present in Musikkarkiv. **Kilder og verifikasjon** retains conflicting
 source values and review decisions. **Filer** stores portable file identities
 separately from current and historical locations.
+
+Use the **Rettigheter** tab on a recording to register and review separate
+claims for master ownership, administration and distribution. New and imported
+claims remain unverified until an authorised rights reviewer records a decision.
+Forvaltet musikk, a label credit, distribution or possession of a file never
+creates ownership automatically.
 
 Original Django Music Publisher documentation
 =============================================
