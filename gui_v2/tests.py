@@ -115,6 +115,8 @@ class GuiV2WorkspaceTests(TestCase):
         self.assertContains(response, "data-auto-submit-filters")
         self.assertNotContains(response, "Bruk filtre")
         self.assertNotContains(response, "Radiomusikk")
+        self.assertEqual(response.content.count(b'aria-label="Nullstill alle filtre"'), 1)
+        self.assertNotContains(response, ">Nullstill</a>")
         self.assertContains(response, '<option value="all" selected>Alle</option>', html=True)
 
     def test_channel_logo_requires_library_permission(self):
