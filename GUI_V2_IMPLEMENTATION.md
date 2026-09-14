@@ -10,7 +10,8 @@ Musikkarkivet har nå en tett, paginert arbeidsliste med reelle søk og filtre,
 flerverdi-filtrering for kanal/målgruppe (`minst én` eller `alle`), bevart
 spørringskontekst og et lukkbart, skalerbart detaljpanel. Panelet viser radio,
 filer, utgivelser, identifikatorer og forvaltning. `Energy` er eneste
-energiverdi. Innlesing fra filer peker til den eksisterende kontrollerte
+energiverdi. ISRC og forvaltningsstatus er samlet i én kompakt listekolonne,
+mens varighet vises sammen med innspillingen. Innlesing fra filer peker til den eksisterende kontrollerte
 Workbench-flyten; GUI v2 starter ikke ingest.
 
 Utgivelsesflaten har kontekstnavigasjon, kompakt utgivelseshode og en reell
