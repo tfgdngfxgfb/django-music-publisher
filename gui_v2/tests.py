@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
+from django.core.files.base import ContentFile
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from mutagen.flac import FLAC
@@ -59,6 +60,42 @@ class GuiV2WorkspaceTests(TestCase):
         self.assertContains(response, "Eksisterende innspilling")
         response = self.client.get(reverse("gui_v2:music_library"), {"channels": [self.channel.pk, other.pk], "channel_mode": "all"})
         self.assertContains(response, "Ingen innspillinger passer")
+
+    def test_library_renders_channel_choices_and_serves_custom_logo(self):
+        self._superuser()
+        built_in = Channel.objects.create(code="p7_riks", name="P7 Riks")
+        response = self.client.get(
+            reverse("gui_v2:music_library"),
+            {"channels": [built_in.pk]},
+        )
+        self.assertContains(response, "P7 Riks")
+        self.assertContains(response, 'name="channels"')
+        self.assertContains(response, 'checked')
+
+        with tempfile.TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
+            self.channel.logo.save("p7-test.png", ContentFile(b"custom-channel-logo"))
+            response = self.client.get(reverse("gui_v2:music_library"))
+            self.assertContains(
+                response,
+                reverse("gui_v2:channel_logo", args=[self.channel.pk]),
+            )
+            response = self.client.get(reverse("gui_v2:channel_logo", args=[self.channel.pk]))
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(b"".join(response.streaming_content), b"custom-channel-logo")
+
+    def test_channel_logo_requires_library_permission(self):
+        with tempfile.TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
+            self.channel.logo.save("p7-test.png", ContentFile(b"custom-channel-logo"))
+            self.client.force_login(self.user)
+            response = self.client.get(reverse("gui_v2:channel_logo", args=[self.channel.pk]))
+            self.assertEqual(response.status_code, 403)
+
+    def test_channel_logo_can_be_configured_in_admin(self):
+        self._superuser()
+        response = self.client.get(
+            reverse("admin:music_library_channel_change", args=[self.channel.pk])
+        )
+        self.assertContains(response, 'name="logo"')
 
     def test_library_uses_observed_genre_and_named_language_filters(self):
         self._superuser()

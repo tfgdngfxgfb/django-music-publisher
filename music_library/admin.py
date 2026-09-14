@@ -85,9 +85,13 @@ class MusicLibraryEntryAdmin(CanonicalAdmin):
 
 @admin.register(Channel)
 class ChannelAdmin(CanonicalAdmin):
-    list_display = ("name", "code", "is_active")
+    list_display = ("name", "code", "has_logo", "is_active")
     list_filter = ("is_active",)
     search_fields = ("name", "code", "id")
+
+    @admin.display(boolean=True, description="Egendefinert logo")
+    def has_logo(self, obj):
+        return bool(obj.logo)
 
 
 @admin.register(TargetAudience)

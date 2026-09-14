@@ -110,6 +110,9 @@ media/
 .local/
 *.sqlite3
 
+# Kanal-logoer er lokale/brukerleverte merkevarer og skal ikke pushes.
+gui_v2/static/gui_v2/channel_logos/
+
 # Never commit imported or copied music files. The exception is a tiny,
 # project-generated silence fixture used by the automated FLAC tests.
 *.flac

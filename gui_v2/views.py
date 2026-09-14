@@ -1,13 +1,16 @@
+import mimetypes
+from pathlib import PurePosixPath
 from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
+from django.contrib.staticfiles import finders
 from django.core.exceptions import ImproperlyConfigured, PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Count, Exists, OuterRef, Prefetch, Q
-from django.http import JsonResponse
+from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -17,7 +20,7 @@ from catalogue.models import DuplicateCandidate, ExternalIdentifier, Recording, 
 from flac_ingest.models import FlacIngestItem
 from flac_ingest.services import apply_batch, resolve_music_path, scan_directory
 from media_assets.models import FileAsset, FileLocation
-from music_library.models import MusicLibraryEntry
+from music_library.models import Channel, MusicLibraryEntry, TargetAudience
 from provenance.models import MetadataAssertion
 from rights.forms import ReleaseRightsClaimForm
 from rights.models import RightsClaim
@@ -262,6 +265,18 @@ def music_library(request):
                         location.onetagger_path = ""
                 except (ImproperlyConfigured, ValidationError, OSError):
                     location.onetagger_path = ""
+    selected_channel_ids = set(request.GET.getlist("channels"))
+    channel_filter_options = list(Channel.objects.filter(is_active=True).order_by("name"))
+    for channel in channel_filter_options:
+        channel.is_filter_selected = str(channel.pk) in selected_channel_ids
+        channel.has_built_in_logo = bool(
+            finders.find(f"gui_v2/channel_logos/{channel.code}.svg")
+        )
+    selected_target_ids = set(request.GET.getlist("target_audiences"))
+    target_filter_options = list(TargetAudience.objects.filter(is_active=True).order_by("name"))
+    for target in target_filter_options:
+        target.is_filter_selected = str(target.pk) in selected_target_ids
+
     return render(
         request,
         "gui_v2/music_library.html",
@@ -276,9 +291,28 @@ def music_library(request):
                 for value in values
             ],
             "active_filters": active_filters,
+            "channel_filter_options": channel_filter_options,
+            "target_filter_options": target_filter_options,
             "writes_enabled": settings.GUI_V2_WRITES_ENABLED,
         },
     )
+
+
+@require_GET
+@login_required
+@permission_required("music_library.view_musiclibraryentry", raise_exception=True)
+def channel_logo(request, channel_id):
+    channel = get_object_or_404(Channel, pk=channel_id)
+    if not channel.logo:
+        raise Http404("Kanalen har ingen egendefinert logo.")
+    content_type = mimetypes.guess_type(channel.logo.name)[0] or "application/octet-stream"
+    response = FileResponse(
+        channel.logo.open("rb"),
+        content_type=content_type,
+        filename=PurePosixPath(channel.logo.name).name,
+    )
+    response["Cache-Control"] = "private, max-age=300"
+    return response
 
 
 @require_POST

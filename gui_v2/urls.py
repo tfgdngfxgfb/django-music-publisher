@@ -7,6 +7,7 @@ app_name = "gui_v2"
 urlpatterns = [
     path("", views.home, name="home"),
     path("musikkarkiv/", views.music_library, name="music_library"),
+    path("kanaler/<uuid:channel_id>/logo/", views.channel_logo, name="channel_logo"),
     path(
         "musikkarkiv/<uuid:entry_id>/filer/<uuid:asset_id>/les-pa-nytt/",
         views.rescan_library_file,

@@ -19,6 +19,15 @@ class Channel(CanonicalModel):
         "kode", max_length=50, unique=True, validators=[code_validator]
     )
     name = models.CharField("navn", max_length=100, unique=True)
+    logo = models.ImageField(
+        "logo",
+        upload_to="channel_logos/",
+        blank=True,
+        help_text=(
+            "Valgfri kanal-logo. PNG, JPEG eller WebP anbefales. "
+            "Hvis feltet er tomt, brukes det innebygde kanalmerket når dette finnes."
+        ),
+    )
     is_active = models.BooleanField("aktiv", default=True)
 
     class Meta:
