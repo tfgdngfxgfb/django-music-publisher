@@ -20,6 +20,25 @@ you explicitly pass ``-AdminPassword``.
 The account is only intended for local development. Stop the application with
 ``Ctrl+C``. The longer manual setup remains available below.
 
+Empty test database
+-------------------
+
+Double-click ``run-p7-empty-test.cmd`` to start with a separate, persistent
+SQLite database containing no demo or imported catalogue data. The first run
+applies migrations and creates a local administrator; a generated password is
+printed once. The database is stored under
+``.local\p7-empty-test.sqlite3`` and is excluded from Git together with all
+locally imported music files.
+
+To archive the current test database and start again with an empty catalogue,
+run::
+
+   .\run-p7-empty-test.cmd -Reset
+
+Reset archives the previous database under ``.local\database-backups``. It
+does not delete or modify FLAC, WAV, cover or document files. An empty test
+database still contains Django system tables and the local administrator.
+
 Demo with fixed test data and files
 -----------------------------------
 
