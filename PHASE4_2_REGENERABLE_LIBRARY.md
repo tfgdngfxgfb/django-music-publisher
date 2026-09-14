@@ -63,14 +63,12 @@ Nettleserprøven bekreftet innlogging, tilgang til vedlikeholdsflaten og at en
 cleanup-preview viser konsekvensene uten å endre data eller filer.
 
 Et isolert SQLite-forsøk brukte 1 475 lokale FLAC-filer. Førstegangsskann tok
-44,9 sekunder; 1 453 filer ble importert, mens 22 filer avdekket OneTagger-
-verdien `TXXX:Rotasjon - Ikke vurdert`. Adapteren tolker nå denne som den
-gyldige, eksplisitte tilstanden *Ikke vurdert*. Read-only kontroll av hele korpuset
-ga 132 *Ikke rotasjonsverdig*, 22 *Ikke vurdert* og ingen ugyldige
-rotasjonsverdier. Rebuild-forsøket før denne siste mappingen tok 272,4
-sekunder og regenererte de 1 453 anvendelige filene. Katalogtallene var
-stabile, og SHA-256 av alle 1 475 originalfiler var identisk før og etter.
-Testdatabasen var separat og er ikke versjonskontrollert.
+45,3 sekunder og ga 1 475 nye filer uten konflikter. Alle 1 475 ble importert
+på 163,8 sekunder. En ny inkrementell skann tok 8,6 sekunder og klassifiserte
+alle 1 475 som uendrede. OneTagger-verdiene fordelte seg på 132 *Ikke
+rotasjonsverdig* og 22 uttrykkelig *Ikke vurdert*, uten ugyldige
+rotasjonsverdier. SHA-256 av alle 1 475 originalfiler var identisk før og
+etter. Testdatabasen var separat og er ikke versjonskontrollert.
 
 PostgreSQL var ikke tilgjengelig lokalt: ingen tjeneste, Docker eller Podman
 var installert, og tilkobling til prosjektets lokale port 5433 tidsavbrøt.
