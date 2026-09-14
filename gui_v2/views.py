@@ -266,12 +266,20 @@ def music_library(request):
                 except (ImproperlyConfigured, ValidationError, OSError):
                     location.onetagger_path = ""
     selected_channel_ids = set(request.GET.getlist("channels"))
-    channel_filter_options = list(Channel.objects.filter(is_active=True).order_by("name"))
+    channel_filter_options = list(
+        Channel.objects.filter(is_active=True)
+        .annotate(usage_count=Count("library_links"))
+        .order_by("-usage_count", "name")
+    )
     for channel in channel_filter_options:
         channel.is_filter_selected = str(channel.pk) in selected_channel_ids
-        channel.has_built_in_logo = bool(
-            finders.find(f"gui_v2/channel_logos/{channel.code}.svg")
-        )
+        for extension in ("png", "svg"):
+            candidate = f"gui_v2/channel_logos/{channel.code}.{extension}"
+            if finders.find(candidate):
+                channel.built_in_logo_path = candidate
+                break
+        else:
+            channel.built_in_logo_path = ""
     selected_target_ids = set(request.GET.getlist("target_audiences"))
     target_filter_options = list(TargetAudience.objects.filter(is_active=True).order_by("name"))
     for target in target_filter_options:

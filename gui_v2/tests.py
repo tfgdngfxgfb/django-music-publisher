@@ -83,6 +83,23 @@ class GuiV2WorkspaceTests(TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertEqual(b"".join(response.streaming_content), b"custom-channel-logo")
 
+    def test_library_orders_channel_filters_by_usage_then_name(self):
+        self._superuser()
+        popular = Channel.objects.create(code="popular", name="Mest brukt")
+        alphabetical = Channel.objects.create(code="alphabetical", name="Alfabetisk")
+        last_alphabetically = Channel.objects.create(code="zulu", name="Zulu")
+        second_recording = Recording.objects.create(title="Andre innspilling")
+        second_entry = MusicLibraryEntry.objects.create(recording=second_recording)
+        MusicLibraryChannel.objects.create(library_entry=self.entry, channel=popular)
+        MusicLibraryChannel.objects.create(library_entry=second_entry, channel=popular)
+
+        response = self.client.get(reverse("gui_v2:music_library"))
+        channels = response.context["channel_filter_options"]
+
+        self.assertEqual(channels[0], popular)
+        self.assertLess(channels.index(self.channel), channels.index(alphabetical))
+        self.assertLess(channels.index(alphabetical), channels.index(last_alphabetically))
+
     def test_channel_logo_requires_library_permission(self):
         with tempfile.TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
             self.channel.logo.save("p7-test.png", ContentFile(b"custom-channel-logo"))
