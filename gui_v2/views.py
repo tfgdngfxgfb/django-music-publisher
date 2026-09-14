@@ -5,6 +5,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
 from django.core.exceptions import ImproperlyConfigured, PermissionDenied, ValidationError
 from django.core.paginator import Paginator
+from django.db import transaction
 from django.db.models import Count, Exists, OuterRef, Prefetch, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -19,7 +20,7 @@ from media_assets.models import FileAsset, FileLocation
 from music_library.models import MusicLibraryEntry
 from provenance.models import MetadataAssertion
 
-from .forms import MusicLibraryFilterForm, TrackRowFormSet
+from .forms import MusicLibraryFilterForm, ReleaseMetadataForm, TrackRowFormSet
 from .services import save_release_track_rows
 
 
@@ -340,6 +341,7 @@ def _require_track_write_permissions(user, rows):
 @permission_required("catalogue.view_release", raise_exception=True)
 def release_detail(request, release_id):
     release = get_object_or_404(Release.objects.select_related("label"), pk=release_id)
+    action = request.POST.get("action", "tracks") if request.method == "POST" else ""
     return_url = _safe_return(request, reverse("gui_v2:release_list"))
     tracks = list(
         release.tracks.select_related("recording")
@@ -348,10 +350,28 @@ def release_detail(request, release_id):
     )
     initial = [_track_initial(track) for track in tracks]
     formset = TrackRowFormSet(
-        request.POST or None, initial=None if request.method == "POST" else initial,
+        request.POST if action == "tracks" else None,
+        initial=None if action == "tracks" else initial,
         form_kwargs={"release": release}, prefix="tracks",
     )
-    if request.method == "POST":
+    track_has_files = {str(track.pk): bool(track.file_assets.all()) for track in tracks}
+    for row_form in formset.forms:
+        row_form.has_files = track_has_files.get(str(row_form["track_id"].value() or ""), False)
+    release_form = ReleaseMetadataForm(
+        request.POST if action == "release" else None, instance=release, prefix="release"
+    )
+    if request.method == "POST" and action == "release":
+        if not settings.GUI_V2_WRITES_ENABLED:
+            raise PermissionDenied("GUI v2 er skrivebeskyttet utenfor den isolerte testdatabasen.")
+        if not request.user.has_perm("catalogue.change_release"):
+            raise PermissionDenied
+        if release_form.is_valid():
+            with transaction.atomic():
+                release_form.save()
+                release_form.save_barcode()
+            messages.success(request, "Utgivelsesopplysningene er lagret.")
+            return redirect(request.get_full_path())
+    elif request.method == "POST":
         if not settings.GUI_V2_WRITES_ENABLED:
             raise PermissionDenied("GUI v2 er skrivebeskyttet utenfor den isolerte testdatabasen.")
         if formset.is_valid():
@@ -366,16 +386,28 @@ def release_detail(request, release_id):
                 messages.success(request, "Sporlisten er lagret samlet.")
                 query = request.POST.get("return_query", "")
                 target = reverse("gui_v2:release_detail", args=[release.pk])
-                return redirect(f"{target}?{query}" if query else target)
+                query = f"{query}&grid_saved=1" if query else "grid_saved=1"
+                return redirect(f"{target}?{query}")
     selected_track_id = request.GET.get("track")
     selected_track = next((item for item in tracks if str(item.pk) == selected_track_id), tracks[0] if tracks else None)
     selected_track_data = _track_initial(selected_track) if selected_track else None
+    release_barcode = release.identifiers.filter(
+        scheme__in=(ExternalIdentifier.Scheme.UPC, ExternalIdentifier.Scheme.EAN, ExternalIdentifier.Scheme.GTIN)
+    ).first()
+    release_artists = []
+    for track_data in initial:
+        artists = track_data["artists"]
+        if artists:
+            release_artists.extend(part.strip() for part in artists.split(";") if part.strip())
+    release_artist_text = ", ".join(dict.fromkeys(release_artists)) or "Uavklart artist"
     return render(
         request,
         "gui_v2/release_tracks.html",
         {
             "section": "releases", "release": release, "tracks": tracks, "formset": formset,
             "selected_track": selected_track, "selected_track_data": selected_track_data,
+            "release_form": release_form, "release_barcode": release_barcode,
+            "release_artist_text": release_artist_text,
             "writes_enabled": settings.GUI_V2_WRITES_ENABLED,
             "return_query": request.GET.urlencode(),
             "return_url": return_url,

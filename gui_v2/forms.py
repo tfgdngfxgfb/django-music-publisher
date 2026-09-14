@@ -1,9 +1,9 @@
 from django import forms
 from django.forms import formset_factory
 
-from catalogue.models import Recording
+from catalogue.models import ExternalIdentifier, Recording, Release
 from catalogue.services import find_recording_candidates
-from catalogue.validators import normalize_isrc
+from catalogue.validators import normalize_isrc, normalize_trade_item_number
 from music_library.models import Channel, MusicLibraryEntry, TargetAudience
 
 
@@ -73,6 +73,89 @@ class MusicLibraryFilterForm(forms.Form):
     target_mode = forms.ChoiceField(
         required=False, choices=MATCH_CHOICES, initial="any", label="Målgruppevalg"
     )
+
+
+class ReleaseMetadataForm(forms.ModelForm):
+    barcode = forms.CharField(
+        required=False,
+        max_length=30,
+        label="Strekkode (UPC/EAN/GTIN)",
+        help_text="8, 12, 13 eller 14 sifre med gyldig kontrollsiffer.",
+    )
+
+    class Meta:
+        model = Release
+        fields = (
+            "title",
+            "release_type",
+            "release_date",
+            "release_year",
+            "label",
+            "catalogue_number",
+            "verification_status",
+            "notes",
+        )
+        widgets = {
+            "release_date": forms.DateInput(attrs={"type": "date"}),
+            "notes": forms.Textarea(attrs={"rows": 3}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk and not self.is_bound:
+            identifier = self.instance.identifiers.filter(
+                scheme__in=(
+                    ExternalIdentifier.Scheme.UPC,
+                    ExternalIdentifier.Scheme.EAN,
+                    ExternalIdentifier.Scheme.GTIN,
+                )
+            ).first()
+            self.initial["barcode"] = identifier.value if identifier else ""
+
+    def clean_barcode(self):
+        value = (self.cleaned_data.get("barcode") or "").strip()
+        if not value:
+            self.barcode_scheme = None
+            self.normalized_barcode = ""
+            return ""
+        digits = value.replace("-", "").replace(" ", "")
+        scheme = {
+            8: ExternalIdentifier.Scheme.EAN,
+            12: ExternalIdentifier.Scheme.UPC,
+            13: ExternalIdentifier.Scheme.EAN,
+            14: ExternalIdentifier.Scheme.GTIN,
+        }.get(len(digits))
+        if not scheme:
+            raise forms.ValidationError("Strekkoden må ha 8, 12, 13 eller 14 sifre.")
+        normalized = normalize_trade_item_number(digits, scheme)
+        conflict = ExternalIdentifier.objects.filter(
+            scheme=scheme, namespace="", normalized_value=normalized
+        ).exclude(release=self.instance).exists()
+        if conflict:
+            raise forms.ValidationError("Strekkoden er allerede knyttet til en annen utgivelse.")
+        self.barcode_scheme = scheme
+        self.normalized_barcode = normalized
+        return value
+
+    def save_barcode(self):
+        identifiers = self.instance.identifiers.filter(
+            scheme__in=(
+                ExternalIdentifier.Scheme.UPC,
+                ExternalIdentifier.Scheme.EAN,
+                ExternalIdentifier.Scheme.GTIN,
+            )
+        )
+        if not self.cleaned_data.get("barcode"):
+            identifiers.delete()
+            return
+        identifier = identifiers.filter(scheme=self.barcode_scheme).first()
+        if identifier is None:
+            identifier = identifiers.first() or ExternalIdentifier(release=self.instance)
+        identifier.scheme = self.barcode_scheme
+        identifier.value = self.cleaned_data["barcode"]
+        identifier.full_clean()
+        identifier.save()
+        identifiers.exclude(pk=identifier.pk).delete()
 
 
 def _parse_duration(value):

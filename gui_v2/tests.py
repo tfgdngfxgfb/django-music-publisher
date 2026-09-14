@@ -10,7 +10,7 @@ from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from mutagen.flac import FLAC
 
-from catalogue.models import Recording, RecordingContribution, Release, ReleaseTrack
+from catalogue.models import ExternalIdentifier, Recording, RecordingContribution, Release, ReleaseTrack
 from managed_music.models import ManagedRecording
 from media_assets.models import FileAsset, FileLocation
 from music_library.models import Channel, MusicLibraryChannel, MusicLibraryEntry
@@ -120,6 +120,85 @@ class GuiV2WorkspaceTests(TestCase):
         response = self.client.post(reverse("gui_v2:release_detail", args=[self.release.pk]), payload)
         self.assertEqual(response.status_code, 302)
         self.assertTrue(self.recording.contributions.filter(role=RecordingContribution.Role.ARRANGER, credited_as="Ada Arrange").exists())
+
+    @override_settings(GUI_V2_WRITES_ENABLED=True)
+    def test_release_metadata_and_barcode_are_edited_in_same_workspace(self):
+        self._superuser()
+        response = self.client.post(
+            reverse("gui_v2:release_detail", args=[self.release.pk]),
+            {
+                "action": "release",
+                "release-title": "Korrigert utgivelse",
+                "release-release_type": Release.Type.CD,
+                "release-release_year": "1998",
+                "release-catalogue_number": "P7-101",
+                "release-verification_status": "confirmed",
+                "release-notes": "Kontrollert mot cover.",
+                "release-barcode": "036000291452",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.release.refresh_from_db()
+        self.assertEqual((self.release.title, self.release.catalogue_number), ("Korrigert utgivelse", "P7-101"))
+        identifier = self.release.identifiers.get()
+        self.assertEqual((identifier.scheme, identifier.normalized_value), (ExternalIdentifier.Scheme.UPC, "036000291452"))
+        identifier_id = identifier.pk
+        response = self.client.post(
+            reverse("gui_v2:release_detail", args=[self.release.pk]),
+            {
+                "action": "release", "release-title": self.release.title,
+                "release-release_type": Release.Type.CD,
+                "release-release_year": "1998", "release-catalogue_number": "P7-101",
+                "release-verification_status": "confirmed", "release-notes": "",
+                "release-barcode": "0 36000 29145 2",
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(self.release.identifiers.get().pk, identifier_id)
+
+    @override_settings(GUI_V2_WRITES_ENABLED=True)
+    def test_release_metadata_write_requires_change_permission(self):
+        self.user.user_permissions.add(
+            Permission.objects.get(content_type__app_label="catalogue", codename="view_release")
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("gui_v2:release_detail", args=[self.release.pk]),
+            {"action": "release", "release-title": "Ikke tillatt"},
+        )
+        self.assertEqual(response.status_code, 403)
+        self.release.refresh_from_db()
+        self.assertEqual(self.release.title, "Testutgivelse")
+
+    @override_settings(GUI_V2_WRITES_ENABLED=True)
+    def test_track_with_linked_file_has_human_deletion_error(self):
+        self._superuser()
+        track = ReleaseTrack.objects.create(
+            release=self.release, recording=self.recording, sequence_number=1
+        )
+        FileAsset.objects.create(
+            recording=self.recording,
+            release_track=track,
+            filename="03 Amazing Grace.flac",
+            role=FileAsset.Role.RADIO_FLAC,
+        )
+        response = self.client.post(
+            reverse("gui_v2:release_detail", args=[self.release.pk]),
+            {
+                "action": "tracks",
+                "tracks-TOTAL_FORMS": "1",
+                "tracks-INITIAL_FORMS": "0",
+                "tracks-MIN_NUM_FORMS": "0",
+                "tracks-MAX_NUM_FORMS": "1000",
+                "tracks-0-track_id": str(track.pk),
+                "tracks-0-sequence_number": "1",
+                "tracks-0-remove": "on",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "03 Amazing Grace.flac")
+        self.assertContains(response, "Koble filen til riktig spor")
+        self.assertTrue(ReleaseTrack.objects.filter(pk=track.pk).exists())
 
     @override_settings(GUI_V2_WRITES_ENABLED=True)
     def test_invalid_grid_preserves_entered_data_and_creates_nothing(self):

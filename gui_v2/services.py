@@ -64,6 +64,16 @@ def save_release_track_rows(*, release, rows):
             track = existing.get(str(row.get("track_id") or ""))
             if row.get("remove"):
                 if track:
+                    linked_files = list(track.file_assets.values_list("filename", flat=True)[:4])
+                    if linked_files:
+                        filenames = ", ".join(f"«{name}»" for name in linked_files)
+                        if track.file_assets.count() > len(linked_files):
+                            filenames += " og flere"
+                        raise ValidationError(
+                            "Sporet kan ikke fjernes fordi radiofilen "
+                            f"{filenames} er knyttet til denne sporforekomsten. "
+                            "Koble filen til riktig spor eller fjern filkoblingen først."
+                        )
                     track.delete()
                 continue
 

@@ -22,6 +22,17 @@ Musikkarkiv-tabellen støtter pil opp/ned, Enter for full visning og Escape for 
 lukke detaljpanelet. Søk, filtre, sortering, side og valgt rad følger eksplisitte
 returlenker fra innspillings- og utgivelsesdetaljer.
 
+Utgivelsessiden kan redigere utgivelsens katalogopplysninger og strekkode i et
+kompakt panel. Hovedartist vises avledet fra sporenes artistkrediteringer; dagens
+kanoniske `Release` har ingen egen hovedartistrelasjon.
+
+Sportabellen støtter piltaster, `Enter`, `Tab`/`Shift+Tab`, flercelleinnliming,
+`Ctrl+Z`, `Ctrl+D` (fyll ned) og `Ctrl+Enter` (lagre). Den kan sette inn,
+duplisere, flytte og renummerere rader. Ulagrede endringer lagres lokalt i
+nettleseren per utgivelse og kan gjenopprettes; databasen endres først når
+«Lagre sporlisten» brukes. Kontrollkolonnen viser konkrete mangler og kan
+filtrere listen til spor som trenger arbeid.
+
 ## Starte prøveområdet
 
 ```powershell
