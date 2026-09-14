@@ -85,7 +85,7 @@ class FlacAdapterTests(FlacTestMixin, TestCase):
         self.assertEqual(snapshot.technical["sample_rate"], 44100)
         self.assertEqual(snapshot.technical["bits_per_sample"], 16)
         self.assertEqual(snapshot.technical["channels"], 1)
-        self.assertEqual(snapshot.technical["tag_adapter_version"], 2)
+        self.assertEqual(snapshot.technical["tag_adapter_version"], 3)
 
     def test_onetagger_percentage_rating_maps_to_p7_energy(self):
         for raw_rating, expected_energy in (
@@ -130,8 +130,10 @@ class FlacAdapterTests(FlacTestMixin, TestCase):
         self.assertEqual(
             snapshot.parsed["channels"], ["P7 Evangelisk", "P7 Riks"]
         )
+        self.assertEqual(
+            snapshot.parsed["rotation_suitability"], "not_suitable"
+        )
         self.assertEqual(snapshot.raw_tags["comment"], comments)
-        self.assertNotIn("Rotasjon", snapshot.parsed)
 
     def test_onetagger_african_languages_group_is_preserved(self):
         path = self.make_flac(
@@ -246,6 +248,7 @@ class FlacIngestTests(FlacTestMixin, TestCase):
             RATING="3",
             KANAL=["P7 Riks", "P7 Ung"],
             TARGET=["Ung voksen", "Voksen"],
+            COMMENT="TXXX:Rotasjon - Ikke Rotasjonsverdig",
             X_UNKNOWN="bevares",
         )
         batch = self.scan()
@@ -270,6 +273,7 @@ class FlacIngestTests(FlacTestMixin, TestCase):
         )
         entry = recording.music_library_entry
         self.assertEqual(entry.energy, 3)
+        self.assertEqual(entry.rotation_suitability, "not_suitable")
         self.assertEqual(entry.verification_status, VerificationStatus.CONFIRMED)
         self.assertEqual(
             set(entry.channels.values_list("name", flat=True)), {"P7 Riks", "P7 Ung"}

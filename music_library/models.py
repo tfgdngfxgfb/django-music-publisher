@@ -56,6 +56,10 @@ class MusicLibraryEntry(CanonicalModel):
         INSTRUMENTAL = "instrumental", "Instrumental"
         OTHER = "other", "Annet / ikke relevant"
 
+    class RotationSuitability(models.TextChoices):
+        SUITABLE = "suitable", "Rotasjonsverdig"
+        NOT_SUITABLE = "not_suitable", "Ikke rotasjonsverdig"
+
     recording = models.OneToOneField(
         Recording,
         verbose_name="innspilling",
@@ -88,6 +92,16 @@ class MusicLibraryEntry(CanonicalModel):
         null=True,
         blank=True,
         help_text="P7s energinivå 1–5. Leses fra FLAC-taggen RATING.",
+    )
+    rotation_suitability = models.CharField(
+        "rotasjonsvurdering",
+        max_length=20,
+        choices=RotationSuitability.choices,
+        blank=True,
+        help_text=(
+            "Lokal vurdering av om innspillingen er egnet for rotasjon. "
+            "Leses fra OneTagger/FLAC-feltet Rotasjon."
+        ),
     )
     verification_status = models.CharField(
         "verifikasjonsstatus",

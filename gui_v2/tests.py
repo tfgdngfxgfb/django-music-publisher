@@ -62,11 +62,14 @@ class GuiV2WorkspaceTests(TestCase):
 
     def test_library_and_grid_render_keyboard_workbench(self):
         self._superuser()
+        self.entry.rotation_suitability = MusicLibraryEntry.RotationSuitability.NOT_SUITABLE
+        self.entry.save(update_fields=("rotation_suitability",))
         library = self.client.get(reverse("gui_v2:music_library"), {"genre": "Pop"})
         self.assertContains(library, "Sjanger: Pop")
         self.assertContains(library, "data-row-href")
         self.assertContains(library, "data-library-row")
         self.assertContains(library, "Krever oppfølging")
+        self.assertContains(library, "Ikke rotasjonsverdig")
         self.assertNotContains(library, 'id="v2-inspector"')
         grid = self.client.get(reverse("gui_v2:release_detail", args=[self.release.pk]))
         self.assertContains(grid, 'role="grid"')
@@ -376,6 +379,7 @@ class GuiV2WorkspaceTests(TestCase):
             path = Path(root) / "radio/test.flac"
             audio = FLAC(path)
             audio["KANAL"] = "P7 Test"
+            audio["COMMENT"] = "TXXX:Rotasjon - Ikke Rotasjonsverdig"
             audio.save()
             response = self.client.post(
                 reverse("gui_v2:rescan_library_file", args=[self.entry.pk, asset.pk]),
@@ -385,6 +389,10 @@ class GuiV2WorkspaceTests(TestCase):
             self.recording.refresh_from_db(); self.entry.refresh_from_db()
             self.assertEqual(self.recording.title, "Tittel fra FLAC")
             self.assertEqual((self.entry.genre, self.entry.energy), ("Rock", 5))
+            self.assertEqual(
+                self.entry.rotation_suitability,
+                MusicLibraryEntry.RotationSuitability.NOT_SUITABLE,
+            )
             self.assertEqual(list(self.entry.channels.all()), [self.channel])
 
             # Removing authoritative radio tags in OneTagger/FLAC removes the
@@ -392,6 +400,7 @@ class GuiV2WorkspaceTests(TestCase):
             audio = FLAC(path)
             del audio["KANAL"]
             del audio["GENRE"]
+            del audio["COMMENT"]
             audio.save()
             response = self.client.post(
                 reverse("gui_v2:rescan_library_file", args=[self.entry.pk, asset.pk]),
@@ -400,6 +409,7 @@ class GuiV2WorkspaceTests(TestCase):
             self.assertEqual(response.status_code, 302)
             self.entry.refresh_from_db()
             self.assertEqual(self.entry.genre, "")
+            self.assertEqual(self.entry.rotation_suitability, "")
             self.assertFalse(self.entry.channels.exists())
 
             # A later explicit re-read must also repair stale relations left by

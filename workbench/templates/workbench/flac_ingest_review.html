@@ -21,6 +21,7 @@
       <p><span>TITLE</span>{{ item.parsed_metadata.title|default:"Ikke registrert" }}</p>
       <p><span>ARTIST</span>{{ item.parsed_metadata.artists|join:", "|default:"Ikke registrert" }}</p>
       <p><span>ISRC</span>{{ item.parsed_metadata.isrc|default:"Ikke registrert" }}</p>
+      <p><span>ROTASJON</span>{% if item.parsed_metadata.rotation_suitability == 'not_suitable' %}Ikke rotasjonsverdig{% elif item.parsed_metadata.rotation_suitability == 'suitable' %}Rotasjonsverdig{% elif item.parsed_metadata.rotation_suitability_invalid %}{{ item.parsed_metadata.rotation_suitability_invalid }}{% else %}Ikke vurdert{% endif %}</p>
       <details><summary>Vis alle råtags</summary><dl class="raw-tag-list">{% for key, values in item.raw_tags.items %}<dt>{{ key }}</dt><dd>{{ values|join:", " }}</dd>{% endfor %}</dl></details>
     </section>
   </aside>

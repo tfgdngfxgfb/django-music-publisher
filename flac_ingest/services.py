@@ -398,6 +398,8 @@ def _metadata_errors(parsed):
         errors.append("RATING må være et Energy-nivå fra 1 til 5.")
     if parsed.get("gender_invalid"):
         errors.append("GENDER har en ukjent kontrollert verdi.")
+    if parsed.get("rotation_suitability_invalid"):
+        errors.append("ROTASJON har en ukjent kontrollert verdi.")
     return errors
 
 
@@ -1264,6 +1266,7 @@ def apply_item(item, *, user):
         "language": parsed.get("language"),
         "energy": parsed.get("energy"),
         "gender": parsed.get("gender"),
+        "rotation_suitability": parsed.get("rotation_suitability"),
     }
     for field, after in scalar_fields.items():
         if field not in parsed and not existing_file_refresh:

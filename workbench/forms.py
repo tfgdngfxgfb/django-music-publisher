@@ -168,6 +168,7 @@ class RadioMetadataForm(forms.ModelForm):
             "language",
             "gender",
             "energy",
+            "rotation_suitability",
             "channels",
             "target_audiences",
             "verification_status",
@@ -279,6 +280,14 @@ class FlacIngestReviewForm(forms.Form):
         required=False,
         choices=(("", "Ikke registrert"), *MusicLibraryEntry.Gender.choices),
     )
+    rotation_suitability = forms.ChoiceField(
+        label="Rotasjonsvurdering",
+        required=False,
+        choices=(
+            ("", "Ikke vurdert"),
+            *MusicLibraryEntry.RotationSuitability.choices,
+        ),
+    )
     review_note = forms.CharField(
         label="Kontrollmerknad",
         required=False,
@@ -325,6 +334,7 @@ class FlacIngestReviewForm(forms.Form):
                 "channels": "; ".join(parsed.get("channels", [])),
                 "target_audiences": "; ".join(parsed.get("target_audiences", [])),
                 "gender": parsed.get("gender", ""),
+                "rotation_suitability": parsed.get("rotation_suitability", ""),
             }
         )
 
@@ -356,6 +366,7 @@ class FlacIngestReviewForm(forms.Form):
             "channels": self._values(self.cleaned_data["channels"]),
             "target_audiences": self._values(self.cleaned_data["target_audiences"]),
             "gender": self.cleaned_data["gender"],
+            "rotation_suitability": self.cleaned_data["rotation_suitability"],
         }
         for field, value in optional_values.items():
             if value:
@@ -370,6 +381,7 @@ class FlacIngestReviewForm(forms.Form):
                 parsed[field] = str(value) if field == "p7uuid" else value
         parsed.pop("energy_invalid", None)
         parsed.pop("gender_invalid", None)
+        parsed.pop("rotation_suitability_invalid", None)
         parsed.pop("p7uuid_invalid", None)
         return parsed
 

@@ -115,7 +115,7 @@ def music_library(request):
                 | Q(recording__contributions__credited_as__icontains=term)
                 | Q(recording__identifiers__normalized_value__icontains=term)
             )
-        for field in ("genre", "language", "energy", "gender"):
+        for field in ("genre", "language", "energy", "gender", "rotation_suitability"):
             if data.get(field) not in (None, ""):
                 queryset = queryset.filter(**{field: data[field]})
         if data.get("managed") == "yes":
@@ -156,7 +156,8 @@ def music_library(request):
         queryset = queryset.order_by(*ordering)
         simple_labels = {
             "q": "Søk", "genre": "Sjanger", "language": "Språk", "energy": "Energy",
-            "gender": "Vokal", "file_status": "Filstatus", "managed": "Forvaltning",
+            "gender": "Vokal", "rotation_suitability": "Rotasjon",
+            "file_status": "Filstatus", "managed": "Forvaltning",
             "follow_up": "Oppfølging", "ordering": "Sortering",
         }
         for name, label in simple_labels.items():
@@ -253,6 +254,7 @@ def rescan_library_file(request, entry_id, asset_id):
     before_radio = {
         "radiosjanger": entry.genre, "radiospråk": entry.language, "Energy": entry.energy,
         "vokalklassifisering": entry.gender,
+        "rotasjonsvurdering": entry.rotation_suitability,
         "kanaler": tuple(entry.channels.values_list("name", flat=True).order_by("name")),
         "målgrupper": tuple(entry.target_audiences.values_list("name", flat=True).order_by("name")),
     }
@@ -275,6 +277,7 @@ def rescan_library_file(request, entry_id, asset_id):
             after_radio = {
                 "radiosjanger": entry.genre, "radiospråk": entry.language, "Energy": entry.energy,
                 "vokalklassifisering": entry.gender,
+                "rotasjonsvurdering": entry.rotation_suitability,
                 "kanaler": tuple(entry.channels.values_list("name", flat=True).order_by("name")),
                 "målgrupper": tuple(entry.target_audiences.values_list("name", flat=True).order_by("name")),
             }

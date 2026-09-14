@@ -7,7 +7,9 @@
 - Forvaltet eller bekreftet lokalt eid musikk bruker databasen som autoritet
   for katalogmetadata. Avvik i filen overskriver ikke katalogen.
 - FLAC/OneTagger-arbeidsflyten er alltid autoritet for radiosjanger,
-  radiospråk, Energy, kanal, målgruppe og kjønn. `RATING` betyr P7 Energy.
+  radiospråk, Energy, kanal, målgruppe, kjønn og lokal rotasjonsvurdering.
+  `TXXX:Rotasjon - Ikke Rotasjonsverdig` betyr at lokal organisasjon har
+  vurdert innspillingen som uegnet for rotasjon. `RATING` betyr P7 Energy.
   Både direkteverdier `1–5` og OneTaggers lagring `20/40/60/80/100` tolkes
   som Energy `1–5`.
 - Writeback har en eksplisitt allowlist for katalogtags. Radiotags og ukjente
@@ -17,7 +19,7 @@
 OneTagger-representasjon ute av domenemodellen. Alle rå Vorbis Comments og
 tekniske lyddata lagres i `SourceRecord.raw_payload`. StationPlaylist-verdier
 som ligger som `TXXX:<felt> - <verdi>` i `COMMENT`, oversettes i adapteren til
-språk, kanal, målgruppe og kjønn uten å endre råverdiene. Adapterversjonen
+språk, kanal, målgruppe, kjønn og rotasjonsvurdering uten å endre råverdiene. Adapterversjonen
 lagres med tekniske metadata, slik at en ny skanning kan behandle tidligere
 innleste filer på nytt når tolkningen forbedres.
 

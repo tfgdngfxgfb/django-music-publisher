@@ -43,6 +43,7 @@ class MusicLibraryEntryAdmin(CanonicalAdmin):
         "genre",
         "language",
         "energy",
+        "rotation_suitability",
         "verification_status",
         "is_managed",
     )
@@ -53,6 +54,7 @@ class MusicLibraryEntryAdmin(CanonicalAdmin):
         "language",
         "gender",
         "energy",
+        "rotation_suitability",
     )
     search_fields = (
         "recording__title",

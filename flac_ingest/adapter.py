@@ -10,7 +10,7 @@ from uuid import UUID
 from mutagen import MutagenError
 from mutagen.flac import FLAC, FLACNoHeaderError
 
-TAG_ADAPTER_VERSION = 2
+TAG_ADAPTER_VERSION = 3
 
 TAG_ALIASES = {
     "title": ("TITLE",),
@@ -39,6 +39,7 @@ TAG_ALIASES = {
     "channels": ("KANAL", "CHANNEL", "CHANNELS"),
     "target_audiences": ("TARGET", "TARGETAUDIENCE", "MÅLGRUPPE"),
     "gender": ("GENDER",),
+    "rotation_suitability": ("ROTATION", "ROTASJON"),
 }
 
 RADIO_FIELDS = {
@@ -48,6 +49,7 @@ RADIO_FIELDS = {
     "channels",
     "target_audiences",
     "gender",
+    "rotation_suitability",
 }
 CATALOGUE_WRITE_TAGS = {
     "TITLE",
@@ -76,6 +78,7 @@ COMMENT_TXXX_ALIASES = {
     "malgruppe": "TARGET",
     "gender": "GENDER",
     "kjonn": "GENDER",
+    "rotasjon": "ROTATION",
 }
 
 LANGUAGE_NAMES = {
@@ -200,6 +203,14 @@ def _gender(value):
     }.get(value.casefold())
 
 
+def _rotation_suitability(value):
+    normalized = _normalized_label(value)
+    return {
+        "rotasjonsverdig": "suitable",
+        "ikkerotasjonsverdig": "not_suitable",
+    }.get(normalized)
+
+
 def _language(value):
     return LANGUAGE_NAMES.get(value.casefold(), value)
 
@@ -257,6 +268,13 @@ def read_flac(path):
                 parsed["gender_invalid"] = value
             else:
                 parsed[field] = gender or ""
+        elif field == "rotation_suitability":
+            value = _first(values)
+            suitability = _rotation_suitability(value)
+            if value and suitability is None:
+                parsed["rotation_suitability_invalid"] = value
+            else:
+                parsed[field] = suitability or ""
         elif field == "language":
             parsed[field] = _language(_first(values))
         else:

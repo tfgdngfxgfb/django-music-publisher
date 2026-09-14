@@ -25,6 +25,11 @@ class MusicLibraryFilterForm(forms.Form):
         choices=(("", "Alle"), *MusicLibraryEntry.Gender.choices),
         label="Vokalklassifisering",
     )
+    rotation_suitability = forms.ChoiceField(
+        required=False,
+        choices=(("", "Alle"), *MusicLibraryEntry.RotationSuitability.choices),
+        label="Rotasjonsvurdering",
+    )
     file_status = forms.ChoiceField(
         required=False,
         choices=(
