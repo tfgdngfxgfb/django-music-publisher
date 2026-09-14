@@ -112,5 +112,6 @@ def save_release_track_rows(*, release, rows):
                 _replace_credits(recording, RecordingContribution.Role.PRIMARY, row.get("artists"))
                 _replace_credits(recording, RecordingContribution.Role.COMPOSER, row.get("composers"))
                 _replace_credits(recording, RecordingContribution.Role.LYRICIST, row.get("lyricists"))
+                _replace_credits(recording, RecordingContribution.Role.ARRANGER, row.get("arrangers"))
             saved.append(track)
         return saved

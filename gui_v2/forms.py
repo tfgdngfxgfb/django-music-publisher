@@ -87,9 +87,10 @@ class TrackRowForm(forms.Form):
     artists = forms.CharField(max_length=1000, required=False, label="Artister")
     composers = forms.CharField(max_length=1000, required=False, label="Komponister")
     lyricists = forms.CharField(max_length=1000, required=False, label="Tekstforfattere")
+    arrangers = forms.CharField(max_length=1000, required=False, label="Arrangører")
     duration = forms.CharField(max_length=12, required=False, label="Varighet")
     isrc = forms.CharField(max_length=30, required=False, label="ISRC")
-    force_create = forms.BooleanField(required=False, label="Opprett ny likevel")
+    force_create = forms.BooleanField(required=False, widget=forms.HiddenInput)
     update_shared_recording = forms.BooleanField(
         required=False, label="Oppdater den felles innspillingen"
     )

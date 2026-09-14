@@ -7,7 +7,7 @@ from django.contrib.auth.models import Permission
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
-from catalogue.models import Recording, Release, ReleaseTrack
+from catalogue.models import Recording, RecordingContribution, Release, ReleaseTrack
 from media_assets.models import FileAsset
 from music_library.models import Channel, MusicLibraryChannel, MusicLibraryEntry
 
@@ -54,6 +54,25 @@ class GuiV2WorkspaceTests(TestCase):
         response = self.client.get(reverse("gui_v2:music_library"), {"channels": [self.channel.pk, other.pk], "channel_mode": "all"})
         self.assertContains(response, "Ingen innspillinger passer")
 
+    def test_library_and_grid_render_keyboard_workbench(self):
+        self._superuser()
+        library = self.client.get(reverse("gui_v2:music_library"), {"genre": "Pop"})
+        self.assertContains(library, "Sjanger: Pop")
+        grid = self.client.get(reverse("gui_v2:release_detail", args=[self.release.pk]))
+        self.assertContains(grid, 'role="grid"')
+        self.assertContains(grid, 'data-field="recording_title"')
+
+    def test_recording_search_matches_credited_artist(self):
+        RecordingContribution.objects.create(
+            recording=self.recording,
+            role=RecordingContribution.Role.PRIMARY,
+            credited_as="Signalverket",
+        )
+        self._superuser()
+        response = self.client.get(reverse("gui_v2:recording_search"), {"q": "Signal"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["results"][0]["id"], str(self.recording.pk))
+
     @override_settings(GUI_V2_WRITES_ENABLED=False)
     def test_writes_are_blocked_outside_isolated_mode(self):
         self._superuser()
@@ -70,6 +89,7 @@ class GuiV2WorkspaceTests(TestCase):
             "tracks-0-sequence_number": "1", "tracks-0-disc_number": "1", "tracks-0-side": "A", "tracks-0-track_number": "1",
             "tracks-0-title_override": "Utgivelsestittel", "tracks-0-recording_id": str(self.recording.pk),
             "tracks-0-recording_title": self.recording.title, "tracks-0-artists": "", "tracks-0-composers": "", "tracks-0-lyricists": "", "tracks-0-duration": "03:12", "tracks-0-isrc": "",
+            "tracks-0-arrangers": "",
         }
         response = self.client.post(reverse("gui_v2:release_detail", args=[self.release.pk]), payload)
         self.assertEqual(response.status_code, 302)
@@ -78,6 +98,20 @@ class GuiV2WorkspaceTests(TestCase):
         self.assertEqual(track.duration_ms, 192000)
         asset.refresh_from_db()
         self.assertEqual(asset.sync_status, FileAsset.SyncStatus.SYNCED)
+
+    @override_settings(GUI_V2_WRITES_ENABLED=True)
+    def test_grid_saves_arranger_as_recording_credit(self):
+        self._superuser()
+        payload = {
+            "tracks-TOTAL_FORMS": "1", "tracks-INITIAL_FORMS": "0",
+            "tracks-MIN_NUM_FORMS": "0", "tracks-MAX_NUM_FORMS": "1000",
+            "tracks-0-sequence_number": "1", "tracks-0-recording_id": str(self.recording.pk),
+            "tracks-0-recording_title": self.recording.title, "tracks-0-arrangers": "Ada Arrange",
+            "tracks-0-update_shared_recording": "on",
+        }
+        response = self.client.post(reverse("gui_v2:release_detail", args=[self.release.pk]), payload)
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(self.recording.contributions.filter(role=RecordingContribution.Role.ARRANGER, credited_as="Ada Arrange").exists())
 
     @override_settings(GUI_V2_WRITES_ENABLED=True)
     def test_invalid_grid_preserves_entered_data_and_creates_nothing(self):

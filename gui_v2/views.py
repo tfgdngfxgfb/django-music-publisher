@@ -52,6 +52,7 @@ def home(request):
 @permission_required("music_library.view_musiclibraryentry", raise_exception=True)
 def music_library(request):
     form = MusicLibraryFilterForm(request.GET or None)
+    active_filters = []
     artist_prefetch = Prefetch(
         "recording__contributions",
         queryset=RecordingContribution.objects.select_related("artist_identity", "party").order_by("display_order"),
@@ -99,6 +100,20 @@ def music_library(request):
             queryset = queryset.filter(radio, recording__file_assets__sync_status__in=["conflict", "failed", "missing"])
         elif file_status == "none":
             queryset = queryset.exclude(radio)
+        simple_labels = {
+            "q": "Søk", "genre": "Sjanger", "language": "Språk", "energy": "Energy",
+            "gender": "Vokal", "file_status": "Filstatus", "managed": "Forvaltning",
+        }
+        for name, label in simple_labels.items():
+            value = data.get(name)
+            if value not in (None, ""):
+                display = dict(form.fields[name].choices).get(value, value) if hasattr(form.fields[name], "choices") else value
+                active_filters.append({"label": f"{label}: {display}", "query": _query_without(request, name, "page")})
+        for name, mode, label in (("channels", "channel_mode", "Kanal"), ("target_audiences", "target_mode", "Målgruppe")):
+            values = data.get(name) or []
+            if values:
+                qualifier = "alle" if data.get(mode) == "all" else "minst én"
+                active_filters.append({"label": f"{label} ({qualifier}): {', '.join(str(value) for value in values)}", "query": _query_without(request, name, mode, "page")})
     queryset = queryset.distinct()
     page = Paginator(queryset, 40).get_page(request.GET.get("page"))
     for entry in page.object_list:
@@ -107,6 +122,19 @@ def music_library(request):
         entry.duration_text = _duration(entry.recording.duration_ms)
         entry.radio_files = [item for item in entry.recording.file_assets.all() if item.role == FileAsset.Role.RADIO_FLAC]
         entry.is_managed = hasattr(entry, "managed_recording")
+        entry.last_read_at = max((item.metadata_read_at for item in entry.radio_files if item.metadata_read_at), default=None)
+        if not entry.radio_files:
+            entry.file_status_text = "Ingen radiofil"
+            entry.file_status_kind = "muted"
+        elif any(location.status == "active" for item in entry.radio_files for location in item.locations.all()):
+            entry.file_status_text = "Tilgjengelig"
+            entry.file_status_kind = "ok"
+        elif any(item.sync_status in {"failed", "conflict", "missing"} for item in entry.radio_files):
+            entry.file_status_text = entry.radio_files[0].get_sync_status_display()
+            entry.file_status_kind = "error"
+        else:
+            entry.file_status_text = "Ikke kontrollert"
+            entry.file_status_kind = "muted"
 
     selected_id = request.GET.get("selected")
     selected = next((item for item in page.object_list if str(item.pk) == selected_id), None)
@@ -124,6 +152,7 @@ def music_library(request):
             "section": "music_library", "filter_form": form, "page": page, "selected": selected,
             "query_without_page": _query_without(request, "page"),
             "query_without_selected": _query_without(request, "selected"),
+            "active_filters": active_filters,
             "writes_enabled": settings.GUI_V2_WRITES_ENABLED,
         },
     )
@@ -154,6 +183,7 @@ def _track_initial(track):
         "artists": credits(RecordingContribution.Role.PRIMARY),
         "composers": credits(RecordingContribution.Role.COMPOSER),
         "lyricists": credits(RecordingContribution.Role.LYRICIST),
+        "arrangers": credits(RecordingContribution.Role.ARRANGER),
         "duration": _duration(track.duration_ms or track.recording.duration_ms), "isrc": isrc,
     }
 
@@ -223,7 +253,11 @@ def recording_search(request):
     q = request.GET.get("q", "").strip()
     if len(q) < 2:
         return JsonResponse({"results": []})
-    queryset = Recording.objects.filter(Q(title__icontains=q) | Q(identifiers__normalized_value__icontains=q)).prefetch_related("contributions", "identifiers").distinct()[:12]
+    queryset = Recording.objects.filter(
+        Q(title__icontains=q)
+        | Q(identifiers__normalized_value__icontains=q)
+        | Q(contributions__credited_as__icontains=q)
+    ).prefetch_related("contributions", "identifiers").distinct()[:12]
     return JsonResponse({"results": [{
         "id": str(item.pk), "title": item.title, "artist": _artist_text(item),
         "isrc": next((identifier.normalized_value for identifier in item.identifiers.all() if identifier.scheme == ExternalIdentifier.Scheme.ISRC), ""),
