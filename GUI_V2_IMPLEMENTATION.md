@@ -20,6 +20,13 @@ cellefeil, ulagret-status og dobbeltsendingsvern. Hele sporlisten lagres i én
 transaksjon. ReleaseTrack-felt og felles Recording-metadata holdes atskilt;
 felles metadata krever `Oppdater felles`.
 
+Sportabellen er keyboard-first: `Tab` går mellom felt, `Enter` og
+`Shift+Enter` går til samme kolonne på neste eller forrige rad, `Ctrl` +
+piltaster beveger seg i rutenettet, `Ctrl+Shift+N` oppretter en rad og
+`Ctrl+Enter` lagrer. Snarveiene vises i arbeidsflaten. Aktiv rad oppdaterer
+sporinspektøren, og detaljpanelene kan lukkes, åpnes og breddejusteres med mus
+eller tastatur.
+
 Avspillingsfeltet er synlig, men deaktivert fordi prosjektet ikke har en trygg
 avspillingsbackend. Det står derfor eksplisitt `Avspilling ikke tilkoblet`.
 
@@ -45,7 +52,8 @@ filer i testdataene er kun databaseposter.
 - faktisk nettleserprøve: innlogging, søk + kanalfilter, valg/detaljpanel,
   overgang til utgivelse, TSV-innliming, ugyldig varighet, bevart rad,
   korrigering og atomisk lagring. Mørkt og lyst tema, smalere bredde,
-  paneltabber/lukking og konsolllogg ble kontrollert.
+  paneltabber/lukking, breddejustering og tastaturnavigasjon i sporgrid ble
+  kontrollert.
 - original FLAC-mappe: manifest før/etter var identisk.
 - isolert GUI-v2-filrot: 0 filer etter lagringsprøven.
 

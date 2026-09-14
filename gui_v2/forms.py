@@ -99,6 +99,9 @@ class TrackRowForm(forms.Form):
         self.release = release
         self.duplicate_candidates = ()
         super().__init__(*args, **kwargs)
+        for name, field in self.fields.items():
+            if not isinstance(field.widget, forms.HiddenInput):
+                field.widget.attrs.setdefault("aria-label", field.label)
 
     def clean_recording_id(self):
         value = self.cleaned_data.get("recording_id")

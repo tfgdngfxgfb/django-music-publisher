@@ -14,13 +14,29 @@
   }));
 
   const inspector = document.querySelector("#v2-inspector");
+  const layout = inspector?.parentElement;
+  const inspectorOpeners = document.querySelectorAll("[data-open-inspector]");
+  const setInspector = open => {
+    if (!inspector) return;
+    inspector.hidden = !open;
+    layout?.classList.toggle("inspector-closed", !open);
+    inspectorOpeners.forEach(button => { button.hidden = open; });
+  };
   document.querySelector("[data-close-inspector]")?.addEventListener("click", () => {
-    inspector.hidden = true; sessionStorage.setItem("p7-v2-inspector", "closed");
+    setInspector(false);
   });
+  inspectorOpeners.forEach(button => button.addEventListener("click", () => setInspector(true)));
   document.querySelectorAll("[data-tab]").forEach(button => button.addEventListener("click", () => {
     document.querySelectorAll("[data-tab]").forEach(item => item.setAttribute("aria-selected", String(item === button)));
     document.querySelectorAll("[data-panel]").forEach(panel => { panel.hidden = panel.dataset.panel !== button.dataset.tab; });
   }));
+  document.querySelector(".tabs")?.addEventListener("keydown", event => {
+    if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+    const tabs = [...event.currentTarget.querySelectorAll("[data-tab]")];
+    const current = tabs.indexOf(document.activeElement);
+    const next = (current + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
+    event.preventDefault(); tabs[next].focus(); tabs[next].click();
+  });
   const handle = inspector?.querySelector(".resize-handle");
   handle?.addEventListener("pointerdown", event => {
     event.preventDefault(); handle.setPointerCapture(event.pointerId);
@@ -31,8 +47,24 @@
     handle.addEventListener("pointermove", move);
     handle.addEventListener("pointerup", () => handle.removeEventListener("pointermove", move), {once:true});
   });
+  handle?.addEventListener("keydown", event => {
+    if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+    const current = parseInt(getComputedStyle(root).getPropertyValue("--inspector"), 10) || 360;
+    const width = Math.max(300, Math.min(560, current + (event.key === "ArrowLeft" ? 16 : -16)));
+    root.style.setProperty("--inspector", `${width}px`);
+    localStorage.setItem("p7-v2-inspector-width", width);
+    event.preventDefault();
+  });
   const storedWidth = localStorage.getItem("p7-v2-inspector-width");
   if (storedWidth) root.style.setProperty("--inspector", `${storedWidth}px`);
+
+  const filterToggle = document.querySelector("[data-collapse='filters']");
+  filterToggle?.addEventListener("click", () => {
+    const page = filterToggle.closest(".archive-layout");
+    const closed = page.classList.toggle("filters-closed");
+    filterToggle.textContent = closed ? "›" : "‹";
+    filterToggle.setAttribute("aria-label", closed ? "Vis filtre" : "Skjul filtre");
+  });
 
   const scrollKey = `p7-v2-scroll:${location.pathname}${location.search.replace(/([?&])selected=[^&]*/, "$1")}`;
   const scroller = document.querySelector(".table-scroll");
@@ -54,6 +86,21 @@
   };
   body.addEventListener("input", event => markDirty(event.target.closest("tr")));
   body.addEventListener("change", event => markDirty(event.target.closest("tr")));
+  const updateTrackInspector = row => {
+    if (!row) return;
+    const index = row.dataset.index;
+    const value = name => row.querySelector(`[name='tracks-${index}-${name}']`)?.value || "";
+    document.querySelectorAll(".track-row.active").forEach(item => item.classList.remove("active"));
+    row.classList.add("active");
+    const releaseTitle = value("title_override"), recordingTitle = value("recording_title");
+    document.querySelector("#inspector-track-title")?.replaceChildren(releaseTitle || recordingTitle || "Nytt spor");
+    document.querySelector("#inspector-common-title")?.replaceChildren(recordingTitle || "Ikke valgt");
+    document.querySelector("#inspector-position")?.replaceChildren(`${value("disc_number") ? `Plate ${value("disc_number")} · ` : ""}${value("side")}${value("track_number") || value("sequence_number")}`);
+    document.querySelector("#inspector-artist")?.replaceChildren(value("artists") || "Uavklart");
+    document.querySelector("#inspector-isrc")?.replaceChildren(value("isrc") || "Ikke registrert");
+  };
+  body.addEventListener("focusin", event => updateTrackInspector(event.target.closest("tr")));
+  body.addEventListener("click", event => updateTrackInspector(event.target.closest("tr")));
 
   function addRow(values = []) {
     const index = Number(total.value); const fragment = template.content.cloneNode(true);
@@ -81,9 +128,32 @@
     form.dataset.submitting="true"; form.querySelector("button[type=submit]").disabled=true;
   });
   body.addEventListener("keydown", event => {
-    if (event.key !== "Enter" || event.target.tagName !== "INPUT") return;
-    event.preventDefault(); const row = event.target.closest("tr"); const inputs = [...row.querySelectorAll("input:not([type=hidden]):not([type=checkbox])")];
-    const column = inputs.indexOf(event.target); const next = row.nextElementSibling || addRow(); const nextInputs=[...next.querySelectorAll("input:not([type=hidden]):not([type=checkbox])")]; nextInputs[column]?.focus();
+    if (event.target.tagName !== "INPUT") return;
+    const row = event.target.closest("tr");
+    const inputs = [...row.querySelectorAll("input:not([type=hidden]):not([type=checkbox])")];
+    const column = inputs.indexOf(event.target);
+    if (event.ctrlKey && event.key === "Enter") {
+      event.preventDefault(); form.requestSubmit(); return;
+    }
+    if (event.ctrlKey && ["ArrowLeft", "ArrowRight"].includes(event.key)) {
+      event.preventDefault(); inputs[column + (event.key === "ArrowRight" ? 1 : -1)]?.focus(); return;
+    }
+    if ((event.ctrlKey && ["ArrowUp", "ArrowDown"].includes(event.key)) || event.key === "Enter") {
+      event.preventDefault();
+      let targetRow;
+      if (event.key === "ArrowUp" || (event.key === "Enter" && event.shiftKey)) targetRow = row.previousElementSibling;
+      else targetRow = row.nextElementSibling || addRow();
+      const targetInputs = targetRow ? [...targetRow.querySelectorAll("input:not([type=hidden]):not([type=checkbox])")] : [];
+      targetInputs[column]?.focus();
+    }
+  });
+  document.addEventListener("keydown", event => {
+    if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "n") {
+      event.preventDefault(); addRow().querySelector("input:not([type=hidden])")?.focus(); return;
+    }
+    if (event.key !== "Escape") return;
+    document.querySelectorAll(".search-results").forEach(result => { result.hidden = true; });
+    if (pastePanel && !pastePanel.hidden) pastePanel.hidden = true;
   });
   body.addEventListener("click", async event => {
     const existing = event.target.closest("[data-use-recording]");

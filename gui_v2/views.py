@@ -203,12 +203,14 @@ def release_detail(request, release_id):
                 return redirect(f"{target}?{query}" if query else target)
     selected_track_id = request.GET.get("track")
     selected_track = next((item for item in tracks if str(item.pk) == selected_track_id), tracks[0] if tracks else None)
+    selected_track_data = _track_initial(selected_track) if selected_track else None
     return render(
         request,
         "gui_v2/release_tracks.html",
         {
             "section": "releases", "release": release, "tracks": tracks, "formset": formset,
-            "selected_track": selected_track, "writes_enabled": settings.GUI_V2_WRITES_ENABLED,
+            "selected_track": selected_track, "selected_track_data": selected_track_data,
+            "writes_enabled": settings.GUI_V2_WRITES_ENABLED,
             "return_query": request.GET.urlencode(),
         },
     )

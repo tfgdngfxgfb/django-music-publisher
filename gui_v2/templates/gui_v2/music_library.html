@@ -14,12 +14,12 @@
   </aside>
 
   <section class="archive-list">
-    <header class="list-heading"><div><span class="eyebrow">Arbeidsliste</span><h2>Musikkarkiv</h2><p>{{ page.paginator.count }} innspillinger · side {{ page.number }} av {{ page.paginator.num_pages }}</p></div><a class="button subtle" href="{% url 'workbench:library_add' %}">Manuell registrering</a></header>
+    <header class="list-heading"><div><span class="eyebrow">Arbeidsliste</span><h2>Musikkarkiv</h2><p>{{ page.paginator.count }} innspillinger · side {{ page.number }} av {{ page.paginator.num_pages }}</p></div><div class="heading-actions"><button class="button" type="button" data-open-inspector hidden>Vis detaljer</button><a class="button subtle" href="{% url 'workbench:library_add' %}">Manuell registrering</a></div></header>
     <div class="table-scroll"><table class="data-table"><thead><tr><th>Innspilling</th><th>ISRC · varighet</th><th>Radio</th><th>Kanal / målgruppe</th><th>Fil</th><th>Forvaltning</th></tr></thead><tbody>
     {% for entry in page.object_list %}<tr class="selectable{% if selected.pk == entry.pk %} selected{% endif %}">
       <td><a class="row-link" href="?{% if query_without_selected %}{{ query_without_selected }}&amp;{% endif %}selected={{ entry.pk }}"><strong>{{ entry.recording.title }}</strong><span>{{ entry.artist_text }}</span></a></td>
       <td><code>{{ entry.isrc|default:"ISRC ukjent" }}</code><span>{{ entry.duration_text|default:"Varighet ukjent" }}</span></td>
-      <td><strong>{{ entry.genre|default:"Ikke klassifisert" }}</strong><span>{{ entry.language|default:"Ukjent språk" }} · Energy {{ entry.energy|default:"–" }}</span></td>
+      <td><strong>{{ entry.genre|default:"Ikke klassifisert" }}</strong><span>{{ entry.language|default:"Ukjent språk" }} · <b class="energy">E{{ entry.energy|default:"–" }}</b></span></td>
       <td><div class="tag-row">{% for channel in entry.channels.all %}<span class="tag">{{ channel.name }}</span>{% empty %}<span>Ingen kanal</span>{% endfor %}</div><span>{% for target in entry.target_audiences.all %}{{ target.name }}{% if not forloop.last %}, {% endif %}{% empty %}Ingen målgruppe{% endfor %}</span></td>
       <td>{% if entry.radio_files %}<span class="status ok">Registrert</span><span>{{ entry.radio_files.0.get_sync_status_display }}</span>{% else %}<span class="status muted">Ingen radiofil</span>{% endif %}</td>
       <td>{% if entry.is_managed %}<span class="status cyan">Forvaltet musikk</span>{% else %}<span class="status muted">Kun musikkarkiv</span>{% endif %}</td>
@@ -28,7 +28,7 @@
     {% if page.paginator.num_pages > 1 %}<nav class="pagination" aria-label="Sider">{% if page.has_previous %}<a href="?{% if query_without_page %}{{ query_without_page }}&amp;{% endif %}page={{ page.previous_page_number }}">← Forrige</a>{% endif %}<span>Side {{ page.number }} av {{ page.paginator.num_pages }}</span>{% if page.has_next %}<a href="?{% if query_without_page %}{{ query_without_page }}&amp;{% endif %}page={{ page.next_page_number }}">Neste →</a>{% endif %}</nav>{% endif %}
   </section>
 
-  {% if selected %}<aside class="inspector" id="v2-inspector"><button class="resize-handle" type="button" aria-label="Endre bredden på detaljpanelet"></button>
+  {% if selected %}<aside class="inspector" id="v2-inspector"><button class="resize-handle" type="button" aria-label="Endre bredden på detaljpanelet" title="Dra eller bruk piltastene"></button>
     <header><div class="cover">♫</div><div><span class="eyebrow">Valgt innspilling</span><h2>{{ selected.recording.title }}</h2><p>{{ selected.artist_text }}</p></div><button type="button" class="icon-button" data-close-inspector aria-label="Lukk detaljpanelet">×</button></header>
     <div class="tabs" role="tablist"><button role="tab" aria-selected="true" data-tab="overview">Detaljer</button><button role="tab" data-tab="radio">Radio</button><button role="tab" data-tab="files">Filer</button><button role="tab" data-tab="rights">Forvaltning</button></div>
     <section data-panel="overview"><dl class="detail-grid"><dt>ISRC</dt><dd>{{ selected.isrc|default:"Ikke registrert" }} <button class="copy" data-copy="{{ selected.isrc }}" type="button">Kopier</button></dd><dt>UUID</dt><dd><code>{{ selected.recording.pk }}</code> <button class="copy" data-copy="{{ selected.recording.pk }}" type="button">Kopier</button></dd><dt>Varighet</dt><dd>{{ selected.duration_text|default:"Ukjent" }}</dd><dt>Utgivelser</dt><dd>{% for release in selected.releases %}<a href="{% url 'gui_v2:release_detail' release.pk %}">{{ release.title }}</a>{% empty %}Ingen registrerte utgivelser{% endfor %}</dd></dl><a class="button full" href="{% url 'workbench:recording' selected.recording.pk %}">Åpne full visning</a></section>
