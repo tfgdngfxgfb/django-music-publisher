@@ -100,6 +100,22 @@ class GuiV2WorkspaceTests(TestCase):
         self.assertLess(channels.index(self.channel), channels.index(alphabetical))
         self.assertLess(channels.index(alphabetical), channels.index(last_alphabetically))
 
+    def test_library_supports_user_selected_page_size_and_automatic_filters(self):
+        self._superuser()
+        second_recording = Recording.objects.create(title="Andre innspilling")
+        MusicLibraryEntry.objects.create(recording=second_recording)
+
+        response = self.client.get(
+            reverse("gui_v2:music_library"),
+            {"per_page": "all", "genre": "Pop"},
+        )
+
+        self.assertEqual(response.context["page_size"], "all")
+        self.assertEqual(response.context["page"].paginator.per_page, 1)
+        self.assertContains(response, "data-auto-submit-filters")
+        self.assertNotContains(response, "Bruk filtre")
+        self.assertContains(response, '<option value="all" selected>Alle</option>', html=True)
+
     def test_channel_logo_requires_library_permission(self):
         with tempfile.TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
             self.channel.logo.save("p7-test.png", ContentFile(b"custom-channel-logo"))

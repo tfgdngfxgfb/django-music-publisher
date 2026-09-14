@@ -82,6 +82,7 @@ def home(request):
 def music_library(request):
     form = MusicLibraryFilterForm(request.GET or None)
     active_filters = []
+    page_size = "40"
     artist_prefetch = Prefetch(
         "recording__contributions",
         queryset=RecordingContribution.objects.select_related("artist_identity", "party").order_by("display_order"),
@@ -112,6 +113,7 @@ def music_library(request):
     )
     if form.is_valid():
         data = form.cleaned_data
+        page_size = data.get("per_page") or "40"
         term = (data.get("q") or "").strip()
         if term:
             queryset = queryset.filter(
@@ -195,7 +197,8 @@ def music_library(request):
                 qualifier = "alle" if data.get(mode) == "all" else "minst én"
                 active_filters.append({"label": f"{label} ({qualifier}): {', '.join(str(value) for value in values)}", "query": _query_without(request, name, mode, "page")})
     queryset = queryset.distinct()
-    page = Paginator(queryset, 40).get_page(request.GET.get("page"))
+    paginator_size = max(queryset.count(), 1) if page_size == "all" else int(page_size)
+    page = Paginator(queryset, paginator_size).get_page(request.GET.get("page"))
     for entry in page.object_list:
         entry.artist_text = _artist_text(entry.recording)
         entry.isrc = next((item.normalized_value for item in entry.recording.identifiers.all() if item.scheme == ExternalIdentifier.Scheme.ISRC), "")
@@ -292,6 +295,13 @@ def music_library(request):
             "section": "music_library", "filter_form": form, "page": page, "selected": selected,
             "query_without_page": _query_without(request, "page"),
             "query_without_selected": _query_without(request, "selected"),
+            "page_size": page_size,
+            "page_size_params": [
+                (key, value)
+                for key, values in request.GET.lists()
+                if key not in {"page", "per_page", "selected"}
+                for value in values
+            ],
             "search_params": [
                 (key, value)
                 for key, values in request.GET.lists()

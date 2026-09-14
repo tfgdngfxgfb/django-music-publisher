@@ -66,6 +66,12 @@ class MusicLibraryFilterForm(forms.Form):
         initial="title",
         label="Sortering",
     )
+    per_page = forms.ChoiceField(
+        required=False,
+        choices=(("40", "40"), ("100", "100"), ("250", "250"), ("500", "500"), ("all", "Alle")),
+        initial="40",
+        label="Rader per side",
+    )
     channels = forms.ModelMultipleChoiceField(
         required=False,
         queryset=Channel.objects.filter(is_active=True),

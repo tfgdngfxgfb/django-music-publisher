@@ -27,6 +27,12 @@
   playerShow?.addEventListener("click", () => setPlayerHidden(false));
   if (localStorage.getItem(playerHiddenKey) === "true") setPlayerHidden(true);
 
+  const autoSubmitFilters = document.querySelector("[data-auto-submit-filters]");
+  autoSubmitFilters?.addEventListener("change", event => {
+    if (!event.target.matches("select, input[type='checkbox'], input[type='radio']")) return;
+    autoSubmitFilters.requestSubmit();
+  });
+
   const libraryRows = [...document.querySelectorAll("[data-library-row]")];
   const keyboardFocusKey = `p7-v2-library-keyboard:${location.pathname}`;
   document.querySelectorAll("[data-row-href]").forEach(row => row.addEventListener("click", event => {

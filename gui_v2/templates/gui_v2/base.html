@@ -6,7 +6,7 @@
   <script>document.documentElement.dataset.v2Theme=localStorage.getItem("p7-v2-theme")||"dark";</script>
   <link rel="stylesheet" href="{% static 'gui_v2/prototype.css' %}">
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
   <a class="skip-link" href="#v2-main">Hopp til innhold</a>
   <header class="app-header">
     <a class="brand" href="{% url 'gui_v2:home' %}" aria-label="P7 Arkiv og rettigheter, GUI v2"><span>P7</span><strong>Arkiv og rettigheter</strong></a>
