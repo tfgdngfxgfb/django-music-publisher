@@ -135,6 +135,11 @@ def music_library(request):
             sort_channel=Subquery(channel_sort),
             sort_target=Subquery(target_sort),
             sort_managed=Exists(ManagedRecording.objects.filter(library_entry_id=OuterRef("pk"))),
+            radio_file_count=Count(
+                "recording__file_assets",
+                filter=Q(recording__file_assets__role=FileAsset.Role.RADIO_FLAC),
+                distinct=True,
+            ),
             has_radio_file=Exists(radio_assets),
             has_active_radio_location=Exists(FileLocation.objects.filter(
                 asset__recording_id=OuterRef("recording_id"), asset__role=FileAsset.Role.RADIO_FLAC,
@@ -161,7 +166,8 @@ def music_library(request):
                 When(
                     Q(has_radio_file=False) | Q(has_active_radio_location=False) | Q(has_file_problem=True)
                     | Q(has_release=False) | Q(has_duplicate_a=True) | Q(has_duplicate_b=True)
-                    | Q(has_ingest_issue=True),
+                    | Q(has_ingest_issue=True)
+                    | (Q(radio_file_count__gt=1) & Q(sort_isrc__isnull=False)),
                     then=Value(1),
                 ),
                 default=Value(0), output_field=IntegerField(),
@@ -247,12 +253,15 @@ def music_library(request):
         needs_follow_up = (
             Q(has_radio_file=False) | Q(has_active_radio_location=False) | Q(has_file_problem=True)
             | Q(has_release=False) | Q(has_duplicate_a=True) | Q(has_duplicate_b=True) | Q(has_ingest_issue=True)
+            | (Q(radio_file_count__gt=1) & Q(sort_isrc__isnull=False))
         )
         follow_up_values = set(request.GET.getlist("follow_up")) & {"yes", "no"}
         if follow_up_values == {"yes"}:
             queryset = queryset.filter(needs_follow_up)
         elif follow_up_values == {"no"}:
             queryset = queryset.exclude(needs_follow_up)
+        if data.get("isrc_file_collision"):
+            queryset = queryset.filter(radio_file_count__gt=1, sort_isrc__isnull=False)
         current_ordering = data.get("ordering") or "title"
         ordering = {
             "title": ("recording__title", "id"), "-title": ("-recording__title", "id"),
@@ -291,6 +300,11 @@ def music_library(request):
                     "label": f"{label}: {display}",
                     "query": _query_without(request, name, "page", "column_filter"),
                 })
+        if data.get("isrc_file_collision"):
+            active_filters.append({
+                "label": "Flere radio-FLAC med samme ISRC",
+                "query": _query_without(request, "isrc_file_collision", "page"),
+            })
         for name, mode, label in (("channels", "channel_mode", "Kanal"), ("target_audiences", "target_mode", "Målgruppe")):
             values = data.get(name) or []
             if values:
@@ -342,6 +356,8 @@ def music_library(request):
             entry.follow_up_reasons.append("Mulig dublett")
         if entry.has_ingest_issue:
             entry.follow_up_reasons.append("Uløst innlesingsavvik")
+        if entry.radio_file_count > 1 and entry.isrc:
+            entry.follow_up_reasons.append("Flere radio-FLAC med samme ISRC")
         entry.last_read_at = max((item.metadata_read_at for item in entry.radio_files if item.metadata_read_at), default=None)
         if not entry.radio_files:
             entry.file_status_text = "Ingen radiofil"

@@ -29,6 +29,11 @@ rettighetsdata blokkeres for manuell avklaring.
 
 Arbeidsflyten skriver, flytter eller kopierer aldri FLAC-filen.
 
+Musikkarkivets filtermeny har også **Flere radio-FLAC med samme ISRC**. Det
+viser Recording-poster som både har en kanonisk ISRC og mer enn én tilknyttet
+radio-FLAC, slik at eksisterende feilgrupperinger kan finnes og vurderes. Dette
+er en kontrolliste; treffene er ikke automatisk bevis på at filene er ulike.
+
 ## Verifikasjon
 
 90 målrettede tester for FLAC-ingest og GUI v2 bestod. De dekker samme ISRC for
@@ -41,4 +46,3 @@ En read-only skann av de 1 475 lokale testfilene identifiserte 34 filer med
 tydelig inkompatible metadata under samme ISRC. De ble isolert som konflikter i
 stedet for å bli koblet automatisk. Ingen import/apply eller filskriving ble
 utført i denne korpuskontrollen.
-

@@ -56,6 +56,10 @@ class MusicLibraryFilterForm(forms.Form):
         choices=(("", "Alle"), ("yes", "Krever oppfølging"), ("no", "Ingen kjent oppfølging")),
         label="Oppfølging",
     )
+    isrc_file_collision = forms.BooleanField(
+        required=False,
+        label="Flere radio-FLAC med samme ISRC",
+    )
     ordering = forms.ChoiceField(
         required=False,
         choices=(

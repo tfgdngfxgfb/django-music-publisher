@@ -61,6 +61,41 @@ class GuiV2WorkspaceTests(TestCase):
         response = self.client.get(reverse("gui_v2:music_library"), {"channels": [self.channel.pk, other.pk], "channel_mode": "all"})
         self.assertContains(response, "Ingen innspillinger passer")
 
+    def test_library_can_filter_recordings_with_multiple_flacs_and_an_isrc(self):
+        self._superuser()
+        ExternalIdentifier.objects.create(
+            recording=self.recording,
+            scheme=ExternalIdentifier.Scheme.ISRC,
+            value="NO-P7T-26-00421",
+        )
+        for number in range(2):
+            FileAsset.objects.create(
+                recording=self.recording,
+                filename=f"kollisjon-{number}.flac",
+                role=FileAsset.Role.RADIO_FLAC,
+            )
+        ordinary = Recording.objects.create(title="Bare én fil")
+        MusicLibraryEntry.objects.create(recording=ordinary)
+        ExternalIdentifier.objects.create(
+            recording=ordinary,
+            scheme=ExternalIdentifier.Scheme.ISRC,
+            value="NO-P7T-26-00422",
+        )
+        FileAsset.objects.create(
+            recording=ordinary,
+            filename="vanlig.flac",
+            role=FileAsset.Role.RADIO_FLAC,
+        )
+
+        response = self.client.get(
+            reverse("gui_v2:music_library"),
+            {"isrc_file_collision": "on", "selected": self.entry.pk},
+        )
+
+        self.assertEqual(list(response.context["page"].object_list), [self.entry])
+        self.assertContains(response, "Flere radio-FLAC med samme ISRC")
+        self.assertContains(response, 'name="isrc_file_collision"')
+
     def test_library_whole_row_selects_inspector_content(self):
         self._superuser()
         response = self.client.get(
