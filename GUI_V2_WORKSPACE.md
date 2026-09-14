@@ -26,6 +26,13 @@ Utgivelsessiden kan redigere utgivelsens katalogopplysninger og strekkode i et
 kompakt panel. Hovedartist vises avledet fra sporenes artistkrediteringer; dagens
 kanoniske `Release` har ingen egen hovedartistrelasjon.
 
+Nye utgivelser kan opprettes direkte fra GUI v2 og åpnes straks i sportabellen.
+Eksisterende cover som er registrert på utgivelsen vises ved sportabellen når
+brukeren har filtilgang. Autoriserte rettighetsbrukere kan åpne den eksisterende
+masseflyten og velge hvilke av utgivelsens underliggende innspillinger som skal
+få samme rettighetsgrunnlag. Rettighetene lagres fortsatt på `Recording`, ikke
+på `Release`.
+
 Sportabellen støtter piltaster, `Enter`, `Tab`/`Shift+Tab`, flercelleinnliming,
 `Ctrl+Z`, `Ctrl+D` (fyll ned) og `Ctrl+Enter` (lagre). Den kan sette inn,
 duplisere, flytte og renummerere rader. Ulagrede endringer lagres lokalt i

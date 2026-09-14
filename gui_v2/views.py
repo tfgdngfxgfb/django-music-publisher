@@ -294,16 +294,38 @@ def rescan_library_file(request, entry_id, asset_id):
     return redirect(return_url)
 
 
-@require_GET
+@require_http_methods(["GET", "POST"])
 @login_required
 @permission_required("catalogue.view_release", raise_exception=True)
 def release_list(request):
+    create_form = ReleaseMetadataForm(
+        request.POST or None, prefix="release"
+    )
+    if request.method == "POST":
+        if not settings.GUI_V2_WRITES_ENABLED:
+            raise PermissionDenied("GUI v2 er skrivebeskyttet utenfor den isolerte testdatabasen.")
+        if not request.user.has_perm("catalogue.add_release"):
+            raise PermissionDenied
+        if (request.POST.get("release-barcode") or "").strip() and not request.user.has_perm(
+            "catalogue.add_externalidentifier"
+        ):
+            raise PermissionDenied
+        if create_form.is_valid():
+            with transaction.atomic():
+                release = create_form.save()
+                create_form.save_barcode()
+            messages.success(request, "Utgivelsen er opprettet. Du kan nå registrere spor.")
+            return redirect("gui_v2:release_detail", release_id=release.pk)
     releases = Release.objects.select_related("label").annotate(track_count=Count("tracks"))
     q = request.GET.get("q", "").strip()
     if q:
         releases = releases.filter(Q(title__icontains=q) | Q(catalogue_number__icontains=q) | Q(label__name__icontains=q))
     page = Paginator(releases.order_by("title", "id"), 40).get_page(request.GET.get("page"))
-    return render(request, "gui_v2/release_list.html", {"section": "releases", "page": page, "q": q})
+    return render(request, "gui_v2/release_list.html", {
+        "section": "releases", "page": page, "q": q,
+        "create_form": create_form,
+        "writes_enabled": settings.GUI_V2_WRITES_ENABLED,
+    })
 
 
 def _track_initial(track):
@@ -400,6 +422,20 @@ def release_detail(request, release_id):
         if artists:
             release_artists.extend(part.strip() for part in artists.split(";") if part.strip())
     release_artist_text = ", ".join(dict.fromkeys(release_artists)) or "Uavklart artist"
+    release_cover = None
+    if request.user.is_staff and request.user.has_perms(
+        ("media_assets.view_fileasset", "media_assets.view_filelocation", "music_library.view_musiclibraryentry")
+    ):
+        release_cover = (
+            release.file_assets.filter(
+                role=FileAsset.Role.COVER_IMAGE,
+                locations__storage_type=FileLocation.StorageType.NAS,
+                locations__is_current=True,
+                locations__status=FileLocation.Status.ACTIVE,
+            )
+            .distinct()
+            .first()
+        )
     return render(
         request,
         "gui_v2/release_tracks.html",
@@ -408,6 +444,7 @@ def release_detail(request, release_id):
             "selected_track": selected_track, "selected_track_data": selected_track_data,
             "release_form": release_form, "release_barcode": release_barcode,
             "release_artist_text": release_artist_text,
+            "release_cover": release_cover,
             "writes_enabled": settings.GUI_V2_WRITES_ENABLED,
             "return_query": request.GET.urlencode(),
             "return_url": return_url,

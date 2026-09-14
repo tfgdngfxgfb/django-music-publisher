@@ -128,9 +128,12 @@ class ReleaseMetadataForm(forms.ModelForm):
         if not scheme:
             raise forms.ValidationError("Strekkoden må ha 8, 12, 13 eller 14 sifre.")
         normalized = normalize_trade_item_number(digits, scheme)
-        conflict = ExternalIdentifier.objects.filter(
+        conflict_query = ExternalIdentifier.objects.filter(
             scheme=scheme, namespace="", normalized_value=normalized
-        ).exclude(release=self.instance).exists()
+        )
+        if self.instance.pk:
+            conflict_query = conflict_query.exclude(release=self.instance)
+        conflict = conflict_query.exists()
         if conflict:
             raise forms.ValidationError("Strekkoden er allerede knyttet til en annen utgivelse.")
         self.barcode_scheme = scheme

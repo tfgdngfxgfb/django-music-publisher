@@ -4,7 +4,7 @@
 <div class="release-layout">
   <aside class="release-nav">
     <a href="{{ return_url }}">← Tilbake</a>
-    <div class="release-cover">▣</div>
+    <div class="release-cover">{% if release_cover %}<img src="{% url 'workbench:cover_image' release_cover.pk %}" alt="Cover til {{ release.title }}">{% else %}▣{% endif %}</div>
     <h2>{{ release.title }}</h2>
     <p>{{ release_artist_text }}</p>
     <dl>
@@ -33,6 +33,7 @@
       <a aria-current="page" href="#tracks">Sporliste</a>
       <a href="{% url 'workbench:release' release.pk %}?return={{ request.get_full_path|urlencode }}">Utgivelsesdetaljer</a>
       <a href="{% url 'workbench:release' release.pk %}?tab=files&amp;return={{ request.get_full_path|urlencode }}">Filer og kilder</a>
+      {% if request.user.is_staff and perms.rights.view_rightsclaim and perms.rights.add_rightsclaim %}<a href="{% url 'workbench:release_rights_add' release.pk %}?return={{ request.get_full_path|urlencode }}">Registrer rettigheter for innspillinger</a>{% endif %}
     </nav>
   </aside>
 

@@ -1,3 +1,23 @@
-{% extends "gui_v2/base.html" %}{% block title %}Utgivelser{% endblock %}{% block content %}
-<section class="release-index"><header class="list-heading"><div><span class="eyebrow">Katalog</span><h1>Utgivelser</h1><p>Velg en utgivelse for å arbeide med sporlisten.</p></div><form method="get" class="inline-search"><input type="search" name="q" value="{{ q }}" placeholder="Tittel, label eller katalognummer"><button class="primary">Søk</button></form></header>
-<div class="release-cards">{% for release in page.object_list %}<a href="{% url 'gui_v2:release_detail' release.pk %}"><span class="cover">▣</span><div><strong>{{ release.title }}</strong><p>{{ release.label|default:"Label ukjent" }} · {{ release.catalogue_number|default:"Katalognummer ukjent" }}</p></div><b>{{ release.track_count }} spor →</b></a>{% empty %}<p class="empty-state">Ingen utgivelser funnet.</p>{% endfor %}</div></section>{% endblock %}
+{% extends "gui_v2/base.html" %}
+{% block title %}Utgivelser{% endblock %}
+{% block content %}
+<section class="release-index">
+  <header class="list-heading">
+    <div><span class="eyebrow">Katalog</span><h1>Utgivelser</h1><p>Velg en utgivelse for å arbeide med sporlisten.</p></div>
+    <form method="get" class="inline-search"><input type="search" name="q" value="{{ q }}" placeholder="Tittel, label eller katalognummer"><button class="primary">Søk</button></form>
+  </header>
+  {% if perms.catalogue.add_release %}
+  <details class="release-create-panel"{% if create_form.errors %} open{% endif %}>
+    <summary>＋ Ny utgivelse</summary>
+    <form method="post" class="release-create-form">
+      {% csrf_token %}
+      {% for field in create_form %}<label>{{ field.label }}{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{% for error in field.errors %}<small class="cell-error">{{ error }}</small>{% endfor %}</label>{% endfor %}
+      {% if create_form.non_field_errors %}<div class="form-errors">{{ create_form.non_field_errors }}</div>{% endif %}
+      <p class="muted compact-note">Hovedartist avledes foreløpig fra artistkrediteringene på sporene.</p>
+      <button class="primary" type="submit" {% if not writes_enabled %}disabled{% endif %}>Opprett og registrer spor</button>
+    </form>
+  </details>
+  {% endif %}
+  <div class="release-cards">{% for release in page.object_list %}<a href="{% url 'gui_v2:release_detail' release.pk %}"><span class="cover">▣</span><div><strong>{{ release.title }}</strong><p>{{ release.label|default:"Label ukjent" }} · {{ release.catalogue_number|default:"Katalognummer ukjent" }}</p></div><b>{{ release.track_count }} spor →</b></a>{% empty %}<p class="empty-state">Ingen utgivelser funnet.</p>{% endfor %}</div>
+</section>
+{% endblock %}

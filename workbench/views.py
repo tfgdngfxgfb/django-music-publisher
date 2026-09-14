@@ -939,6 +939,7 @@ def release_detail(request, pk):
 )
 def release_rights_add(request, pk):
     release = get_object_or_404(Release, pk=pk)
+    return_url = _safe_return(request, reverse("workbench:release", args=(release.pk,)))
     form = ReleaseRightsClaimForm(request.POST or None, release=release)
     if not request.user.has_perm("rights.view_agreement"):
         form.fields["agreement"].queryset = Agreement.objects.none()
@@ -965,7 +966,7 @@ def release_rights_add(request, pk):
                 request,
                 f"{len(claims)} rettighetskrav ble registrert som ikke verifisert.",
             )
-            return redirect("workbench:release", pk=release.pk)
+            return redirect(return_url)
     return render(
         request,
         "workbench/form.html",
@@ -979,7 +980,8 @@ def release_rights_add(request, pk):
             form=form,
             form_help=RIGHTS_FORM_HELP,
             submit_label="Registrer rettighetskrav",
-            cancel_url=reverse("workbench:release", args=(release.pk,)),
+            cancel_url=return_url,
+            return_url=return_url,
         ),
     )
 

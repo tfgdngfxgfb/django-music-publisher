@@ -70,6 +70,62 @@ class GuiV2WorkspaceTests(TestCase):
         self.assertContains(grid, 'role="grid"')
         self.assertContains(grid, 'data-field="recording_title"')
 
+    @override_settings(GUI_V2_WRITES_ENABLED=True)
+    def test_release_can_be_created_before_tracks_are_registered(self):
+        self._superuser()
+        response = self.client.post(
+            reverse("gui_v2:release_list"),
+            {
+                "release-title": "Ny testutgivelse",
+                "release-release_type": "",
+                "release-release_date": "",
+                "release-release_year": "",
+                "release-label": "",
+                "release-catalogue_number": "",
+                "release-verification_status": "unverified",
+                "release-notes": "",
+                "release-barcode": "",
+            },
+        )
+        created = Release.objects.get(title="Ny testutgivelse")
+        self.assertRedirects(
+            response,
+            reverse("gui_v2:release_detail", args=[created.pk]),
+        )
+        self.assertFalse(created.tracks.exists())
+
+    @override_settings(GUI_V2_WRITES_ENABLED=False)
+    def test_release_creation_is_blocked_in_read_only_mode(self):
+        self._superuser()
+        response = self.client.post(
+            reverse("gui_v2:release_list"),
+            {"release-title": "Skal ikke opprettes"},
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(Release.objects.filter(title="Skal ikke opprettes").exists())
+
+    def test_release_grid_shows_cover_and_bulk_rights_entry_point(self):
+        self._superuser()
+        cover = FileAsset.objects.create(
+            release=self.release,
+            filename="cover.png",
+            role=FileAsset.Role.COVER_IMAGE,
+        )
+        FileLocation.objects.create(
+            asset=cover,
+            storage_type=FileLocation.StorageType.NAS,
+            relative_path="covers/cover.png",
+            status=FileLocation.Status.ACTIVE,
+        )
+        detail_url = reverse("gui_v2:release_detail", args=[self.release.pk])
+        response = self.client.get(detail_url)
+        self.assertContains(response, reverse("workbench:cover_image", args=[cover.pk]))
+        self.assertContains(response, "Registrer rettigheter for innspillinger")
+        rights_url = reverse("workbench:release_rights_add", args=[self.release.pk])
+        rights_response = self.client.get(rights_url, {"return": detail_url})
+        self.assertEqual(rights_response.context["cancel_url"], detail_url)
+        self.assertEqual(rights_response.context["return_url"], detail_url)
+
     def test_recording_search_matches_credited_artist(self):
         RecordingContribution.objects.create(
             recording=self.recording,
