@@ -2,10 +2,9 @@
   <summary aria-label="{{ label }}" title="{{ label }}">Filter</summary>
   <form method="get" class="column-filter-menu" data-column-filter-form>
     {% for key, item in params %}<input type="hidden" name="{{ key }}" value="{{ item }}">{% endfor %}
-    <input type="hidden" name="column_filter" value="{{ name }}">
     <fieldset>
       <legend>{{ label }}</legend>
-      {% for option in options %}<label class="column-filter-option"><input type="checkbox" name="{{ name }}" value="{{ option.value }}"{% if option.selected %} checked{% endif %} onchange="this.form.requestSubmit()"><span>{{ option.label }}</span></label>{% empty %}<span class="filter-empty">Ingen tilgjengelige valg</span>{% endfor %}
+      {% for option in options %}<label class="column-filter-option"><input type="checkbox" name="{{ name }}" value="{{ option.value }}"{% if option.selected %} checked{% endif %}><span>{{ option.label }}</span></label>{% empty %}<span class="filter-empty">Ingen tilgjengelige valg</span>{% endfor %}
     </fieldset>
   </form>
 </details>

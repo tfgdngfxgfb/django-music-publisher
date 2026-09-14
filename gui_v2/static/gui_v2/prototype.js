@@ -38,6 +38,24 @@
       if (!filter.contains(event.target)) filter.removeAttribute("open");
     });
   });
+  document.querySelectorAll("[data-column-filter-form]").forEach(form => {
+    const filter = form.closest(".column-filter");
+    form.addEventListener("change", event => {
+      if (event.target.matches("input[type='checkbox']")) form.dataset.pendingChanges = "true";
+    });
+    filter?.addEventListener("toggle", () => {
+      if (filter.open || form.dataset.pendingChanges !== "true") return;
+      form.dataset.pendingChanges = "false";
+      form.requestSubmit();
+    });
+  });
+  document.addEventListener("keydown", event => {
+    if (event.key !== "Escape") return;
+    const filter = event.target.closest?.(".column-filter[open]") || document.querySelector(".column-filter[open]");
+    if (!filter) return;
+    event.preventDefault();
+    filter.removeAttribute("open");
+  });
   document.querySelectorAll("[data-column-filter-trigger]").forEach(header => {
     header.addEventListener("click", event => {
       if (!event.ctrlKey && !event.metaKey) return;
@@ -49,7 +67,7 @@
         if (item !== filter) item.removeAttribute("open");
       });
       filter.open = true;
-      filter.querySelector("select")?.focus();
+      filter.querySelector("input[type='checkbox']")?.focus();
     });
   });
 

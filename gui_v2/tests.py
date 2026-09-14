@@ -150,6 +150,7 @@ class GuiV2WorkspaceTests(TestCase):
         self.assertContains(response, "ordering=title")
         self.assertNotContains(response, 'name="ordering" id="id_ordering"')
         self.assertContains(response, "data-column-filter-form", count=9)
+        self.assertNotContains(response, "this.form.requestSubmit()")
         self.assertContains(response, 'type="checkbox" name="genre" value="Jazz"')
         self.assertContains(response, 'type="checkbox" name="channels"')
         self.assertContains(response, "data-column-filter-trigger", count=9)
