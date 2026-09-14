@@ -198,11 +198,17 @@ def music_library(request):
                     rotation_query |= (
                         Q(rotation_suitability=MusicLibraryEntry.RotationSuitability.SUITABLE)
                         | Q(channels__isnull=False)
-                    ) & ~Q(rotation_suitability=MusicLibraryEntry.RotationSuitability.NOT_SUITABLE)
+                    ) & ~Q(rotation_suitability__in=(
+                        MusicLibraryEntry.RotationSuitability.NOT_SUITABLE,
+                        MusicLibraryEntry.RotationSuitability.UNASSESSED,
+                    ))
                 elif rotation == MusicLibraryEntry.RotationSuitability.NOT_SUITABLE:
                     rotation_query |= Q(rotation_suitability=rotation)
-                elif rotation == "unassessed":
-                    rotation_query |= Q(rotation_suitability="", channels__isnull=True)
+                elif rotation == MusicLibraryEntry.RotationSuitability.UNASSESSED:
+                    rotation_query |= (
+                        Q(rotation_suitability=rotation)
+                        | Q(rotation_suitability="", channels__isnull=True)
+                    )
             queryset = queryset.filter(rotation_query)
         managed_values = set(request.GET.getlist("managed")) & {"yes", "no"}
         if managed_values == {"yes"}:
@@ -305,6 +311,9 @@ def music_library(request):
         if entry.rotation_suitability == MusicLibraryEntry.RotationSuitability.NOT_SUITABLE:
             entry.rotation_display = MusicLibraryEntry.RotationSuitability.NOT_SUITABLE.label
             entry.rotation_kind = "warning"
+        elif entry.rotation_suitability == MusicLibraryEntry.RotationSuitability.UNASSESSED:
+            entry.rotation_display = MusicLibraryEntry.RotationSuitability.UNASSESSED.label
+            entry.rotation_kind = "muted"
         elif entry.rotation_suitability == MusicLibraryEntry.RotationSuitability.SUITABLE or channel_values:
             entry.rotation_display = MusicLibraryEntry.RotationSuitability.SUITABLE.label
             entry.rotation_kind = "ok"

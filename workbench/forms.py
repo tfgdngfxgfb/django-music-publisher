@@ -309,7 +309,7 @@ class FlacIngestReviewForm(forms.Form):
         label="Rotasjonsvurdering",
         required=False,
         choices=(
-            ("", "Ikke vurdert"),
+            ("", "Ikke registrert"),
             *MusicLibraryEntry.RotationSuitability.choices,
         ),
     )

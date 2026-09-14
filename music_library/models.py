@@ -68,6 +68,7 @@ class MusicLibraryEntry(CanonicalModel):
     class RotationSuitability(models.TextChoices):
         SUITABLE = "suitable", "Rotasjonsverdig"
         NOT_SUITABLE = "not_suitable", "Ikke rotasjonsverdig"
+        UNASSESSED = "unassessed", "Ikke vurdert"
 
     recording = models.OneToOneField(
         Recording,

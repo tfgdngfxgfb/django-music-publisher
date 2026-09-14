@@ -32,7 +32,6 @@ class MusicLibraryFilterForm(forms.Form):
         choices=(
             ("", "Alle"),
             *MusicLibraryEntry.RotationSuitability.choices,
-            ("unassessed", "Ikke vurdert"),
         ),
         label="Rotasjonsvurdering",
     )

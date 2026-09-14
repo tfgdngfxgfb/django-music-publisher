@@ -153,6 +153,31 @@ class FlacAdapterTests(FlacTestMixin, TestCase):
         self.assertEqual(snapshot.parsed["rotation_suitability"], "not_suitable")
         self.assertEqual(snapshot.raw_tags["comment"], comments)
 
+    def test_onetagger_not_assessed_rotation_maps_to_empty_state(self):
+        path = self.make_flac(
+            "not-assessed.flac",
+            TITLE="Ikke rotasjonsvurdert",
+            COMMENT="TXXX:Rotasjon - Ikke vurdert",
+        )
+        before = path.read_bytes()
+
+        snapshot = read_flac(path)
+
+        self.assertEqual(snapshot.parsed["rotation_suitability"], "unassessed")
+        self.assertNotIn("rotation_suitability_invalid", snapshot.parsed)
+
+        with override_settings(P7_MUSIC_ROOT=str(self.root)):
+            batch = scan_directory(relative_root=".", recursive=True, user=self.user)
+            apply_batch(batch, user=self.user)
+        item = batch.items.get()
+        self.assertEqual(item.action, FlacIngestItem.Action.NEW)
+        self.assertEqual(item.messages, [])
+        self.assertEqual(
+            MusicLibraryEntry.objects.get().rotation_suitability,
+            MusicLibraryEntry.RotationSuitability.UNASSESSED,
+        )
+        self.assertEqual(path.read_bytes(), before)
+
     def test_onetagger_african_languages_group_is_preserved(self):
         path = self.make_flac(
             "african-languages.flac",

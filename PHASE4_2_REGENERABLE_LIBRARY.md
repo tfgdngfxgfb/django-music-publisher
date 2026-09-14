@@ -50,22 +50,25 @@ varighet er kompatible. PCM-MD5 brukes aldri alene til Recording-merge.
 ## Migrasjon og verifikasjon
 
 `flac_ingest.0005` legger til den auditerte vedlikeholdsjobben og fire separate
-preview-/utfør-permissions. Ren SQLite-migrering og oppgradering fra
-`flac_ingest.0004` er kontrollert.
+preview-/utfør-permissions. `music_library.0007` registrerer *Ikke vurdert*
+som en eksplisitt rotasjonstilstand. Ren SQLite-migrering og oppgradering fra
+de foregående migrasjonene er kontrollert.
 
-53 målrettede FLAC-tester dekker blant annet filskriveport, uendrede bytes,
+54 målrettede FLAC-tester dekker blant annet filskriveport, uendrede bytes,
 P7UUID med og uten gjenoppretting, rebuild uten P7UUID, flyttet/manglende fil,
 beskyttet manuell kunnskap, Managed Music, RightsClaim/Agreement, cleanup og
 serverside-permissions. Workbench/GUI v2-regresjonen bestod 68 tester, og
-hele SQLite-suiten bestod 278 tester. `manage.py check` var uten feil.
+hele SQLite-suiten bestod 279 tester. `manage.py check` var uten feil.
 Nettleserprøven bekreftet innlogging, tilgang til vedlikeholdsflaten og at en
 cleanup-preview viser konsekvensene uten å endre data eller filer.
 
 Et isolert SQLite-forsøk brukte 1 475 lokale FLAC-filer. Førstegangsskann tok
-44,9 sekunder; 1 453 filer ble importert og 22 fikk handlingsbar konflikt på
-en ukjent `ROTASJON`-verdi. Rebuild tok 272,4 sekunder, regenererte de 1 453
-anvendelige filene og beholdt de 22 konfliktene. Etterpå ga en inkrementell
-skann 1 453 uendrede og 22 konflikter på 9,4 sekunder. Katalogtallene var
+44,9 sekunder; 1 453 filer ble importert, mens 22 filer avdekket OneTagger-
+verdien `TXXX:Rotasjon - Ikke vurdert`. Adapteren tolker nå denne som den
+gyldige, eksplisitte tilstanden *Ikke vurdert*. Read-only kontroll av hele korpuset
+ga 132 *Ikke rotasjonsverdig*, 22 *Ikke vurdert* og ingen ugyldige
+rotasjonsverdier. Rebuild-forsøket før denne siste mappingen tok 272,4
+sekunder og regenererte de 1 453 anvendelige filene. Katalogtallene var
 stabile, og SHA-256 av alle 1 475 originalfiler var identisk før og etter.
 Testdatabasen var separat og er ikke versjonskontrollert.
 

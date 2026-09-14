@@ -243,6 +243,19 @@ class GuiV2WorkspaceTests(TestCase):
         )
         self.assertContains(response, "Ikke rotasjonsverdig")
 
+        self.entry.rotation_suitability = MusicLibraryEntry.RotationSuitability.UNASSESSED
+        self.entry.save(update_fields=("rotation_suitability",))
+        response = self.client.get(
+            reverse("gui_v2:music_library"),
+            {"rotation_suitability": MusicLibraryEntry.RotationSuitability.SUITABLE},
+        )
+        self.assertContains(response, "Ingen innspillinger passer")
+        response = self.client.get(
+            reverse("gui_v2:music_library"),
+            {"rotation_suitability": MusicLibraryEntry.RotationSuitability.UNASSESSED},
+        )
+        self.assertContains(response, "Ikke vurdert")
+
     def test_library_and_grid_render_keyboard_workbench(self):
         self._superuser()
         self.entry.rotation_suitability = MusicLibraryEntry.RotationSuitability.NOT_SUITABLE

@@ -209,6 +209,10 @@ def _rotation_suitability(value):
     return {
         "rotasjonsverdig": "suitable",
         "ikkerotasjonsverdig": "not_suitable",
+        # OneTagger stores this explicit source value when no active rotation
+        # assessment has been made. Keep it distinct from a missing tag so a
+        # channel assignment cannot make it appear actively approved.
+        "ikkevurdert": "unassessed",
     }.get(normalized)
 
 
