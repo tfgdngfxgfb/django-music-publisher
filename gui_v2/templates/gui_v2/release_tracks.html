@@ -1,0 +1,7 @@
+{% extends "gui_v2/base.html" %}
+{% block title %}Utgivelsesprototype{% endblock %}
+{% block content %}
+<header class="v2-heading"><p>Utgivelse og spor</p><h1>Eksempelutgivelse</h1><span>Foreløpig struktur for sporarbeid. Tabellen er skrivebeskyttet.</span></header>
+<section class="v2-release"><div><small>Fiktiv prototype</small><h2>Eksempelalbum</h2><p>Eksempelartist · LP · år ukjent</p></div><span class="v2-pill">Ingen endringer lagres</span></section>
+<section class="v2-table-card"><table><thead><tr><th>Plass</th><th>Sportittel</th><th>Artist</th><th>Koblet innspilling</th></tr></thead><tbody>{% for track in tracks %}<tr><td>{{ track.position }}</td><td><strong>{{ track.title }}</strong></td><td>{{ track.artist }}</td><td>Simulert kobling</td></tr>{% endfor %}</tbody></table></section>
+{% endblock %}

@@ -1,0 +1,10 @@
+{% extends "gui_v2/base.html" %}
+{% block title %}Prototype{% endblock %}
+{% block content %}
+<header class="v2-heading"><p>GUI v2</p><h1>Prototypeområde</h1><span>Her kan neste designrunde prøves uten å endre katalogen eller arkivfilene.</span></header>
+<section class="v2-grid" aria-label="Prototypeflater">
+  {% if perms.music_library.view_musiclibraryentry %}<a class="v2-card" href="{% url 'gui_v2:music_library' %}"><small>Arbeidsflate</small><h2>Musikkarkiv</h2><p>Plass for ny liste-, søke- og detaljopplevelse.</p><span>Åpne statisk prototype →</span></a>{% endif %}
+  {% if perms.catalogue.view_release %}<a class="v2-card" href="{% url 'gui_v2:release_tracks' %}"><small>Arbeidsflate</small><h2>Utgivelse og spor</h2><p>Plass for neste utforming av utgivelses- og sporarbeidet.</p><span>Åpne statisk prototype →</span></a>{% endif %}
+  {% if not perms.music_library.view_musiclibraryentry and not perms.catalogue.view_release %}<div class="v2-empty"><h2>Ingen prototypeflater tilgjengelig</h2><p>Brukeren din mangler nødvendige visningstillatelser.</p></div>{% endif %}
+</section>
+{% endblock %}

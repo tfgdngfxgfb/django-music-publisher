@@ -1,0 +1,7 @@
+{% extends "gui_v2/base.html" %}
+{% block title %}Musikkarkivprototype{% endblock %}
+{% block content %}
+<header class="v2-heading"><p>Musikkarkiv</p><h1>Liste og arbeidskontekst</h1><span>Strukturskisse med fiktive opplysninger. Søk og redigering er ikke aktivert.</span></header>
+<div class="v2-toolbar" aria-label="Ikke-aktiv prototypekontroll"><input type="search" placeholder="Søk i musikkarkivet" disabled><button type="button" disabled>Filtrer</button></div>
+<section class="v2-table-card"><table><thead><tr><th>Innspilling</th><th>Artist</th><th>Sjanger</th><th>Energy</th><th>Status</th></tr></thead><tbody>{% for recording in recordings %}<tr><td><strong>{{ recording.title }}</strong></td><td>{{ recording.artist }}</td><td>{{ recording.genre }}</td><td>{{ recording.energy }}</td><td><span class="v2-pill">{{ recording.status }}</span></td></tr>{% endfor %}</tbody></table></section>
+{% endblock %}

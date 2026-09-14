@@ -18,6 +18,7 @@ urlpatterns = [
         name="help",
     ),
     path("arbeid/", include("workbench.urls")),
+    path("v2/", include("gui_v2.urls")),
     path("admin/", admin.site.urls),
     path("publishing/", include("music_publisher.urls")),
 ]

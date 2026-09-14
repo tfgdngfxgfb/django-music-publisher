@@ -39,6 +39,7 @@ INSTALLED_APPS = [  # noqa: F405
     "rights",
     "flac_ingest.apps.FlacIngestConfig",
     "workbench",
+    "gui_v2.apps.GuiV2Config",
 ]
 ROOT_URLCONF = "rights_project.urls"
 WSGI_APPLICATION = "rights_project.wsgi.application"
