@@ -1,14 +1,18 @@
 import tempfile
+import shutil
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
+from uuid import uuid4
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
+from mutagen.flac import FLAC
 
 from catalogue.models import Recording, RecordingContribution, Release, ReleaseTrack
-from media_assets.models import FileAsset
+from managed_music.models import ManagedRecording
+from media_assets.models import FileAsset, FileLocation
 from music_library.models import Channel, MusicLibraryChannel, MusicLibraryEntry
 
 
@@ -59,6 +63,8 @@ class GuiV2WorkspaceTests(TestCase):
         library = self.client.get(reverse("gui_v2:music_library"), {"genre": "Pop"})
         self.assertContains(library, "Sjanger: Pop")
         self.assertContains(library, "data-row-href")
+        self.assertContains(library, "data-library-row")
+        self.assertContains(library, "Krever oppfølging")
         self.assertNotContains(library, 'id="v2-inspector"')
         grid = self.client.get(reverse("gui_v2:release_detail", args=[self.release.pk]))
         self.assertContains(grid, 'role="grid"')
@@ -132,6 +138,17 @@ class GuiV2WorkspaceTests(TestCase):
         strict.force_login(self.user)
         self.assertEqual(strict.post(reverse("gui_v2:release_detail", args=[self.release.pk]), {}).status_code, 403)
 
+    @override_settings(GUI_V2_WRITES_ENABLED=True)
+    def test_catalogue_viewer_cannot_rescan_by_direct_post(self):
+        self.user.user_permissions.add(
+            Permission.objects.get(content_type__app_label="music_library", codename="view_musiclibraryentry")
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("gui_v2:rescan_library_file", args=[self.entry.pk, uuid4()])
+        )
+        self.assertEqual(response.status_code, 403)
+
     def test_existing_workbench_and_prototype_do_not_touch_files(self):
         self._superuser()
         with tempfile.TemporaryDirectory() as folder:
@@ -142,3 +159,55 @@ class GuiV2WorkspaceTests(TestCase):
                 for name in ("home", "workbench:library", "workbench:releases", "gui_v2:home", "gui_v2:music_library", "gui_v2:release_list"):
                     self.assertEqual(self.client.get(reverse(name)).status_code, 200)
             self.assertEqual((sentinel.read_bytes(), sentinel.stat().st_mtime_ns), before)
+
+    def _radio_file(self, root, recording, *, title, genre, energy):
+        relative_path = "radio/test.flac"
+        path = Path(root) / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(Path(__file__).parents[1] / "flac_ingest" / "test_fixtures" / "silence.flac", path)
+        audio = FLAC(path)
+        audio["TITLE"] = title
+        audio["GENRE"] = genre
+        audio["RATING"] = str(energy)
+        audio["P7UUID"] = str(recording.pk)
+        audio.save()
+        asset = FileAsset.objects.create(
+            recording=recording, filename=path.name, role=FileAsset.Role.RADIO_FLAC,
+            sha256="0" * 64, sync_status=FileAsset.SyncStatus.SYNCED,
+        )
+        FileLocation.objects.create(
+            asset=asset, storage_type=FileLocation.StorageType.NAS,
+            relative_path=relative_path, status=FileLocation.Status.ACTIVE, is_current=True,
+        )
+        return asset
+
+    @override_settings(GUI_V2_WRITES_ENABLED=True)
+    def test_single_file_rescan_updates_unmanaged_catalogue_and_radio(self):
+        self._superuser()
+        with tempfile.TemporaryDirectory() as root, override_settings(P7_MUSIC_ROOT=root):
+            asset = self._radio_file(root, self.recording, title="Tittel fra FLAC", genre="Rock", energy=5)
+            response = self.client.post(
+                reverse("gui_v2:rescan_library_file", args=[self.entry.pk, asset.pk]),
+                {"return": reverse("gui_v2:music_library")},
+            )
+            self.assertEqual(response.status_code, 302)
+            self.recording.refresh_from_db(); self.entry.refresh_from_db()
+            self.assertEqual(self.recording.title, "Tittel fra FLAC")
+            self.assertEqual((self.entry.genre, self.entry.energy), ("Rock", 5))
+
+    @override_settings(GUI_V2_WRITES_ENABLED=True)
+    def test_single_file_rescan_preserves_managed_catalogue_but_updates_radio(self):
+        self._superuser()
+        ManagedRecording.objects.create(library_entry=self.entry)
+        with tempfile.TemporaryDirectory() as root, override_settings(P7_MUSIC_ROOT=root):
+            asset = self._radio_file(root, self.recording, title="Skal ikke brukes", genre="Ny radiosjanger", energy=4)
+            rights_before = ManagedRecording.objects.count()
+            response = self.client.post(
+                reverse("gui_v2:rescan_library_file", args=[self.entry.pk, asset.pk]),
+                {"return": reverse("gui_v2:music_library")},
+            )
+            self.assertEqual(response.status_code, 302)
+            self.recording.refresh_from_db(); self.entry.refresh_from_db()
+            self.assertEqual(self.recording.title, "Eksisterende innspilling")
+            self.assertEqual((self.entry.genre, self.entry.energy), ("Ny radiosjanger", 4))
+            self.assertEqual(ManagedRecording.objects.count(), rights_before)

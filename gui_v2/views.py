@@ -1,16 +1,21 @@
+from urllib.parse import urlencode
+
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
-from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.exceptions import ImproperlyConfigured, PermissionDenied, ValidationError
 from django.core.paginator import Paginator
-from django.db.models import Count, Prefetch, Q
+from django.db.models import Count, Exists, OuterRef, Prefetch, Q
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
-from django.views.decorators.http import require_GET, require_http_methods
+from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
-from catalogue.models import ExternalIdentifier, Recording, RecordingContribution, Release
-from media_assets.models import FileAsset
+from catalogue.models import DuplicateCandidate, ExternalIdentifier, Recording, RecordingContribution, Release, ReleaseTrack
+from flac_ingest.models import FlacIngestItem
+from flac_ingest.services import apply_batch, resolve_music_path, scan_directory
+from media_assets.models import FileAsset, FileLocation
 from music_library.models import MusicLibraryEntry
 from provenance.models import MetadataAssertion
 
@@ -41,6 +46,21 @@ def _query_without(request, *names):
     return query.urlencode()
 
 
+def _safe_return(request, default):
+    value = request.POST.get("return") or request.GET.get("return") or ""
+    if value.startswith("/") and not value.startswith("//") and url_has_allowed_host_and_scheme(
+        value, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        return value
+    return default
+
+
+def _entry_url(request, entry_id):
+    query = request.GET.copy()
+    query["selected"] = str(entry_id)
+    return f"{reverse('gui_v2:music_library')}?{query.urlencode()}"
+
+
 @require_GET
 @login_required
 def home(request):
@@ -57,13 +77,29 @@ def music_library(request):
         "recording__contributions",
         queryset=RecordingContribution.objects.select_related("artist_identity", "party").order_by("display_order"),
     )
+    radio_assets = FileAsset.objects.filter(recording_id=OuterRef("recording_id"), role=FileAsset.Role.RADIO_FLAC)
     queryset = (
         MusicLibraryEntry.objects.select_related("recording")
         .prefetch_related(
             artist_prefetch, "channels", "target_audiences", "recording__identifiers",
             "recording__file_assets__locations", "recording__release_tracks__release",
         )
-        .order_by("recording__title", "id")
+        .annotate(
+            has_radio_file=Exists(radio_assets),
+            has_active_radio_location=Exists(FileLocation.objects.filter(
+                asset__recording_id=OuterRef("recording_id"), asset__role=FileAsset.Role.RADIO_FLAC,
+                is_current=True, status=FileLocation.Status.ACTIVE,
+            )),
+            has_file_problem=Exists(radio_assets.filter(sync_status__in=(
+                FileAsset.SyncStatus.MISSING, FileAsset.SyncStatus.CONFLICT, FileAsset.SyncStatus.FAILED,
+            ))),
+            has_release=Exists(ReleaseTrack.objects.filter(recording_id=OuterRef("recording_id"))),
+            has_duplicate_a=Exists(DuplicateCandidate.objects.filter(recording_a_id=OuterRef("recording_id"), status=DuplicateCandidate.Status.OPEN)),
+            has_duplicate_b=Exists(DuplicateCandidate.objects.filter(recording_b_id=OuterRef("recording_id"), status=DuplicateCandidate.Status.OPEN)),
+            has_ingest_issue=Exists(FlacIngestItem.objects.filter(recording_id=OuterRef("recording_id"), applied_at__isnull=True, action__in=(
+                FlacIngestItem.Action.CONFLICT, FlacIngestItem.Action.RETRY, FlacIngestItem.Action.INVALID,
+            ))),
+        )
     )
     if form.is_valid():
         data = form.cleaned_data
@@ -100,9 +136,23 @@ def music_library(request):
             queryset = queryset.filter(radio, recording__file_assets__sync_status__in=["conflict", "failed", "missing"])
         elif file_status == "none":
             queryset = queryset.exclude(radio)
+        needs_follow_up = (
+            Q(has_radio_file=False) | Q(has_active_radio_location=False) | Q(has_file_problem=True)
+            | Q(has_release=False) | Q(has_duplicate_a=True) | Q(has_duplicate_b=True) | Q(has_ingest_issue=True)
+        )
+        if data.get("follow_up") == "yes":
+            queryset = queryset.filter(needs_follow_up)
+        elif data.get("follow_up") == "no":
+            queryset = queryset.exclude(needs_follow_up)
+        ordering = {
+            "title": ("recording__title", "id"), "-title": ("-recording__title", "id"),
+            "-updated": ("-updated_at", "id"), "updated": ("updated_at", "id"),
+        }.get(data.get("ordering"), ("recording__title", "id"))
+        queryset = queryset.order_by(*ordering)
         simple_labels = {
             "q": "Søk", "genre": "Sjanger", "language": "Språk", "energy": "Energy",
             "gender": "Vokal", "file_status": "Filstatus", "managed": "Forvaltning",
+            "follow_up": "Oppfølging", "ordering": "Sortering",
         }
         for name, label in simple_labels.items():
             value = data.get(name)
@@ -122,6 +172,21 @@ def music_library(request):
         entry.duration_text = _duration(entry.recording.duration_ms)
         entry.radio_files = [item for item in entry.recording.file_assets.all() if item.role == FileAsset.Role.RADIO_FLAC]
         entry.is_managed = hasattr(entry, "managed_recording")
+        entry.preview_url = _entry_url(request, entry.pk)
+        entry.detail_url = f"{reverse('workbench:recording', args=[entry.recording_id])}?{urlencode({'return': entry.preview_url})}"
+        entry.follow_up_reasons = []
+        if not entry.has_radio_file:
+            entry.follow_up_reasons.append("Ingen radio-FLAC")
+        elif not entry.has_active_radio_location:
+            entry.follow_up_reasons.append("Filen er ikke tilgjengelig")
+        if entry.has_file_problem:
+            entry.follow_up_reasons.append("Fil- eller synkroniseringsproblem")
+        if not entry.has_release:
+            entry.follow_up_reasons.append("Ingen utgivelseskobling")
+        if entry.has_duplicate_a or entry.has_duplicate_b:
+            entry.follow_up_reasons.append("Mulig dublett")
+        if entry.has_ingest_issue:
+            entry.follow_up_reasons.append("Uløst innlesingsavvik")
         entry.last_read_at = max((item.metadata_read_at for item in entry.radio_files if item.metadata_read_at), default=None)
         if not entry.radio_files:
             entry.file_status_text = "Ingen radiofil"
@@ -143,6 +208,16 @@ def music_library(request):
         selected.source_assertions = MetadataAssertion.objects.filter(
             entity_type=MetadataAssertion.EntityType.MUSIC_LIBRARY_ENTRY, entity_uuid=selected.pk
         ).select_related("source_record__source_system")[:10]
+        for asset in selected.radio_files:
+            asset.current_locations = [location for location in asset.locations.all() if location.is_current]
+            for location in asset.current_locations:
+                try:
+                    location.onetagger_path = (
+                        str(resolve_music_path(location.relative_path))
+                        if location.storage_type == FileLocation.StorageType.NAS else ""
+                    )
+                except (ImproperlyConfigured, ValidationError, OSError):
+                    location.onetagger_path = ""
     return render(
         request,
         "gui_v2/music_library.html",
@@ -154,6 +229,68 @@ def music_library(request):
             "writes_enabled": settings.GUI_V2_WRITES_ENABLED,
         },
     )
+
+
+@require_POST
+@login_required
+@permission_required(
+    ("music_library.view_musiclibraryentry", "flac_ingest.add_flacingestbatch", "flac_ingest.apply_flacingestbatch"),
+    raise_exception=True,
+)
+def rescan_library_file(request, entry_id, asset_id):
+    if not settings.GUI_V2_WRITES_ENABLED:
+        raise PermissionDenied("Ny innlesing er deaktivert i dette prototypeoppsettet.")
+    entry = get_object_or_404(MusicLibraryEntry.objects.select_related("recording"), pk=entry_id)
+    asset = get_object_or_404(FileAsset, pk=asset_id, recording=entry.recording, role=FileAsset.Role.RADIO_FLAC)
+    location = get_object_or_404(asset.locations, is_current=True, storage_type=FileLocation.StorageType.NAS)
+    return_url = _safe_return(request, _entry_url(request, entry.pk))
+    before_radio = {
+        "radiosjanger": entry.genre, "radiospråk": entry.language, "Energy": entry.energy,
+        "vokalklassifisering": entry.gender,
+        "kanaler": tuple(entry.channels.values_list("name", flat=True).order_by("name")),
+        "målgrupper": tuple(entry.target_audiences.values_list("name", flat=True).order_by("name")),
+    }
+    before_catalogue = (entry.recording.title, entry.recording.duration_ms)
+    try:
+        # This explicit re-read follows an already registered FileAsset. P7UUID may
+        # therefore recover that known link; the ingest service still rejects UUID/
+        # ISRC conflicts instead of silently attaching another Recording.
+        batch = scan_directory(
+            relative_root=".", recursive=False, relative_paths=[location.relative_path],
+            allow_uuid_recovery=True, user=request.user,
+        )
+        item = batch.items.first()
+        if not item:
+            messages.error(request, "Filen kunne ikke leses – prøv igjen.")
+        elif item.action == FlacIngestItem.Action.UNCHANGED:
+            messages.info(request, "Ingen endringer funnet.")
+        elif item.can_apply:
+            apply_batch(batch, user=request.user)
+            entry.refresh_from_db()
+            entry.recording.refresh_from_db()
+            after_radio = {
+                "radiosjanger": entry.genre, "radiospråk": entry.language, "Energy": entry.energy,
+                "vokalklassifisering": entry.gender,
+                "kanaler": tuple(entry.channels.values_list("name", flat=True).order_by("name")),
+                "målgrupper": tuple(entry.target_audiences.values_list("name", flat=True).order_by("name")),
+            }
+            changed = [label for label, value in after_radio.items() if value != before_radio[label]]
+            catalogue_changed = before_catalogue != (entry.recording.title, entry.recording.duration_ms)
+            if changed:
+                text = f"Radiometadata oppdatert: {', '.join(changed)}."
+                if catalogue_changed:
+                    text += " Katalogmetadata ble også oppdatert fra filen."
+                messages.success(request, text)
+            elif catalogue_changed:
+                messages.success(request, "Katalogmetadata ble oppdatert fra filen. Ingen radiometadata ble endret.")
+            else:
+                messages.info(request, "Filmetadata lest inn på nytt. Ingen katalogverdier ble endret.")
+        else:
+            explanation = "; ".join(str(value) for value in (item.messages or []))
+            messages.error(request, explanation or "Filen krever kontroll og ble ikke brukt.")
+    except (OSError, ValidationError) as error:
+        messages.error(request, f"Filen kunne ikke leses – {error}")
+    return redirect(return_url)
 
 
 @require_GET
@@ -203,6 +340,7 @@ def _require_track_write_permissions(user, rows):
 @permission_required("catalogue.view_release", raise_exception=True)
 def release_detail(request, release_id):
     release = get_object_or_404(Release.objects.select_related("label"), pk=release_id)
+    return_url = _safe_return(request, reverse("gui_v2:release_list"))
     tracks = list(
         release.tracks.select_related("recording")
         .prefetch_related("recording__contributions__artist_identity", "recording__contributions__party", "recording__identifiers", "file_assets")
@@ -240,6 +378,7 @@ def release_detail(request, release_id):
             "selected_track": selected_track, "selected_track_data": selected_track_data,
             "writes_enabled": settings.GUI_V2_WRITES_ENABLED,
             "return_query": request.GET.urlencode(),
+            "return_url": return_url,
         },
     )
 

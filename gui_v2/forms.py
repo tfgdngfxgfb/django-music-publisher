@@ -41,6 +41,20 @@ class MusicLibraryFilterForm(forms.Form):
         choices=(("", "Alle"), ("yes", "Forvaltet"), ("no", "Ikke forvaltet")),
         label="Forvaltning",
     )
+    follow_up = forms.ChoiceField(
+        required=False,
+        choices=(("", "Alle"), ("yes", "Krever oppfølging"), ("no", "Ingen kjent oppfølging")),
+        label="Oppfølging",
+    )
+    ordering = forms.ChoiceField(
+        required=False,
+        choices=(
+            ("title", "Tittel A–Å"), ("-title", "Tittel Å–A"),
+            ("-updated", "Sist endret først"), ("updated", "Eldst endret først"),
+        ),
+        initial="title",
+        label="Sortering",
+    )
     channels = forms.ModelMultipleChoiceField(
         required=False,
         queryset=Channel.objects.filter(is_active=True),

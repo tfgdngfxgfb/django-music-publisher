@@ -13,11 +13,14 @@
     setTimeout(() => { button.textContent = old; }, 1100);
   }));
 
+  const libraryRows = [...document.querySelectorAll("[data-library-row]")];
+  const keyboardFocusKey = `p7-v2-library-keyboard:${location.pathname}`;
   document.querySelectorAll("[data-row-href]").forEach(row => row.addEventListener("click", event => {
     if (event.target.closest("a, button, input, select, textarea, label")) return;
     const scroller = row.closest(".table-scroll");
     const key = `p7-v2-scroll:${location.pathname}${location.search.replace(/([?&])selected=[^&]*/, "$1")}`;
     sessionStorage.setItem(key, scroller?.scrollTop || 0);
+    if (row.matches("[data-library-row]")) sessionStorage.setItem(keyboardFocusKey, "true");
     location.href = row.dataset.rowHref;
   }));
 
@@ -37,6 +40,24 @@
   });
   inspectorOpeners.forEach(button => button.addEventListener("click", () => setInspector(true)));
   if (inspector && localStorage.getItem(inspectorKey) === "false") setInspector(false);
+  document.addEventListener("keydown", event => {
+    const editing = event.target.closest("input, select, textarea, [contenteditable='true']");
+    if (editing) return;
+    const row = event.target.closest?.("[data-library-row]") || document.activeElement?.closest?.("[data-library-row]");
+    if (event.key === "Escape" && inspector && !inspector.hidden) {
+      event.preventDefault(); setInspector(false); row?.focus(); return;
+    }
+    if (!row || !libraryRows.length) return;
+    if (event.key === "Enter") {
+      event.preventDefault(); location.href = row.dataset.detailHref; return;
+    }
+    if (!["ArrowUp", "ArrowDown"].includes(event.key)) return;
+    const index = libraryRows.indexOf(row);
+    const next = libraryRows[Math.max(0, Math.min(libraryRows.length - 1, index + (event.key === "ArrowDown" ? 1 : -1)))];
+    event.preventDefault();
+    sessionStorage.setItem(keyboardFocusKey, "true");
+    location.href = next.dataset.rowHref;
+  });
   document.querySelectorAll("[data-tab]").forEach(button => button.addEventListener("click", () => {
     document.querySelectorAll("[data-tab]").forEach(item => item.setAttribute("aria-selected", String(item === button)));
     document.querySelectorAll("[data-panel]").forEach(panel => { panel.hidden = panel.dataset.panel !== button.dataset.tab; });
@@ -84,6 +105,9 @@
   if (scroller) {
     scroller.scrollTop = Number(sessionStorage.getItem(scrollKey) || 0);
     document.querySelectorAll(".row-link").forEach(link => link.addEventListener("click", () => sessionStorage.setItem(scrollKey, scroller.scrollTop)));
+  }
+  if (sessionStorage.getItem(keyboardFocusKey) === "true") {
+    document.querySelector("[data-library-row].selected")?.focus({preventScroll: true});
   }
 
 })();
