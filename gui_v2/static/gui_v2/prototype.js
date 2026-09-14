@@ -13,6 +13,20 @@
     setTimeout(() => { button.textContent = old; }, 1100);
   }));
 
+  const player = document.querySelector("#v2-player");
+  const playerShow = document.querySelector("[data-player-show]");
+  const playerHiddenKey = "p7-v2-player-hidden";
+  const setPlayerHidden = hidden => {
+    if (!player || !playerShow) return;
+    player.hidden = hidden;
+    playerShow.hidden = !hidden;
+    document.body.classList.toggle("player-hidden", hidden);
+    localStorage.setItem(playerHiddenKey, String(hidden));
+  };
+  document.querySelector("[data-player-hide]")?.addEventListener("click", () => setPlayerHidden(true));
+  playerShow?.addEventListener("click", () => setPlayerHidden(false));
+  if (localStorage.getItem(playerHiddenKey) === "true") setPlayerHidden(true);
+
   const libraryRows = [...document.querySelectorAll("[data-library-row]")];
   const keyboardFocusKey = `p7-v2-library-keyboard:${location.pathname}`;
   document.querySelectorAll("[data-row-href]").forEach(row => row.addEventListener("click", event => {
