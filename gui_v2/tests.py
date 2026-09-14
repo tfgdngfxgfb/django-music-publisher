@@ -230,7 +230,7 @@ class GuiV2WorkspaceTests(TestCase):
         self.assertContains(library, "data-library-row")
         self.assertContains(library, "Krever oppfølging")
         self.assertContains(library, "Ikke rotasjonsverdig")
-        self.assertNotContains(library, 'id="v2-inspector"')
+        self.assertContains(library, 'id="v2-inspector"')
         grid = self.client.get(reverse("gui_v2:release_detail", args=[self.release.pk]))
         self.assertContains(grid, 'role="grid"')
         self.assertContains(grid, 'data-field="recording_title"')

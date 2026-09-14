@@ -282,6 +282,8 @@ def music_library(request):
 
     selected_id = request.GET.get("selected")
     selected = next((item for item in page.object_list if str(item.pk) == selected_id), None)
+    if selected is None and page.object_list:
+        selected = page.object_list[0]
     if selected:
         selected.releases = list({track.release_id: track.release for track in selected.recording.release_tracks.all()}.values())
         selected.source_assertions = MetadataAssertion.objects.filter(
@@ -317,6 +319,19 @@ def music_library(request):
     target_filter_options = list(TargetAudience.objects.filter(is_active=True).order_by("name"))
     for target in target_filter_options:
         target.is_filter_selected = str(target.pk) in selected_target_ids
+    header_filter_names = (
+        "genre", "language", "energy", "rotation_suitability", "channels",
+        "target_audiences", "file_status", "managed", "follow_up",
+    )
+    header_filter_params = {
+        name: [
+            (key, value)
+            for key, values in request.GET.lists()
+            if key not in {name, "page", "selected"}
+            for value in values
+        ]
+        for name in header_filter_names
+    }
 
     return render(
         request,
@@ -343,6 +358,7 @@ def music_library(request):
             "active_filters": active_filters,
             "channel_filter_options": channel_filter_options,
             "target_filter_options": target_filter_options,
+            "header_filter_params": header_filter_params,
             "writes_enabled": settings.GUI_V2_WRITES_ENABLED,
         },
     )

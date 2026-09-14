@@ -33,14 +33,6 @@
     autoSubmitFilters.requestSubmit();
   });
 
-  document.querySelectorAll("[data-header-filter]").forEach(select => select.addEventListener("change", () => {
-    const params = new URLSearchParams(location.search);
-    params.delete(select.dataset.headerFilter);
-    params.delete("page");
-    params.delete("selected");
-    if (select.value) params.append(select.dataset.headerFilter, select.value);
-    location.href = `${location.pathname}?${params.toString()}`;
-  }));
   document.addEventListener("click", event => {
     document.querySelectorAll(".column-filter[open]").forEach(filter => {
       if (!filter.contains(event.target)) filter.removeAttribute("open");
@@ -63,24 +55,24 @@
   const alignInspectorWithTable = () => {
     if (!inspector || !layout) return;
     const table = layout.querySelector(".table-scroll");
-    layout.style.setProperty("--inspector-offset", `${table?.offsetTop || 0}px`);
+    const offset = table
+      ? Math.max(0, table.getBoundingClientRect().top - layout.getBoundingClientRect().top)
+      : 0;
+    layout.style.setProperty("--inspector-offset", `${offset}px`);
   };
   alignInspectorWithTable();
   window.addEventListener("resize", alignInspectorWithTable);
-  const inspectorKey = `p7-v2-inspector-open:${location.pathname}`;
   const inspectorOpeners = document.querySelectorAll("[data-open-inspector]");
   const setInspector = open => {
     if (!inspector) return;
     inspector.hidden = !open;
     layout?.classList.toggle("inspector-closed", !open);
     inspectorOpeners.forEach(button => { button.hidden = open; });
-    localStorage.setItem(inspectorKey, String(open));
   };
   document.querySelector("[data-close-inspector]")?.addEventListener("click", () => {
     setInspector(false);
   });
   inspectorOpeners.forEach(button => button.addEventListener("click", () => setInspector(true)));
-  if (inspector && localStorage.getItem(inspectorKey) === "false") setInspector(false);
   document.addEventListener("keydown", event => {
     const editing = event.target.closest("input, select, textarea, [contenteditable='true']");
     if (editing) return;

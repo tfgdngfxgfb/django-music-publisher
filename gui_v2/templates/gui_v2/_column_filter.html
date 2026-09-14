@@ -1,10 +1,11 @@
 <details class="column-filter{% if value %} active{% endif %}">
   <summary aria-label="{{ label }}" title="{{ label }}">⌄</summary>
-  <div class="column-filter-menu">
+  <form method="get" class="column-filter-menu">
+    {% for key, item in params %}<input type="hidden" name="{{ key }}" value="{{ item }}">{% endfor %}
     <label><span>{{ label }}</span>
-      <select data-header-filter="{{ name }}">
+      <select name="{{ name }}" data-header-filter="{{ name }}" onchange="this.form.submit()">
         {% for choice in choices %}<option value="{{ choice.0 }}"{% if choice.0|stringformat:"s" == value %} selected{% endif %}>{{ choice.1 }}</option>{% endfor %}
       </select>
     </label>
-  </div>
+  </form>
 </details>
