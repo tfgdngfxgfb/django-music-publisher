@@ -88,6 +88,11 @@ body.music-library-page .archive-layout>.inspector{align-self:start;margin-top:v
 @media(max-width:1350px){.header-player.player{width:260px;min-width:210px}.header-player .player-title span{display:none}.header-actions .prototype-mark{display:none}}
 @media(max-width:900px){.header-player.player{min-width:142px;width:142px;grid-template-columns:24px 26px 28px 26px 24px}.header-player .player-title{display:none}.header-player .player-cover{width:24px;height:24px}.header-actions{gap:6px;padding-inline:8px}}
 
+/* Read-only preview for repairing a radio file attached to the wrong Recording. */
+.file-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:5px}.file-actions form{margin:0}.warning-action{border-color:color-mix(in srgb,var(--warn) 60%,var(--line));color:var(--warn)}
+.split-preview-page{max-width:1000px;margin:0 auto;padding:28px}.split-preview-page>header{margin-bottom:18px}.split-preview-page>header p{color:var(--muted)}.split-preview-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.split-preview-grid article,.split-consequences{padding:16px;border:1px solid var(--line);border-radius:7px;background:var(--surface)}.split-preview-grid h2{margin-top:4px}.split-consequences{margin-top:12px}.split-consequences li{margin-block:5px}.split-confirm-form{display:grid;gap:12px;margin-top:14px;padding:14px;border:1px solid var(--line);border-radius:7px;background:var(--surface)}.split-confirm-form label{display:flex;align-items:center;gap:8px}.error-notice{border-left-color:var(--danger)}
+@media(max-width:720px){.split-preview-grid{grid-template-columns:1fr}.split-preview-page{padding:16px}}
+
 /* The sidebar is the library's only filter surface; its toggle stays in the top toolbar. */
 .filter-toggle{position:static;z-index:auto;width:auto;height:32px;margin:0;padding:5px 9px;box-shadow:none}
 .filter-toggle [data-filter-direction]{margin-left:0}

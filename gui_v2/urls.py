@@ -13,6 +13,11 @@ urlpatterns = [
         views.rescan_library_file,
         name="rescan_library_file",
     ),
+    path(
+        "musikkarkiv/<uuid:entry_id>/filer/<uuid:asset_id>/skill-ut/",
+        views.split_library_file,
+        name="split_library_file",
+    ),
     path("utgivelser/", views.release_list, name="release_list"),
     path("utgivelser/<uuid:release_id>/", views.release_detail, name="release_detail"),
     path("api/innspillinger/", views.recording_search, name="recording_search"),

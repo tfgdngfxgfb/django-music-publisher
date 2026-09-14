@@ -1,0 +1,49 @@
+{% extends "gui_v2/base.html" %}
+{% block title %}Skill ut radiofil{% endblock %}
+{% block content %}
+<section class="split-preview-page">
+  <header>
+    <span class="eyebrow">Musikkarkiv · kontrollert utskilling</span>
+    <h1>Skill ut radiofil som egen innspilling</h1>
+    <p>Kontroller konsekvensene før katalogkoblingen endres. Selve FLAC-filen blir ikke skrevet til, flyttet eller kopiert.</p>
+  </header>
+  {% if preview.blocked_reason %}<p class="notice error-notice" role="alert">{{ preview.blocked_reason }}</p>{% endif %}
+  <div class="split-preview-grid">
+    <article>
+      <span class="eyebrow">Nåværende kobling</span>
+      <h2>{{ entry.recording.title }}</h2>
+      <dl class="detail-grid">
+        <dt>Radiofiler</dt><dd>{{ preview.other_files|length|add:"1" }}</dd>
+        <dt>Valgt fil</dt><dd>{{ asset.filename }}</dd>
+        <dt>Plassering</dt><dd><code>{{ preview.location.relative_path }}</code></dd>
+        <dt>Sporforekomst</dt><dd>{{ asset.release_track|default:"Ingen entydig sporforekomst" }}</dd>
+      </dl>
+    </article>
+    <article>
+      <span class="eyebrow">Ny innspilling fra FLAC</span>
+      <h2>{{ preview.parsed.title }}</h2>
+      <dl class="detail-grid">
+        <dt>Artist</dt><dd>{{ preview.parsed.artists|join:", "|default:"Uavklart" }}</dd>
+        <dt>Rapportert ISRC</dt><dd>{{ preview.parsed.isrc|default:"Ikke registrert" }}</dd>
+        <dt>Utgivelse</dt><dd>{{ preview.parsed.album|default:"Ingen utgivelsesopplysning" }}</dd>
+        <dt>Spor</dt><dd>{{ preview.parsed.track_number|default:"Ukjent" }}</dd>
+      </dl>
+    </article>
+  </div>
+  <section class="split-consequences">
+    <h2>Dette skjer</h2>
+    <ul>
+      <li>Valgt fil og dens entydige sporforekomst flyttes til en ny <code>Recording</code>.</li>
+      <li>Den opprinnelige innspillingen og de øvrige filene beholdes.</li>
+      <li>Hvis ISRC allerede brukes, lagres den på den nye innspillingen som en bestridt kildeverdi og ikke som en ny kanonisk ISRC.</li>
+      <li>Avgjørelsen om å holde innspillingene adskilt bevares ved senere re-scan.</li>
+      <li>Ingen lydfil endres.</li>
+    </ul>
+  </section>
+  <form method="post" class="split-confirm-form">
+    {% csrf_token %}<input type="hidden" name="return" value="{{ return_url }}">
+    <label><input type="checkbox" name="confirmed" value="yes" required> Jeg har kontrollert at filen er en egen innspilling.</label>
+    <div><button class="primary" type="submit"{% if preview.blocked_reason %} disabled{% endif %}>Skill ut filen</button> <a class="button" href="{{ return_url }}">Avbryt</a></div>
+  </form>
+</section>
+{% endblock %}

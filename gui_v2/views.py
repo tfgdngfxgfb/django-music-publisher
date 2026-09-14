@@ -1,6 +1,6 @@
 import mimetypes
 from pathlib import PurePosixPath
-from urllib.parse import urlencode
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from django.conf import settings
 from django.contrib import messages
@@ -18,7 +18,7 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 
 from catalogue.models import DuplicateCandidate, ExternalIdentifier, Recording, RecordingContribution, Release, ReleaseTrack
 from flac_ingest.models import FlacIngestItem
-from flac_ingest.services import apply_batch, resolve_music_path, scan_directory
+from flac_ingest.services import apply_batch, preview_radio_file_split, resolve_music_path, scan_directory, split_radio_file_to_new_recording
 from managed_music.models import ManagedRecording
 from media_assets.models import FileAsset, FileLocation
 from music_library.models import Channel, MusicLibraryChannel, MusicLibraryEntry, MusicLibraryTargetAudience, TargetAudience
@@ -69,6 +69,13 @@ def _entry_url(request, entry_id):
     query = request.GET.copy()
     query["selected"] = str(entry_id)
     return f"{reverse('gui_v2:music_library')}?{query.urlencode()}"
+
+
+def _selected_entry_return(value, entry_id):
+    parts = urlsplit(value)
+    query = dict(parse_qsl(parts.query, keep_blank_values=True))
+    query["selected"] = str(entry_id)
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
 
 
 @require_GET
@@ -360,6 +367,18 @@ def music_library(request):
         ).select_related("source_record__source_system")[:10]
         for asset in selected.radio_files:
             asset.current_locations = [location for location in asset.locations.all() if location.is_current]
+            asset.can_split = (
+                len(selected.radio_files) > 1
+                and not selected.is_managed
+                and request.user.is_staff
+                and request.user.has_perms((
+                    "catalogue.add_recording",
+                    "catalogue.change_releasetrack",
+                    "media_assets.change_fileasset",
+                    "music_library.add_musiclibraryentry",
+                    "flac_ingest.apply_flacingestbatch",
+                ))
+            )
             for location in asset.current_locations:
                 try:
                     if location.storage_type == FileLocation.StorageType.NAS:
@@ -495,6 +514,79 @@ def rescan_library_file(request, entry_id, asset_id):
     except (OSError, ValidationError) as error:
         messages.error(request, f"Filen kunne ikke leses – {error}")
     return redirect(return_url)
+
+
+@require_http_methods(["GET", "POST"])
+@login_required
+@permission_required(
+    (
+        "music_library.view_musiclibraryentry",
+        "catalogue.add_recording",
+        "catalogue.change_releasetrack",
+        "media_assets.change_fileasset",
+        "music_library.add_musiclibraryentry",
+        "flac_ingest.apply_flacingestbatch",
+    ),
+    raise_exception=True,
+)
+def split_library_file(request, entry_id, asset_id):
+    if not settings.GUI_V2_WRITES_ENABLED:
+        raise PermissionDenied("Utskilling er deaktivert utenfor den isolerte testdatabasen.")
+    entry = get_object_or_404(MusicLibraryEntry.objects.select_related("recording"), pk=entry_id)
+    asset = get_object_or_404(
+        FileAsset, pk=asset_id, recording=entry.recording, role=FileAsset.Role.RADIO_FLAC
+    )
+    return_url = _safe_return(request, _entry_url(request, entry.pk))
+    try:
+        preview = preview_radio_file_split(asset_id=asset.pk)
+    except (OSError, ValidationError) as error:
+        messages.error(request, str(error))
+        return redirect(return_url)
+    if request.method == "POST":
+        if request.POST.get("confirmed") != "yes":
+            messages.error(request, "Bekreft utskillingen før den utføres.")
+        elif preview["blocked_reason"]:
+            messages.error(request, preview["blocked_reason"])
+        else:
+            try:
+                recording, old_recording, remaining_assets = split_radio_file_to_new_recording(
+                    asset_id=asset.pk, user=request.user
+                )
+            except (OSError, ValidationError) as error:
+                messages.error(request, str(error))
+            else:
+                # Restore the former Recording from its one remaining authoritative
+                # FLAC. Several remaining files require explicit human review.
+                refreshed = False
+                if len(remaining_assets) == 1:
+                    remaining_location = remaining_assets[0].locations.filter(
+                        is_current=True,
+                        storage_type=FileLocation.StorageType.NAS,
+                        status=FileLocation.Status.ACTIVE,
+                    ).first()
+                    if remaining_location:
+                        batch = scan_directory(
+                            relative_root=".", recursive=False,
+                            relative_paths=[remaining_location.relative_path],
+                            force_read=True, user=request.user,
+                        )
+                        refreshed = apply_batch(batch, user=request.user) == 1
+                new_entry = recording.music_library_entry
+                message = (
+                    f"«{asset.filename}» er skilt ut som innspillingen "
+                    f"«{recording.title}». Filen ble ikke endret."
+                )
+                if refreshed:
+                    message += f" «{old_recording.title}» ble lest på nytt fra gjenværende fil."
+                elif len(remaining_assets) > 1:
+                    message += " Flere filer gjenstår på den opprinnelige innspillingen og må kontrolleres."
+                messages.success(request, message)
+                return redirect(_selected_entry_return(return_url, new_entry.pk))
+    return render(request, "gui_v2/split_library_file.html", {
+        "section": "music_library", "entry": entry, "asset": asset,
+        "preview": preview, "return_url": return_url,
+        "writes_enabled": settings.GUI_V2_WRITES_ENABLED,
+    })
 
 
 @require_http_methods(["GET", "POST"])

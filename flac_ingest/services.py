@@ -2,6 +2,7 @@ import json
 import logging
 import mimetypes
 import re
+from difflib import SequenceMatcher
 from datetime import datetime
 from hashlib import sha256
 from pathlib import Path, PurePosixPath
@@ -14,6 +15,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 
 from catalogue.models import (
+    DuplicateCandidate,
     ExternalIdentifier,
     Recording,
     RecordingContribution,
@@ -169,6 +171,109 @@ def _recording_isrc(recording):
     )
 
 
+def _identity_text(value):
+    return " ".join(slugify(str(value or "")).replace("-", " ").split())
+
+
+def _material_identity_conflicts(left, left_technical, right, right_technical):
+    """Return strong contradictions that make a shared ISRC unsafe to trust.
+
+    ISRC remains a strong signal, but real source catalogues sometimes reuse a
+    code incorrectly. Minor punctuation/title variations are tolerated. A
+    materially different title together with artist, duration or album evidence
+    must be reviewed instead of silently joining two files to one Recording.
+    """
+    left_title = _identity_text(left.get("title"))
+    right_title = _identity_text(right.get("title"))
+    similarity = (
+        SequenceMatcher(None, left_title, right_title).ratio()
+        if left_title and right_title
+        else 1.0
+    )
+    title_conflict = bool(left_title and right_title and similarity < 0.82)
+
+    left_artists = {_identity_text(value) for value in left.get("artists", []) if value}
+    right_artists = {
+        _identity_text(value) for value in right.get("artists", []) if value
+    }
+    artist_conflict = bool(
+        left_artists and right_artists and left_artists.isdisjoint(right_artists)
+    )
+
+    left_duration = left_technical.get("duration_ms")
+    right_duration = right_technical.get("duration_ms")
+    duration_conflict = False
+    if left_duration and right_duration:
+        difference = abs(left_duration - right_duration)
+        duration_conflict = difference > max(
+            10000, max(left_duration, right_duration) * 0.08
+        )
+        severe_duration_conflict = difference > max(
+            30000, max(left_duration, right_duration) * 0.20
+        )
+    else:
+        severe_duration_conflict = False
+
+    left_album = _identity_text(left.get("album"))
+    right_album = _identity_text(right.get("album"))
+    album_conflict = bool(left_album and right_album and left_album != right_album)
+    clearly_incompatible = (
+        (title_conflict and similarity < 0.45)
+        or (title_conflict and (artist_conflict or duration_conflict or album_conflict))
+        or (artist_conflict and (duration_conflict or album_conflict))
+        or (severe_duration_conflict and artist_conflict)
+    )
+    if not clearly_incompatible:
+        return []
+
+    reasons = []
+    if title_conflict:
+        reasons.append("vesentlig forskjellig tittel")
+    if artist_conflict:
+        reasons.append("forskjellig artist")
+    if duration_conflict:
+        reasons.append("forskjellig varighet")
+    if album_conflict:
+        reasons.append("forskjellig utgivelseskontekst")
+    return reasons
+
+
+def _recording_identity_conflicts(recording, parsed, technical):
+    artists = [
+        contribution.display_credit
+        for contribution in recording.contributions.filter(
+            role__in=(
+                RecordingContribution.Role.PRIMARY,
+                RecordingContribution.Role.FEATURED,
+            )
+        )
+    ]
+    return _material_identity_conflicts(
+        {
+            "title": recording.title,
+            "artists": artists,
+            "album": next(
+                (
+                    track.release.title
+                    for track in recording.release_tracks.select_related("release")
+                    if track.release_id
+                ),
+                "",
+            ),
+        },
+        {"duration_ms": recording.duration_ms},
+        parsed,
+        technical,
+    )
+
+
+def _manual_file_assignment(asset):
+    value = (asset.technical_metadata or {}).get("manual_recording_assignment") or {}
+    return bool(
+        asset.recording_id and value.get("recording_uuid") == str(asset.recording_id)
+    )
+
+
 def _candidate_payload(matches):
     return [
         {
@@ -279,6 +384,28 @@ def _match_recording(
             .first()
         )
         if identifier:
+            contradictions = _recording_identity_conflicts(
+                identifier.recording, parsed, technical
+            )
+            if contradictions:
+                return (
+                    identifier.recording,
+                    "isrc_conflict",
+                    [
+                        {
+                            "recording_uuid": str(identifier.recording_id),
+                            "title": identifier.recording.title,
+                            "signals": ["samme ISRC", *contradictions],
+                            "score": 100,
+                        }
+                    ],
+                    [
+                        "Samme ISRC er allerede registrert, men filene ser ut til "
+                        f"å være ulike innspillinger ({', '.join(contradictions)}). "
+                        "Kontroller koblingen; ingen automatisk sammenslåing er gjort."
+                    ],
+                    True,
+                )
             return identifier.recording, "isrc", [], messages, False
     if not catalogue_has_recordings:
         return None, "", [], messages, False
@@ -600,6 +727,7 @@ def scan_directory(
     candidates = _candidate_paths(root, folder, recursive, relative_paths)
     locations_by_path = _existing_locations(relative_root, relative_paths)
     catalogue_has_recordings = Recording.objects.exists()
+    batch_isrcs = {}
     for path in sorted(candidates, key=lambda item: str(item).casefold()):
         if path.suffix.casefold() != ".flac":
             continue
@@ -699,13 +827,78 @@ def scan_directory(
             catalogue_has_recordings=catalogue_has_recordings,
             allow_uuid_recovery=allow_uuid_recovery,
         )
+        if parsed.get("isrc"):
+            try:
+                normalized_isrc = normalize_isrc(parsed["isrc"])
+            except ValidationError:
+                normalized_isrc = ""
+            previous = batch_isrcs.get(normalized_isrc) if normalized_isrc else None
+            if previous:
+                contradictions = _material_identity_conflicts(
+                    previous[0], previous[1], parsed, technical
+                )
+                previous_asset = previous[3]
+                manually_separated = bool(
+                    previous_asset
+                    and existing_asset
+                    and previous_asset.recording_id != existing_asset.recording_id
+                    and (
+                        _manual_file_assignment(previous_asset)
+                        or _manual_file_assignment(existing_asset)
+                    )
+                )
+                if contradictions and not manually_separated:
+                    conflict = True
+                    method = "isrc_batch_conflict"
+                    messages.append(
+                        "Samme ISRC finnes på en tidligere fil i denne skanningen, "
+                        "men metadataene beskriver ulike innspillinger "
+                        f"({', '.join(contradictions)}). Filene kobles ikke automatisk."
+                    )
+            elif normalized_isrc:
+                batch_isrcs[normalized_isrc] = (
+                    parsed,
+                    technical,
+                    relative_path,
+                    existing_asset,
+                )
         if existing_asset and existing_asset.recording_id:
             path_recording = existing_asset.recording
-            if recording and recording.pk != path_recording.pk:
+            if (
+                recording
+                and recording.pk != path_recording.pk
+                and _manual_file_assignment(existing_asset)
+            ):
+                recording = path_recording
+                method = "manual_file_assignment"
+                conflict = False
+                messages = [
+                    "Den manuelt kontrollerte filkoblingen er beholdt selv om "
+                    "filen rapporterer en identifikator som brukes av en annen innspilling."
+                ]
+            elif recording and recording.pk != path_recording.pk:
                 conflict = True
                 messages.append(
                     "Filplasseringen og filens identifikatorer peker mot ulike innspillinger."
                 )
+            elif (
+                recording
+                and recording.pk == path_recording.pk
+                and conflict
+                and method == "isrc_conflict"
+                and path_recording.file_assets.filter(
+                    role=FileAsset.Role.RADIO_FLAC
+                ).count()
+                == 1
+            ):
+                # A previously established one-file link is stronger than stale
+                # unmanaged catalogue text during an explicit re-read. Multiple
+                # files on the same Recording stay in conflict until reviewed.
+                conflict = False
+                method = "file_location"
+                messages = [
+                    "Den eksisterende, entydige filkoblingen ble brukt ved ny innlesing."
+                ]
             elif not conflict:
                 recording = path_recording
                 method = "audio_md5_move" if not existing_locations else "file_location"
@@ -1097,6 +1290,63 @@ def _source_record_reference(item):
     return external_record_id, source_locator
 
 
+def _record_reported_isrc_collision(
+    *, recording, conflicting_recording, reported_isrc, source_record, user
+):
+    """Preserve a bad source ISRC without violating canonical uniqueness."""
+    first, second = sorted(
+        (recording, conflicting_recording), key=lambda value: str(value.pk)
+    )
+    candidate, _ = DuplicateCandidate.objects.get_or_create(
+        recording_a=first,
+        recording_b=second,
+        defaults={
+            "signals": ["reported_isrc_collision", "manual_separate_recordings"],
+            "score": 100,
+            "status": DuplicateCandidate.Status.DISMISSED,
+            "notes": (
+                f"Manuelt beholdt som ulike innspillinger selv om kildefilen "
+                f"rapporterer ISRC {normalize_isrc(reported_isrc)}."
+            ),
+        },
+    )
+    if candidate.status != DuplicateCandidate.Status.DISMISSED:
+        candidate.status = DuplicateCandidate.Status.DISMISSED
+        candidate.signals = list(
+            dict.fromkeys(
+                [
+                    *(candidate.signals or []),
+                    "reported_isrc_collision",
+                    "manual_separate_recordings",
+                ]
+            )
+        )
+        candidate.notes = (
+            f"Manuelt beholdt som ulike innspillinger selv om kildefilen "
+            f"rapporterer ISRC {normalize_isrc(reported_isrc)}."
+        )
+        candidate.save(update_fields=("status", "signals", "notes"))
+    assertion = MetadataAssertion.objects.create(
+        source_record=source_record,
+        entity_type=MetadataAssertion.EntityType.RECORDING,
+        entity_uuid=recording.pk,
+        field_name="reported_isrc",
+        raw_value=str(reported_isrc),
+        normalized_value=normalize_isrc(reported_isrc),
+        status=VerificationStatus.DISPUTED,
+    )
+    AssertionDecision.objects.create(
+        assertion=assertion,
+        decision=VerificationStatus.DISPUTED,
+        decided_by=user,
+        note=(
+            "Kildeverdien kolliderer med en annen innspilling og er derfor ikke "
+            "lagret som kanonisk ISRC. Innspillingene skal forbli adskilt."
+        ),
+    )
+    return candidate
+
+
 def _verify_item_source(item):
     """Fail before canonical writes if the preview no longer matches the file."""
     _root, path = resolve_music_path(item.relative_path)
@@ -1169,6 +1419,7 @@ def review_item(item, *, parsed, resolution, user, note=""):
         raise ValidationError(
             "P7UUID må peke til den valgte innspillingen. Korriger eller tøm feltet."
         )
+    isrc_collision_recording = None
     if parsed.get("isrc"):
         normalized_isrc = normalize_isrc(parsed["isrc"])
         linked_recording_id = (
@@ -1183,11 +1434,14 @@ def review_item(item, *, parsed, resolution, user, note=""):
         if linked_recording_id and (
             not recording or linked_recording_id != recording.pk
         ):
-            raise ValidationError(
-                "Kildedataene bruker en ISRC som allerede er knyttet til en annen "
-                "innspilling. Velg den innspillingen, eller fjern ISRC fra den "
-                "tolkede verdien og behold konflikten i kildehistorikken."
-            )
+            if resolution == "new":
+                isrc_collision_recording = linked_recording_id
+            else:
+                raise ValidationError(
+                    "Kildedataene bruker en ISRC som allerede er knyttet til en annen "
+                    "innspilling. Velg den innspillingen, eller opprett en ny "
+                    "innspilling med ISRC-en bevart som en rapportert konflikt."
+                )
     if (
         item.file_asset_id
         and item.file_asset.recording_id
@@ -1203,7 +1457,9 @@ def review_item(item, *, parsed, resolution, user, note=""):
     item.action = (
         FlacIngestItem.Action.MATCHED if recording else FlacIngestItem.Action.NEW
     )
-    item.match_method = "manual_review"
+    item.match_method = (
+        "manual_isrc_collision" if isrc_collision_recording else "manual_review"
+    )
     item.messages = []
     item.reviewed_by = user
     item.reviewed_at = timezone.now()
@@ -1250,7 +1506,11 @@ def apply_item(item, *, user):
     # Several files in the same preview may carry the same previously unseen
     # ISRC. The first applied row creates the Recording; later rows must
     # re-check the identifier boundary instead of creating a duplicate.
-    if recording is None and parsed.get("isrc"):
+    if (
+        recording is None
+        and parsed.get("isrc")
+        and item.match_method != "manual_isrc_collision"
+    ):
         normalized_isrc = normalize_isrc(parsed["isrc"])
         identifier = (
             ExternalIdentifier.objects.select_for_update()
@@ -1318,11 +1578,29 @@ def apply_item(item, *, user):
             recording.save(update_fields=("duration_ms",))
         file_isrc = parsed.get("isrc", "")
         if file_isrc and not _recording_isrc(recording):
-            ExternalIdentifier.objects.create(
-                recording=recording,
-                scheme=ExternalIdentifier.Scheme.ISRC,
-                value=file_isrc,
+            linked_identifier = (
+                ExternalIdentifier.objects.filter(
+                    scheme=ExternalIdentifier.Scheme.ISRC,
+                    namespace="",
+                    normalized_value=normalize_isrc(file_isrc),
+                )
+                .select_related("recording")
+                .first()
             )
+            if not linked_identifier:
+                ExternalIdentifier.objects.create(
+                    recording=recording,
+                    scheme=ExternalIdentifier.Scheme.ISRC,
+                    value=file_isrc,
+                )
+            elif linked_identifier.recording_id != recording.pk:
+                _record_reported_isrc_collision(
+                    recording=recording,
+                    conflicting_recording=linked_identifier.recording,
+                    reported_isrc=file_isrc,
+                    source_record=source_record,
+                    user=user,
+                )
         for artist in parsed.get("artists", []):
             _credit(
                 recording, RecordingContribution.Role.PRIMARY, artist, source_record
@@ -1416,6 +1694,14 @@ def apply_item(item, *, user):
             "Filplasseringen er allerede knyttet til en annen innspilling."
         )
     if not asset:
+        technical_metadata = dict(item.technical_metadata)
+        if item.match_method == "manual_isrc_collision":
+            technical_metadata["manual_recording_assignment"] = {
+                "recording_uuid": str(recording.pk),
+                "decided_by": user.pk,
+                "decided_at": timezone.now().isoformat(),
+                "reason": "reported_isrc_collision",
+            }
         asset = FileAsset.objects.create(
             recording=recording,
             release_track=release_track,
@@ -1424,7 +1710,7 @@ def apply_item(item, *, user):
             size_bytes=item.file_size,
             sha256=item.sha256,
             role=FileAsset.Role.RADIO_FLAC,
-            technical_metadata=item.technical_metadata,
+            technical_metadata=technical_metadata,
             metadata_read_at=timezone.now(),
             source_modified_at=item.source_modified_at,
             sync_status=FileAsset.SyncStatus.SYNCED,
@@ -1459,7 +1745,12 @@ def apply_item(item, *, user):
         asset.mime_type = "audio/flac"
         asset.size_bytes = item.file_size
         asset.sha256 = item.sha256
-        asset.technical_metadata = item.technical_metadata
+        manual_assignment = (asset.technical_metadata or {}).get(
+            "manual_recording_assignment"
+        )
+        asset.technical_metadata = dict(item.technical_metadata)
+        if manual_assignment:
+            asset.technical_metadata["manual_recording_assignment"] = manual_assignment
         asset.metadata_read_at = timezone.now()
         asset.source_modified_at = item.source_modified_at
         asset.sync_status = FileAsset.SyncStatus.SYNCED
@@ -1529,6 +1820,325 @@ def apply_batch(batch, *, user):
     )
     batch.save(update_fields=("status",))
     return applied
+
+
+def preview_radio_file_split(*, asset_id):
+    """Read and validate the consequences of a file split without mutations."""
+    asset = (
+        FileAsset.objects.select_related("recording", "release_track")
+        .prefetch_related("locations")
+        .get(pk=asset_id)
+    )
+    if asset.role != FileAsset.Role.RADIO_FLAC or not asset.recording_id:
+        raise ValidationError(
+            "Bare en radio-FLAC med innspillingskobling kan skilles ut."
+        )
+    location = next(
+        (
+            value
+            for value in asset.locations.all()
+            if value.is_current
+            and value.storage_type == FileLocation.StorageType.NAS
+            and value.status == FileLocation.Status.ACTIVE
+        ),
+        None,
+    )
+    if not location:
+        raise ValidationError("Filen har ingen aktiv NAS-plassering som kan leses.")
+    _root, path = resolve_music_path(location.relative_path)
+    try:
+        snapshot, checksum, stable_stat = _stable_snapshot(path)
+    except (FlacReadError, FileChangedDuringScan, OSError) as error:
+        raise ValidationError(f"Filen kunne ikke leses sikkert: {error}") from error
+    parsed = _with_release_folder_context(snapshot.parsed, location.relative_path)
+    errors = _metadata_errors(parsed)
+    if errors:
+        raise ValidationError(errors)
+    other_files = list(
+        asset.recording.file_assets.filter(role=FileAsset.Role.RADIO_FLAC)
+        .exclude(pk=asset.pk)
+        .prefetch_related("locations")
+    )
+    if not other_files:
+        raise ValidationError(
+            "Innspillingen har ikke flere radiofiler. Det er derfor ingenting å skille ut."
+        )
+    blocked_reason = ""
+    if (
+        ManagedRecording.objects.filter(
+            library_entry__recording=asset.recording
+        ).exists()
+        or RightsClaim.objects.filter(recording=asset.recording).exists()
+    ):
+        blocked_reason = (
+            "Innspillingen har forvaltnings- eller rettighetsdata. Avklar hvilken "
+            "innspilling disse gjelder før filkoblingen deles."
+        )
+    elif (
+        asset.release_track
+        and asset.release_track.file_assets.exclude(pk=asset.pk).exists()
+    ):
+        blocked_reason = (
+            "Flere filer er knyttet til samme sporforekomst. Koble filene manuelt "
+            "før én av dem skilles ut."
+        )
+    return {
+        "asset": asset,
+        "location": location,
+        "snapshot": snapshot,
+        "checksum": checksum,
+        "stable_stat": stable_stat,
+        "parsed": parsed,
+        "other_files": other_files,
+        "blocked_reason": blocked_reason,
+    }
+
+
+def split_radio_file_to_new_recording(*, asset_id, user):
+    """Move one wrongly grouped radio-FLAC to a new Recording, read-only.
+
+    The operation is intended for a known source-identifier collision. It
+    preserves the reported ISRC as disputed provenance, moves the applicable
+    ReleaseTrack, and records an explicit keep-separate decision used by later
+    re-scans. No bytes are written to the FLAC.
+    """
+    preview = preview_radio_file_split(asset_id=asset_id)
+    asset = preview["asset"]
+    location = preview["location"]
+    snapshot = preview["snapshot"]
+    checksum = preview["checksum"]
+    stable_stat = preview["stable_stat"]
+    parsed = preview["parsed"]
+    if preview["blocked_reason"]:
+        raise ValidationError(preview["blocked_reason"])
+
+    with transaction.atomic():
+        asset = (
+            FileAsset.objects.select_for_update()
+            .select_related("recording", "release_track")
+            .get(pk=asset.pk)
+        )
+        old_recording = Recording.objects.select_for_update().get(pk=asset.recording_id)
+        if old_recording.file_assets.filter(role=FileAsset.Role.RADIO_FLAC).count() < 2:
+            raise ValidationError(
+                "Innspillingen har ikke flere radiofiler. Det er derfor ingenting å skille ut."
+            )
+        if (
+            ManagedRecording.objects.filter(
+                library_entry__recording=old_recording
+            ).exists()
+            or RightsClaim.objects.filter(recording=old_recording).exists()
+        ):
+            raise ValidationError(
+                "Innspillingen har forvaltnings- eller rettighetsdata. Avklar hvilken "
+                "innspilling disse gjelder før filkoblingen deles."
+            )
+        release_track = asset.release_track
+        if release_track and release_track.file_assets.exclude(pk=asset.pk).exists():
+            raise ValidationError(
+                "Flere filer er knyttet til samme sporforekomst. Koble filene manuelt "
+                "før én av dem skilles ut."
+            )
+
+        recording = Recording.objects.create(
+            title=parsed["title"],
+            duration_ms=snapshot.technical.get("duration_ms"),
+            recording_kind=Recording.Kind.SOUND,
+        )
+        source = _source_system()
+        import_batch = ImportBatch.objects.create(
+            source_system=source,
+            notes=f"Manuell utskilling av radio-FLAC: {location.relative_path}",
+        )
+        ingest_batch = FlacIngestBatch.objects.create(
+            import_batch=import_batch,
+            relative_root=".",
+            recursive=False,
+            status=FlacIngestBatch.Status.APPLIED,
+            created_by=user,
+        )
+        item = FlacIngestItem.objects.create(
+            batch=ingest_batch,
+            relative_path=location.relative_path,
+            action=FlacIngestItem.Action.UPDATED,
+            match_method="manual_file_split",
+            raw_tags=snapshot.raw_tags,
+            parsed_metadata=parsed,
+            technical_metadata=snapshot.technical,
+            file_size=stable_stat.st_size,
+            source_modified_at=datetime.fromtimestamp(
+                stable_stat.st_mtime, tz=timezone.get_current_timezone()
+            ),
+            sha256=checksum,
+            recording=recording,
+            release=release_track.release if release_track else None,
+            release_track=release_track,
+            file_asset=asset,
+            reviewed_by=user,
+            reviewed_at=timezone.now(),
+            review_note="Radiofil manuelt skilt ut som egen innspilling.",
+            applied_at=timezone.now(),
+        )
+        external_record_id, source_locator = _source_record_reference(item)
+        source_record = SourceRecord.objects.create(
+            source_system=source,
+            import_batch=import_batch,
+            external_record_id=external_record_id,
+            source_locator=source_locator,
+            raw_payload={
+                "relative_path": location.relative_path,
+                "tags": snapshot.raw_tags,
+                "parsed": parsed,
+                "technical": snapshot.technical,
+                "sha256": checksum,
+                "manual_action": "split_radio_file",
+            },
+        )
+        item.source_record = source_record
+        item.save(update_fields=("source_record",))
+
+        title_assertion = _assertion(
+            source_record,
+            MetadataAssertion.EntityType.RECORDING,
+            recording,
+            "title",
+            parsed["title"],
+            user=user,
+        )
+        _log_applied(
+            title_assertion,
+            recording,
+            "",
+            recording.title,
+            user,
+            recording.revision,
+        )
+        for artist in parsed.get("artists", []):
+            _credit(
+                recording, RecordingContribution.Role.PRIMARY, artist, source_record
+            )
+        for field, role in (
+            ("composers", RecordingContribution.Role.COMPOSER),
+            ("lyricists", RecordingContribution.Role.LYRICIST),
+            ("arrangers", RecordingContribution.Role.ARRANGER),
+        ):
+            for name in parsed.get(field, []):
+                _credit(recording, role, name, source_record)
+
+        reported_isrc = parsed.get("isrc", "")
+        linked_identifier = None
+        if reported_isrc:
+            linked_identifier = (
+                ExternalIdentifier.objects.filter(
+                    scheme=ExternalIdentifier.Scheme.ISRC,
+                    namespace="",
+                    normalized_value=normalize_isrc(reported_isrc),
+                )
+                .select_related("recording")
+                .first()
+            )
+            if not linked_identifier:
+                ExternalIdentifier.objects.create(
+                    recording=recording,
+                    scheme=ExternalIdentifier.Scheme.ISRC,
+                    value=reported_isrc,
+                )
+            elif linked_identifier.recording_id != recording.pk:
+                _record_reported_isrc_collision(
+                    recording=recording,
+                    conflicting_recording=linked_identifier.recording,
+                    reported_isrc=reported_isrc,
+                    source_record=source_record,
+                    user=user,
+                )
+
+        entry = MusicLibraryEntry.objects.create(
+            recording=recording,
+            genre=parsed.get("genre", ""),
+            language=parsed.get("language", ""),
+            energy=parsed.get("energy"),
+            gender=parsed.get("gender", ""),
+            rotation_suitability=parsed.get("rotation_suitability", ""),
+            verification_status=VerificationStatus.CONFIRMED,
+        )
+        for field in (
+            "genre",
+            "language",
+            "energy",
+            "gender",
+            "rotation_suitability",
+        ):
+            if field not in parsed:
+                continue
+            value = parsed.get(field)
+            assertion = _assertion(
+                source_record,
+                MetadataAssertion.EntityType.MUSIC_LIBRARY_ENTRY,
+                entry,
+                field,
+                value,
+                user=user,
+            )
+            _log_applied(assertion, entry, "", value, user, entry.revision)
+        for field, model, through, relation in (
+            ("channels", Channel, MusicLibraryChannel, "channels"),
+            (
+                "target_audiences",
+                TargetAudience,
+                MusicLibraryTargetAudience,
+                "target_audiences",
+            ),
+        ):
+            values = parsed.get(field, [])
+            _sync_library_relations(entry, model, through, relation, values)
+            assertion = _assertion(
+                source_record,
+                MetadataAssertion.EntityType.MUSIC_LIBRARY_ENTRY,
+                entry,
+                field,
+                values,
+                user=user,
+            )
+            _log_applied(assertion, entry, [], values, user, entry.revision)
+
+        if release_track:
+            release_track.recording = recording
+            if parsed.get("title") and (
+                not release_track.title_override
+                or release_track.title_override == old_recording.title
+            ):
+                release_track.title_override = parsed["title"]
+            release_track.save(update_fields=("recording", "title_override"))
+
+        technical_metadata = dict(snapshot.technical)
+        technical_metadata["manual_recording_assignment"] = {
+            "recording_uuid": str(recording.pk),
+            "decided_by": user.pk,
+            "decided_at": timezone.now().isoformat(),
+            "reason": "split_radio_file",
+        }
+        asset.recording = recording
+        asset.technical_metadata = technical_metadata
+        asset.size_bytes = stable_stat.st_size
+        asset.sha256 = checksum
+        asset.metadata_read_at = timezone.now()
+        asset.source_modified_at = datetime.fromtimestamp(
+            stable_stat.st_mtime, tz=timezone.get_current_timezone()
+        )
+        asset.sync_status = FileAsset.SyncStatus.SYNCED
+        asset.sync_error = ""
+        asset.save()
+        FileChecksum.objects.get_or_create(
+            asset=asset,
+            sha256=checksum,
+            defaults={"reason": FileChecksum.Reason.INGEST},
+        )
+        remaining_assets = list(
+            old_recording.file_assets.filter(role=FileAsset.Role.RADIO_FLAC)
+            .exclude(pk=asset.pk)
+            .prefetch_related("locations")
+        )
+    return recording, old_recording, remaining_assets
 
 
 def _catalogue_tags(asset, p7uuid_only=False):

@@ -519,6 +519,18 @@ class GuiV2WorkspaceTests(TestCase):
         )
         self.assertEqual(response.status_code, 403)
 
+    @override_settings(GUI_V2_WRITES_ENABLED=True)
+    def test_catalogue_viewer_cannot_split_file_by_direct_post(self):
+        self.user.user_permissions.add(
+            Permission.objects.get(content_type__app_label="music_library", codename="view_musiclibraryentry")
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("gui_v2:split_library_file", args=[self.entry.pk, uuid4()]),
+            {"confirmed": "yes"},
+        )
+        self.assertEqual(response.status_code, 403)
+
     def test_existing_workbench_and_prototype_do_not_touch_files(self):
         self._superuser()
         with tempfile.TemporaryDirectory() as folder:
@@ -566,6 +578,66 @@ class GuiV2WorkspaceTests(TestCase):
             self.assertNotIn("WindowsPath(", copied_path)
             self.assertNotIn("(", copied_path)
             self.assertContains(response, "Kopier mappe til OneTagger")
+
+    @override_settings(GUI_V2_WRITES_ENABLED=True)
+    def test_split_file_has_preview_and_keeps_flac_read_only(self):
+        self._superuser()
+        ExternalIdentifier.objects.create(
+            recording=self.recording,
+            scheme=ExternalIdentifier.Scheme.ISRC,
+            value="NO-P7T-26-00555",
+        )
+        with tempfile.TemporaryDirectory() as root, override_settings(P7_MUSIC_ROOT=root):
+            first_asset = self._radio_file(
+                root, self.recording, title="Eksisterende innspilling", genre="Pop", energy=3
+            )
+            first_path = Path(root) / "radio/test.flac"
+            first_audio = FLAC(first_path)
+            first_audio["ISRC"] = "NO-P7T-26-00555"
+            first_audio.save()
+
+            second_path = Path(root) / "radio/annen.flac"
+            shutil.copyfile(
+                Path(__file__).parents[1] / "flac_ingest" / "test_fixtures" / "silence.flac",
+                second_path,
+            )
+            second_audio = FLAC(second_path)
+            second_audio["TITLE"] = "En helt annen sang"
+            second_audio["ARTIST"] = "En annen artist"
+            second_audio["ISRC"] = "NO-P7T-26-00555"
+            second_audio.save()
+            second_asset = FileAsset.objects.create(
+                recording=self.recording, filename=second_path.name, role=FileAsset.Role.RADIO_FLAC
+            )
+            FileLocation.objects.create(
+                asset=second_asset,
+                storage_type=FileLocation.StorageType.NAS,
+                relative_path="radio/annen.flac",
+            )
+            before = (first_path.read_bytes(), second_path.read_bytes())
+
+            library = self.client.get(
+                reverse("gui_v2:music_library"), {"selected": self.entry.pk}
+            )
+            split_url = reverse(
+                "gui_v2:split_library_file", args=[self.entry.pk, second_asset.pk]
+            )
+            self.assertContains(library, split_url)
+            preview = self.client.get(split_url)
+            self.assertContains(preview, "Skill ut radiofil som egen innspilling")
+            self.assertContains(preview, "En helt annen sang")
+            self.assertContains(preview, "Ingen lydfil endres")
+
+            response = self.client.post(split_url, {"confirmed": "yes"})
+            self.assertEqual(response.status_code, 302)
+            second_asset.refresh_from_db()
+            self.assertNotEqual(second_asset.recording_id, self.recording.pk)
+            self.assertEqual(second_asset.recording.title, "En helt annen sang")
+            self.assertTrue(
+                MusicLibraryEntry.objects.filter(recording_id=second_asset.recording_id).exists()
+            )
+            self.assertEqual((first_path.read_bytes(), second_path.read_bytes()), before)
+            self.assertEqual(first_asset.recording_id, self.recording.pk)
 
     @override_settings(GUI_V2_WRITES_ENABLED=True)
     def test_single_file_rescan_updates_unmanaged_catalogue_and_radio(self):

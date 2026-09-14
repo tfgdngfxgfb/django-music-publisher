@@ -16,6 +16,7 @@ from django.urls import reverse
 from mutagen.flac import FLAC
 
 from catalogue.models import (
+    DuplicateCandidate,
     ExternalIdentifier,
     Recording,
     RecordingContribution,
@@ -56,8 +57,10 @@ from flac_ingest.models import (
 from flac_ingest.services import (
     apply_batch,
     _source_record_reference,
+    review_item,
     resolve_music_path,
     scan_directory,
+    split_radio_file_to_new_recording,
     sync_file_asset,
     sync_recording_files,
 )
@@ -541,9 +544,10 @@ class FlacIngestTests(FlacTestMixin, TestCase):
         common_tags = {
             "ARTIST": "Uavklart felles artist",
             "ISRC": "NO-P7T-26-00999",
+            "ALBUM": "Original og samleutgivelse",
         }
-        self.make_flac("sett/spor-a.flac", TITLE="Første fil", **common_tags)
-        self.make_flac("sett/spor-b.flac", TITLE="Andre fil", **common_tags)
+        self.make_flac("sett/spor-a.flac", TITLE="Samme innspilling", **common_tags)
+        self.make_flac("sett/spor-b.flac", TITLE="Samme innspilling", **common_tags)
 
         batch = self.scan()
         self.assertEqual(
@@ -562,6 +566,177 @@ class FlacIngestTests(FlacTestMixin, TestCase):
             1,
         )
         self.assertEqual(FileAsset.objects.count(), 2)
+
+    def test_same_isrc_with_incompatible_metadata_requires_manual_separation(self):
+        first = self.make_flac(
+            "album-a/01.flac",
+            TITLE="Første helt forskjellige sang",
+            ARTIST="Artist A",
+            ALBUM="Utgivelse A",
+            ISRC="NO-P7T-26-00777",
+        )
+        second = self.make_flac(
+            "album-b/09.flac",
+            TITLE="En annen innspilling",
+            ARTIST="Artist B",
+            ALBUM="Utgivelse B",
+            ISRC="NO-P7T-26-00777",
+        )
+        before = {path.name: path.read_bytes() for path in (first, second)}
+
+        batch = self.scan()
+        self.assertEqual(
+            list(batch.items.values_list("action", flat=True)),
+            [FlacIngestItem.Action.NEW, FlacIngestItem.Action.CONFLICT],
+        )
+        conflicted = batch.items.order_by("relative_path").last()
+        self.assertIn("Samme ISRC", " ".join(conflicted.messages))
+        self.assertEqual(self.apply(batch), 1)
+        self.assertEqual(Recording.objects.count(), 1)
+        self.assertEqual(FileAsset.objects.count(), 1)
+
+        review_item(
+            conflicted,
+            parsed=conflicted.parsed_metadata,
+            resolution="new",
+            user=self.user,
+            note="Kjent feilbruk av ISRC; innspillingene skal holdes adskilt.",
+        )
+        self.assertEqual(self.apply(batch), 1)
+        self.assertEqual(Recording.objects.count(), 2)
+        self.assertEqual(FileAsset.objects.count(), 2)
+        self.assertEqual(
+            ExternalIdentifier.objects.filter(
+                scheme=ExternalIdentifier.Scheme.ISRC,
+                normalized_value="NOP7T2600777",
+            ).count(),
+            1,
+        )
+        self.assertTrue(
+            MetadataAssertion.objects.filter(
+                entity_type=MetadataAssertion.EntityType.RECORDING,
+                field_name="reported_isrc",
+                normalized_value="NOP7T2600777",
+                status=VerificationStatus.DISPUTED,
+            ).exists()
+        )
+        decision = DuplicateCandidate.objects.get(
+            status=DuplicateCandidate.Status.DISMISSED
+        )
+        self.assertIn("reported_isrc_collision", decision.signals)
+
+        # Cleanup treats the explicit keep-separate decision as protected P7
+        # knowledge even while both files still exist.
+        with override_settings(P7_MUSIC_ROOT=str(self.root)):
+            for recording_id in Recording.objects.values_list("pk", flat=True):
+                cleanup = create_cleanup_preview(
+                    user=self.user, recording_id=recording_id
+                )
+                self.assertEqual(cleanup.plan["stats"]["safe_to_remove"], 0)
+                self.assertIn(
+                    "Innspillingen inngår i en bevart dublettavgjørelse.",
+                    cleanup.plan["items"][0]["protected_reasons"],
+                )
+
+        # The explicit keep-separate decision survives a forced scan and rebuild.
+        with override_settings(P7_MUSIC_ROOT=str(self.root)):
+            repeated = scan_directory(
+                relative_root=".", recursive=True, force_read=True, user=self.user
+            )
+            self.assertFalse(
+                repeated.items.filter(action=FlacIngestItem.Action.CONFLICT).exists()
+            )
+            apply_batch(repeated, user=self.user)
+            rebuild = create_rebuild_preview(user=self.user)
+            execute_rebuild(rebuild, user=self.user)
+        self.assertEqual(Recording.objects.count(), 2)
+        self.assertEqual(FileAsset.objects.count(), 2)
+        self.assertEqual(
+            {path.name: path.read_bytes() for path in (first, second)}, before
+        )
+
+    def test_manual_file_split_moves_only_selected_file_and_track(self):
+        first = self.make_flac(
+            "album-a/01.flac",
+            TITLE="Riktig første sang",
+            ARTIST="Artist A",
+            ALBUM="Album A",
+            ISRC="NO-P7T-26-00666",
+        )
+        second = self.make_flac(
+            "album-b/02.flac",
+            TITLE="Riktig andre sang",
+            ARTIST="Artist B",
+            ALBUM="Album B",
+            ISRC="NO-P7T-26-00666",
+        )
+        before = {path.name: path.read_bytes() for path in (first, second)}
+        recording = Recording.objects.create(title="Feil felles innspilling")
+        ExternalIdentifier.objects.create(
+            recording=recording,
+            scheme=ExternalIdentifier.Scheme.ISRC,
+            value="NO-P7T-26-00666",
+        )
+        MusicLibraryEntry.objects.create(recording=recording)
+        release_a = Release.objects.create(title="Album A")
+        release_b = Release.objects.create(title="Album B")
+        track_a = ReleaseTrack.objects.create(
+            release=release_a, recording=recording, sequence_number=1
+        )
+        track_b = ReleaseTrack.objects.create(
+            release=release_b,
+            recording=recording,
+            sequence_number=1,
+            title_override="Feil felles innspilling",
+        )
+        assets = []
+        for path, track, relative in (
+            (first, track_a, "album-a/01.flac"),
+            (second, track_b, "album-b/02.flac"),
+        ):
+            snapshot = read_flac(path)
+            asset = FileAsset.objects.create(
+                recording=recording,
+                release_track=track,
+                filename=path.name,
+                role=FileAsset.Role.RADIO_FLAC,
+                size_bytes=path.stat().st_size,
+                sha256=file_sha256(path),
+                technical_metadata=snapshot.technical,
+            )
+            FileLocation.objects.create(
+                asset=asset,
+                storage_type=FileLocation.StorageType.NAS,
+                relative_path=relative,
+            )
+            assets.append(asset)
+
+        with override_settings(P7_MUSIC_ROOT=str(self.root)):
+            new_recording, old_recording, remaining = split_radio_file_to_new_recording(
+                asset_id=assets[1].pk, user=self.user
+            )
+
+        assets[0].refresh_from_db()
+        assets[1].refresh_from_db()
+        track_a.refresh_from_db()
+        track_b.refresh_from_db()
+        self.assertEqual(assets[0].recording_id, old_recording.pk)
+        self.assertEqual(track_a.recording_id, old_recording.pk)
+        self.assertEqual(assets[1].recording_id, new_recording.pk)
+        self.assertEqual(track_b.recording_id, new_recording.pk)
+        self.assertEqual(track_b.title_override, "Riktig andre sang")
+        self.assertEqual(new_recording.title, "Riktig andre sang")
+        self.assertEqual(len(remaining), 1)
+        self.assertEqual(
+            assets[1].technical_metadata["manual_recording_assignment"][
+                "recording_uuid"
+            ],
+            str(new_recording.pk),
+        )
+        self.assertFalse(new_recording.identifiers.filter(scheme="ISRC").exists())
+        self.assertEqual(
+            {path.name: path.read_bytes() for path in (first, second)}, before
+        )
 
     def test_managed_catalogue_is_protected_but_radio_metadata_updates(self):
         recording = Recording.objects.create(title="Databasefasit")
