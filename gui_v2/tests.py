@@ -114,6 +114,7 @@ class GuiV2WorkspaceTests(TestCase):
         self.assertEqual(response.context["page"].paginator.per_page, 1)
         self.assertContains(response, "data-auto-submit-filters")
         self.assertNotContains(response, "Bruk filtre")
+        self.assertNotContains(response, "Radiomusikk")
         self.assertContains(response, '<option value="all" selected>Alle</option>', html=True)
 
     def test_channel_logo_requires_library_permission(self):
