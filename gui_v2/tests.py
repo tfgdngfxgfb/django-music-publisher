@@ -58,6 +58,8 @@ class GuiV2WorkspaceTests(TestCase):
         self._superuser()
         library = self.client.get(reverse("gui_v2:music_library"), {"genre": "Pop"})
         self.assertContains(library, "Sjanger: Pop")
+        self.assertContains(library, "data-row-href")
+        self.assertNotContains(library, 'id="v2-inspector"')
         grid = self.client.get(reverse("gui_v2:release_detail", args=[self.release.pk]))
         self.assertContains(grid, 'role="grid"')
         self.assertContains(grid, 'data-field="recording_title"')

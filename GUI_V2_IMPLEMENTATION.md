@@ -9,6 +9,8 @@ oppdiktede statusbetydninger fra illustrasjonene er ikke kopiert.
 Musikkarkivet har nå en tett, paginert arbeidsliste med reelle søk og filtre,
 flerverdi-filtrering for kanal/målgruppe (`minst én` eller `alle`), bevart
 spørringskontekst, aktive filterchips og et lukkbart, skalerbart detaljpanel.
+Detaljpanelet åpnes først når brukeren velger en innspilling. Hele tabellraden
+kan velges, mens tittellenken fortsatt gir vanlig tastaturnavigasjon.
 Panelets åpne/lukkede tilstand og bredde huskes lokalt. Tabellen viser tittel,
 artist, ISRC, varighet, sjanger, språk, `Energy`, kanaler, målgrupper, filstatus,
 forvaltning og siste innlesing som separate sammenlignbare kolonner. `Energy`

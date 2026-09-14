@@ -13,6 +13,14 @@
     setTimeout(() => { button.textContent = old; }, 1100);
   }));
 
+  document.querySelectorAll("[data-row-href]").forEach(row => row.addEventListener("click", event => {
+    if (event.target.closest("a, button, input, select, textarea, label")) return;
+    const scroller = row.closest(".table-scroll");
+    const key = `p7-v2-scroll:${location.pathname}${location.search.replace(/([?&])selected=[^&]*/, "$1")}`;
+    sessionStorage.setItem(key, scroller?.scrollTop || 0);
+    location.href = row.dataset.rowHref;
+  }));
+
   const inspector = document.querySelector("#v2-inspector");
   const layout = inspector?.parentElement;
   const inspectorKey = `p7-v2-inspector-open:${location.pathname}`;

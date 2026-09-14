@@ -138,8 +138,6 @@ def music_library(request):
 
     selected_id = request.GET.get("selected")
     selected = next((item for item in page.object_list if str(item.pk) == selected_id), None)
-    if not selected and not selected_id and page.object_list:
-        selected = page.object_list[0]
     if selected:
         selected.releases = list({track.release_id: track.release for track in selected.recording.release_tracks.all()}.values())
         selected.source_assertions = MetadataAssertion.objects.filter(
