@@ -5,15 +5,15 @@
   <header class="release-object-header">
     <a class="release-back" href="{{ return_url }}">← Utgivelser</a>
     <div class="release-cover compact">{% if release_cover %}<img src="{% url 'workbench:cover_image' release_cover.pk %}" alt="Cover til {{ release.title }}">{% else %}▣{% endif %}</div>
-    <div class="release-identity"><span class="eyebrow">Utgivelse</span><h1>{{ release.title }}</h1><p>{{ release_artist_text }}</p><div class="release-facts"><span>{{ release.release_year|default:"År ukjent" }}</span><span>{{ release.get_release_type_display|default:"Format ukjent" }}</span><span>{{ release.label|default:"Label ukjent" }}</span><span>{{ release.catalogue_number|default:"Katalognummer ukjent" }}</span></div></div>
-    <code>{{ release.pk }}</code>
+    <div class="release-identity"><h1>{{ release.title }}</h1><p>{{ release_artist_text }}{% if release.release_year %}<span> · {{ release.release_year }}</span>{% endif %}</p><div class="release-facts"><span><b>Format</b> {{ release.get_release_type_display|default:"—" }}</span><span><b>Label</b> {{ release.label|default:"—" }}</span><span><b>Katalognr.</b> {{ release.catalogue_number|default:"—" }}</span></div></div>
+    <nav class="release-tabs" aria-label="Utgivelsens arbeidsområder">
+      <a {% if active_tab == 'tracks' %}aria-current="page"{% endif %} href="?tab=tracks">Sporliste</a>
+      <a {% if active_tab == 'details' %}aria-current="page"{% endif %} href="?tab=details">Utgivelsesdetaljer</a>
+      <a {% if active_tab == 'files' %}aria-current="page"{% endif %} href="?tab=files">Filer og kilder</a>
+      <a {% if active_tab == 'rights' %}aria-current="page"{% endif %} href="?tab=rights">Rettigheter</a>
+    </nav>
+    <button class="button subtle release-uuid-copy" type="button" data-copy="{{ release.pk }}" title="Kopier utgivelsens UUID">Kopier UUID</button>
   </header>
-  <nav class="release-tabs" aria-label="Utgivelsens arbeidsområder">
-    <a {% if active_tab == 'tracks' %}aria-current="page"{% endif %} href="?tab=tracks">Sporliste</a>
-    <a {% if active_tab == 'details' %}aria-current="page"{% endif %} href="?tab=details">Utgivelsesdetaljer</a>
-    <a {% if active_tab == 'files' %}aria-current="page"{% endif %} href="?tab=files">Filer og kilder</a>
-    <a {% if active_tab == 'rights' %}aria-current="page"{% endif %} href="?tab=rights">Rettigheter</a>
-  </nav>
 
   {% if active_tab == "tracks" %}<div class="release-layout">
   <section class="track-workspace" id="tracks">
@@ -52,7 +52,7 @@
 
   {% elif active_tab == "details" %}
   <section class="release-tab-content"><header><span class="eyebrow">Utgivelsesdetaljer</span><h2>Grunnopplysninger</h2><p>Disse opplysningene gjelder utgivelsen som helhet.</p></header>
-    <dl class="release-readonly"><dt>Tittel</dt><dd>{{ release.title }}</dd><dt>Artist</dt><dd>{{ release_artist_text }} <small>avledet fra sporene</small></dd><dt>Dato/år</dt><dd>{{ release.release_date|date:"d.m.Y"|default:release.release_year|default:"Ukjent" }}</dd><dt>Format</dt><dd>{{ release.get_release_type_display|default:"Ukjent" }}</dd><dt>Label</dt><dd>{{ release.label|default:"Ukjent" }}</dd><dt>Katalognummer</dt><dd>{{ release.catalogue_number|default:"Ikke registrert" }}</dd><dt>Strekkode</dt><dd>{% if release_barcode %}{{ release_barcode.normalized_value }}{% else %}Ikke registrert{% endif %}</dd></dl>
+    <dl class="release-readonly"><dt>Tittel</dt><dd>{{ release.title }}</dd><dt>Artist</dt><dd>{{ release_artist_text }} <small>avledet fra sporene</small></dd><dt>Dato/år</dt><dd>{{ release.release_date|date:"d.m.Y"|default:release.release_year|default:"Ukjent" }}</dd><dt>Format</dt><dd>{{ release.get_release_type_display|default:"Ukjent" }}</dd><dt>Label</dt><dd>{{ release.label|default:"Ukjent" }}</dd><dt>Katalognummer</dt><dd>{{ release.catalogue_number|default:"Ikke registrert" }}</dd><dt>Strekkode</dt><dd>{% if release_barcode %}{{ release_barcode.normalized_value }}{% else %}Ikke registrert{% endif %}</dd><dt>UUID</dt><dd><code>{{ release.pk }}</code> <button class="copy" type="button" data-copy="{{ release.pk }}">Kopier</button></dd></dl>
     {% if perms.catalogue.change_release %}<form method="post" class="release-metadata-form integrated"><input type="hidden" name="action" value="release"><input type="hidden" name="tab" value="details">{% csrf_token %}{% for field in release_form %}<label>{{ field.label }}{{ field }}{% for error in field.errors %}<small class="cell-error">{{ error }}</small>{% endfor %}</label>{% endfor %}{% if release_form.non_field_errors %}<div class="form-errors">{{ release_form.non_field_errors }}</div>{% endif %}<p class="muted compact-note">Dagens Release-modell har ikke en egen albumartist. Visningen avledes fra sporenes artistkrediteringer.</p><button class="primary" type="submit" {% if not writes_enabled %}disabled{% endif %}>Lagre utgivelsen</button></form>{% endif %}
   </section>
 
