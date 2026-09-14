@@ -213,10 +213,11 @@ def music_library(request):
             asset.current_locations = [location for location in asset.locations.all() if location.is_current]
             for location in asset.current_locations:
                 try:
-                    location.onetagger_path = (
-                        str(resolve_music_path(location.relative_path))
-                        if location.storage_type == FileLocation.StorageType.NAS else ""
-                    )
+                    if location.storage_type == FileLocation.StorageType.NAS:
+                        _, file_path = resolve_music_path(location.relative_path)
+                        location.onetagger_path = str(file_path.parent)
+                    else:
+                        location.onetagger_path = ""
                 except (ImproperlyConfigured, ValidationError, OSError):
                     location.onetagger_path = ""
     return render(

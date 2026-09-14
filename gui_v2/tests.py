@@ -316,6 +316,22 @@ class GuiV2WorkspaceTests(TestCase):
         )
         return asset
 
+    def test_onetagger_copy_value_is_plain_containing_folder_path(self):
+        self._superuser()
+        with tempfile.TemporaryDirectory() as root, override_settings(P7_MUSIC_ROOT=root):
+            self._radio_file(
+                root, self.recording, title=self.recording.title, genre="Pop", energy=3
+            )
+            response = self.client.get(
+                reverse("gui_v2:music_library"), {"selected": self.entry.pk}
+            )
+            selected = response.context["selected"]
+            copied_path = selected.radio_files[0].current_locations[0].onetagger_path
+            self.assertEqual(copied_path, str((Path(root) / "radio").resolve()))
+            self.assertNotIn("WindowsPath(", copied_path)
+            self.assertNotIn("(", copied_path)
+            self.assertContains(response, "Kopier mappe til OneTagger")
+
     @override_settings(GUI_V2_WRITES_ENABLED=True)
     def test_single_file_rescan_updates_unmanaged_catalogue_and_radio(self):
         self._superuser()
