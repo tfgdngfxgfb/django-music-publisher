@@ -114,6 +114,15 @@
   });
   if (filterToggle && localStorage.getItem(`p7-v2-filters:${location.pathname}`) === "false") filterToggle.click();
 
+  const librarySearch = document.querySelector("[data-library-search]");
+  document.addEventListener("keydown", event => {
+    if (!librarySearch || event.key !== "/" || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (event.target.closest("input, select, textarea, [contenteditable='true']")) return;
+    event.preventDefault();
+    librarySearch.focus();
+    librarySearch.select();
+  });
+
   const scrollKey = `p7-v2-scroll:${location.pathname}${location.search.replace(/([?&])selected=[^&]*/, "$1")}`;
   const scroller = document.querySelector(".table-scroll");
   if (scroller) {

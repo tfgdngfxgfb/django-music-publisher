@@ -6,13 +6,15 @@ from catalogue.services import find_recording_candidates
 from catalogue.validators import normalize_isrc, normalize_trade_item_number
 from music_library.models import Channel, MusicLibraryEntry, TargetAudience
 
+from .presentation import observed_genres, radio_language_name
+
 
 class MusicLibraryFilterForm(forms.Form):
     MATCH_CHOICES = (("any", "Minst én valgt"), ("all", "Alle valgte"))
 
     q = forms.CharField(required=False, label="Søk")
-    genre = forms.CharField(required=False, label="Radiosjanger")
-    language = forms.CharField(required=False, label="Radiospråk")
+    genre = forms.ChoiceField(required=False, choices=(("", "Alle"),), label="Radiosjanger")
+    language = forms.ChoiceField(required=False, choices=(("", "Alle"),), label="Radiospråk")
     energy = forms.TypedChoiceField(
         required=False,
         coerce=int,
@@ -27,7 +29,11 @@ class MusicLibraryFilterForm(forms.Form):
     )
     rotation_suitability = forms.ChoiceField(
         required=False,
-        choices=(("", "Alle"), *MusicLibraryEntry.RotationSuitability.choices),
+        choices=(
+            ("", "Alle"),
+            *MusicLibraryEntry.RotationSuitability.choices,
+            ("unassessed", "Ikke vurdert"),
+        ),
         label="Rotasjonsvurdering",
     )
     file_status = forms.ChoiceField(
@@ -78,6 +84,28 @@ class MusicLibraryFilterForm(forms.Form):
     target_mode = forms.ChoiceField(
         required=False, choices=MATCH_CHOICES, initial="any", label="Målgruppevalg"
     )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["q"].widget.attrs.update({
+            "placeholder": "Tittel, artist eller ISRC",
+            "data-library-search": "",
+            "autocomplete": "off",
+        })
+        genres = observed_genres(
+            MusicLibraryEntry.objects.exclude(genre="").order_by().values_list("genre", flat=True).distinct()
+        )
+        languages = list(
+            MusicLibraryEntry.objects.exclude(language="")
+            .order_by()
+            .values_list("language", flat=True)
+            .distinct()
+        )
+        self.fields["genre"].choices = (("", "Alle"), *((value, value) for value in genres))
+        self.fields["language"].choices = (
+            ("", "Alle"),
+            *((value, radio_language_name(value)) for value in sorted(languages, key=lambda item: radio_language_name(item).casefold())),
+        )
 
 
 class ReleaseMetadataForm(forms.ModelForm):

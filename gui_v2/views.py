@@ -25,6 +25,7 @@ from rights.services import create_release_rights_claims, get_local_organization
 from rights.summaries import OwnershipCategory, local_confirmed_right_recording_ids, ownership_summaries_for_recordings
 
 from .forms import MusicLibraryFilterForm, ReleaseMetadataForm, TrackRowFormSet
+from .presentation import compact_names, radio_language_name
 from .services import save_release_track_rows
 
 
@@ -115,9 +116,29 @@ def music_library(request):
                 | Q(recording__contributions__credited_as__icontains=term)
                 | Q(recording__identifiers__normalized_value__icontains=term)
             )
-        for field in ("genre", "language", "energy", "gender", "rotation_suitability"):
+        selected_genre = data.get("genre")
+        if selected_genre:
+            queryset = queryset.filter(
+                Q(genre__iexact=selected_genre)
+                | Q(genre__istartswith=f"{selected_genre};")
+                | Q(genre__iendswith=f"; {selected_genre}")
+                | Q(genre__iendswith=f";{selected_genre}")
+                | Q(genre__icontains=f"; {selected_genre};")
+                | Q(genre__icontains=f";{selected_genre};")
+            )
+        for field in ("language", "energy", "gender"):
             if data.get(field) not in (None, ""):
                 queryset = queryset.filter(**{field: data[field]})
+        rotation = data.get("rotation_suitability")
+        if rotation == MusicLibraryEntry.RotationSuitability.SUITABLE:
+            queryset = queryset.filter(
+                Q(rotation_suitability=MusicLibraryEntry.RotationSuitability.SUITABLE)
+                | Q(channels__isnull=False)
+            ).exclude(rotation_suitability=MusicLibraryEntry.RotationSuitability.NOT_SUITABLE)
+        elif rotation == MusicLibraryEntry.RotationSuitability.NOT_SUITABLE:
+            queryset = queryset.filter(rotation_suitability=rotation)
+        elif rotation == "unassessed":
+            queryset = queryset.filter(rotation_suitability="", channels__isnull=True)
         if data.get("managed") == "yes":
             queryset = queryset.filter(managed_recording__isnull=False)
         elif data.get("managed") == "no":
@@ -178,6 +199,22 @@ def music_library(request):
         entry.duration_text = _duration(entry.recording.duration_ms)
         entry.radio_files = [item for item in entry.recording.file_assets.all() if item.role == FileAsset.Role.RADIO_FLAC]
         entry.is_managed = hasattr(entry, "managed_recording")
+        entry.language_display = radio_language_name(entry.language)
+        channel_values = list(entry.channels.all())
+        target_values = list(entry.target_audiences.all())
+        entry.channel_summary = compact_names(channel_values)
+        entry.channel_names = ", ".join(str(value) for value in channel_values)
+        entry.target_summary = compact_names(target_values)
+        entry.target_names = ", ".join(str(value) for value in target_values)
+        if entry.rotation_suitability == MusicLibraryEntry.RotationSuitability.NOT_SUITABLE:
+            entry.rotation_display = MusicLibraryEntry.RotationSuitability.NOT_SUITABLE.label
+            entry.rotation_kind = "warning"
+        elif entry.rotation_suitability == MusicLibraryEntry.RotationSuitability.SUITABLE or channel_values:
+            entry.rotation_display = MusicLibraryEntry.RotationSuitability.SUITABLE.label
+            entry.rotation_kind = "ok"
+        else:
+            entry.rotation_display = "Ikke vurdert"
+            entry.rotation_kind = "muted"
         entry.preview_url = _entry_url(request, entry.pk)
         entry.detail_url = f"{reverse('workbench:recording', args=[entry.recording_id])}?{urlencode({'return': entry.preview_url})}"
         entry.follow_up_reasons = []
@@ -232,6 +269,12 @@ def music_library(request):
             "section": "music_library", "filter_form": form, "page": page, "selected": selected,
             "query_without_page": _query_without(request, "page"),
             "query_without_selected": _query_without(request, "selected"),
+            "search_params": [
+                (key, value)
+                for key, values in request.GET.lists()
+                if key not in {"q", "page", "selected"}
+                for value in values
+            ],
             "active_filters": active_filters,
             "writes_enabled": settings.GUI_V2_WRITES_ENABLED,
         },

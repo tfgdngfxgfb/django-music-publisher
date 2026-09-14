@@ -60,6 +60,47 @@ class GuiV2WorkspaceTests(TestCase):
         response = self.client.get(reverse("gui_v2:music_library"), {"channels": [self.channel.pk, other.pk], "channel_mode": "all"})
         self.assertContains(response, "Ingen innspillinger passer")
 
+    def test_library_uses_observed_genre_and_named_language_filters(self):
+        self._superuser()
+        self.entry.genre = "Pop; Evangelisk"
+        self.entry.language = "no"
+        self.entry.save(update_fields=("genre", "language"))
+        second_recording = Recording.objects.create(title="En annen norsk innspilling")
+        MusicLibraryEntry.objects.create(recording=second_recording, genre="Pop", language="no")
+
+        response = self.client.get(reverse("gui_v2:music_library"))
+        self.assertContains(response, '<option value="Evangelisk">Evangelisk</option>', html=True)
+        self.assertContains(response, '<option value="Pop">Pop</option>', html=True)
+        self.assertContains(response, '<option value="no">Norsk</option>', html=True)
+        self.assertEqual(response.content.count(b'<option value="no">Norsk</option>'), 1)
+        self.assertContains(response, 'data-library-search')
+
+        filtered = self.client.get(reverse("gui_v2:music_library"), {"genre": "Evangelisk"})
+        self.assertContains(filtered, "Eksisterende innspilling")
+        self.assertContains(filtered, "Sjanger: Evangelisk")
+
+    def test_rotation_filter_derives_suitable_from_channel_membership(self):
+        self._superuser()
+        response = self.client.get(
+            reverse("gui_v2:music_library"),
+            {"rotation_suitability": MusicLibraryEntry.RotationSuitability.SUITABLE},
+        )
+        self.assertContains(response, "Eksisterende innspilling")
+        self.assertContains(response, "Rotasjonsverdig")
+
+        self.entry.rotation_suitability = MusicLibraryEntry.RotationSuitability.NOT_SUITABLE
+        self.entry.save(update_fields=("rotation_suitability",))
+        response = self.client.get(
+            reverse("gui_v2:music_library"),
+            {"rotation_suitability": MusicLibraryEntry.RotationSuitability.SUITABLE},
+        )
+        self.assertContains(response, "Ingen innspillinger passer")
+        response = self.client.get(
+            reverse("gui_v2:music_library"),
+            {"rotation_suitability": MusicLibraryEntry.RotationSuitability.NOT_SUITABLE},
+        )
+        self.assertContains(response, "Ikke rotasjonsverdig")
+
     def test_library_and_grid_render_keyboard_workbench(self):
         self._superuser()
         self.entry.rotation_suitability = MusicLibraryEntry.RotationSuitability.NOT_SUITABLE
