@@ -38,6 +38,10 @@ arbeidsflaten. Aktiv rad oppdaterer
 sporinspektøren, og detaljpanelene kan lukkes, åpnes og breddejusteres med mus
 eller tastatur.
 
+Begge arbeidslistene bruker innholdsbasert kolonnebredde uten fryste kolonner.
+Sportabellen har kompakte énradsstatuser og felt som vokser med innholdet innen
+praktiske maksimumsbredder.
+
 Avspillingsfeltet er synlig, men deaktivert fordi prosjektet ikke har en trygg
 avspillingsbackend. Det står derfor eksplisitt `Avspilling ikke tilkoblet`.
 

@@ -30,3 +30,17 @@
 .active-filters{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:7px 10px;border-bottom:1px solid var(--line);background:var(--surface)}.filter-chip{padding:4px 7px;border:1px solid var(--accent);border-radius:999px;color:var(--text);background:var(--accent-soft);text-decoration:none;font-size:10px}.filter-chip span{color:var(--accent);font-size:13px}.clear-filters{margin-left:auto;color:var(--muted);font-size:10px}.library-table{min-width:1520px;font-size:10px}.library-table th{padding:5px 7px;white-space:nowrap;vertical-align:middle}.library-table td{height:32px;padding:3px 7px;white-space:nowrap;vertical-align:middle;line-height:1.15}.library-table th:first-child,.library-table td:first-child{min-width:210px}.library-table tr.selected td:first-child{background:var(--accent-soft)}.library-table td:nth-child(2){min-width:150px}.library-table td:nth-child(8),.library-table td:nth-child(9){min-width:150px}.library-table .tag-row{flex-wrap:nowrap}.library-table .row-link strong{font-size:11px;line-height:1.15}.library-table time{color:var(--muted)}.energy-meter{display:inline-flex;align-items:center;gap:5px}.energy-meter b{display:inline-block;width:42px;height:7px;border-radius:2px;background:linear-gradient(90deg,var(--accent) calc(var(--energy) * 20%),var(--line2) 0)}
 
 .library-table tr[data-row-href]{cursor:pointer}
+
+/* Content-sized, vertically compact tables */
+.library-table,.track-table{width:max-content;min-width:100%;table-layout:auto}
+.library-table th:first-child,.library-table td:first-child,.library-table td:nth-child(2),.library-table td:nth-child(8),.library-table td:nth-child(9){min-width:0}
+.library-table th{padding:4px 6px}.library-table td{height:28px;padding:2px 6px}
+.track-table th:nth-child(n),.track-table td:nth-child(n){width:auto;min-width:0}
+.track-table [data-grid-cell]{padding:1px}
+.track-table input[type=text],.track-table input[type=number]{field-sizing:content;width:auto;min-width:6ch;max-width:42ch;padding:2px 4px;line-height:1.15}
+.track-table [data-field=sequence_number] input,.track-table [data-field=disc_number] input,.track-table [data-field=track_number] input{min-width:4ch;max-width:6ch}
+.track-table [data-field=side] input{min-width:5ch;max-width:8ch}
+.track-table [data-field=title_override] input,.track-table [data-field=recording_title] input{min-width:18ch}
+.track-table [data-field=artists] input,.track-table [data-field=composers] input,.track-table [data-field=lyricists] input,.track-table [data-field=arrangers] input{min-width:14ch}
+.track-table [data-field=duration] input{min-width:7ch;max-width:10ch}.track-table [data-field=isrc] input{min-width:14ch;max-width:18ch}
+.row-actions{display:flex;align-items:center;gap:5px;height:28px;padding:2px 5px;white-space:nowrap}.row-actions .status{padding:1px 5px}.row-actions .compact-check{display:inline-flex}
