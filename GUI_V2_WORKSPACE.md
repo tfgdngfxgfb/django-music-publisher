@@ -22,16 +22,22 @@ Musikkarkiv-tabellen støtter pil opp/ned, Enter for full visning og Escape for 
 lukke detaljpanelet. Søk, filtre, sortering, side og valgt rad følger eksplisitte
 returlenker fra innspillings- og utgivelsesdetaljer.
 
-Utgivelsessiden kan redigere utgivelsens katalogopplysninger og strekkode i et
-kompakt panel. Hovedartist vises avledet fra sporenes artistkrediteringer; dagens
-kanoniske `Release` har ingen egen hovedartistrelasjon.
+En åpen utgivelse er samlet i ett GUI-v2-arbeidsområde med fanene **Sporliste**,
+**Utgivelsesdetaljer**, **Filer og kilder** og **Rettigheter**. Et kompakt cover
+og utgivelsens identitet ligger fast i overskriften. Utgivelsesdetaljer kan
+redigeres i sin egen fane. Hovedartist vises avledet fra sporenes
+artistkrediteringer; dagens kanoniske `Release` har ingen egen hovedartistrelasjon.
 
 Nye utgivelser kan opprettes direkte fra GUI v2 og åpnes straks i sportabellen.
-Eksisterende cover som er registrert på utgivelsen vises ved sportabellen når
-brukeren har filtilgang. Autoriserte rettighetsbrukere kan åpne den eksisterende
-masseflyten og velge hvilke av utgivelsens underliggende innspillinger som skal
-få samme rettighetsgrunnlag. Rettighetene lagres fortsatt på `Recording`, ikke
-på `Release`.
+Filer og kilder viser eksisterende cover, dokumentreferanser, filplasseringer og
+kildepåstander når brukeren har tilgang. Autoriserte rettighetsbrukere kan i
+Rettigheter-fanen velge hvilke av utgivelsens underliggende innspillinger som
+skal få samme rettighetsgrunnlag. Rettighetene lagres fortsatt på `Recording`,
+ikke på `Release`.
+
+Høyrepanelet i Sporliste gjelder bare valgt spor og innspilling: sporplassering,
+artist, ISRC, kontrollbehov, andre utgivelsesforekomster og filkoblinger. Det
+brukes ikke som navigasjon eller handlingsmeny for utgivelsen.
 
 Sportabellen støtter piltaster, `Enter`, `Tab`/`Shift+Tab`, flercelleinnliming,
 `Ctrl+Z`, `Ctrl+D` (fyll ned) og `Ctrl+Enter` (lagre). Den kan sette inn,

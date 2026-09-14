@@ -1,45 +1,24 @@
 {% extends "gui_v2/base.html" %}
 {% block title %}{{ release.title }}{% endblock %}
 {% block content %}
-<div class="release-layout">
-  <aside class="release-nav">
-    <a href="{{ return_url }}">← Tilbake</a>
-    <div class="release-cover">{% if release_cover %}<img src="{% url 'workbench:cover_image' release_cover.pk %}" alt="Cover til {{ release.title }}">{% else %}▣{% endif %}</div>
-    <h2>{{ release.title }}</h2>
-    <p>{{ release_artist_text }}</p>
-    <dl>
-      <dt>Label</dt><dd>{{ release.label|default:"Ukjent" }}</dd>
-      <dt>Format</dt><dd>{{ release.get_release_type_display|default:"Ukjent" }}</dd>
-      <dt>År</dt><dd>{{ release.release_year|default:"Ukjent" }}</dd>
-      <dt>Katalognr.</dt><dd>{{ release.catalogue_number|default:"Ikke registrert" }}</dd>
-      <dt>Strekkode</dt><dd>{% if release_barcode %}{{ release_barcode.normalized_value }}{% else %}Ikke registrert{% endif %}</dd>
-      <dt>UUID</dt><dd><code>{{ release.pk }}</code></dd>
-    </dl>
-    {% if perms.catalogue.change_release %}
-    <details class="release-edit-panel"{% if release_form.errors %} open{% endif %}>
-      <summary>Rediger utgivelse</summary>
-      <form method="post" class="release-metadata-form">
-        {% csrf_token %}<input type="hidden" name="action" value="release">
-        {% for field in release_form %}
-          <label>{{ field.label }}{{ field }}{% for error in field.errors %}<small class="cell-error">{{ error }}</small>{% endfor %}</label>
-        {% endfor %}
-        {% if release_form.non_field_errors %}<div class="form-errors">{{ release_form.non_field_errors }}</div>{% endif %}
-        <p class="muted compact-note">Hovedartist avledes foreløpig fra artister på sporene og vedlikeholdes i sportabellen.</p>
-        <button class="primary" type="submit" {% if not writes_enabled %}disabled{% endif %}>Lagre utgivelsen</button>
-      </form>
-    </details>
-    {% endif %}
-    <nav>
-      <a aria-current="page" href="#tracks">Sporliste</a>
-      <a href="{% url 'workbench:release' release.pk %}?return={{ request.get_full_path|urlencode }}">Utgivelsesdetaljer</a>
-      <a href="{% url 'workbench:release' release.pk %}?tab=files&amp;return={{ request.get_full_path|urlencode }}">Filer og kilder</a>
-      {% if request.user.is_staff and perms.rights.view_rightsclaim and perms.rights.add_rightsclaim %}<a href="{% url 'workbench:release_rights_add' release.pk %}?return={{ request.get_full_path|urlencode }}">Registrer rettigheter for innspillinger</a>{% endif %}
-    </nav>
-  </aside>
+<div class="release-page">
+  <header class="release-object-header">
+    <a class="release-back" href="{{ return_url }}">← Utgivelser</a>
+    <div class="release-cover compact">{% if release_cover %}<img src="{% url 'workbench:cover_image' release_cover.pk %}" alt="Cover til {{ release.title }}">{% else %}▣{% endif %}</div>
+    <div class="release-identity"><span class="eyebrow">Utgivelse</span><h1>{{ release.title }}</h1><p>{{ release_artist_text }}</p><div class="release-facts"><span>{{ release.release_year|default:"År ukjent" }}</span><span>{{ release.get_release_type_display|default:"Format ukjent" }}</span><span>{{ release.label|default:"Label ukjent" }}</span><span>{{ release.catalogue_number|default:"Katalognummer ukjent" }}</span></div></div>
+    <code>{{ release.pk }}</code>
+  </header>
+  <nav class="release-tabs" aria-label="Utgivelsens arbeidsområder">
+    <a {% if active_tab == 'tracks' %}aria-current="page"{% endif %} href="?tab=tracks">Sporliste</a>
+    <a {% if active_tab == 'details' %}aria-current="page"{% endif %} href="?tab=details">Utgivelsesdetaljer</a>
+    <a {% if active_tab == 'files' %}aria-current="page"{% endif %} href="?tab=files">Filer og kilder</a>
+    <a {% if active_tab == 'rights' %}aria-current="page"{% endif %} href="?tab=rights">Rettigheter</a>
+  </nav>
 
+  {% if active_tab == "tracks" %}<div class="release-layout">
   <section class="track-workspace" id="tracks">
-    <header class="release-header">
-      <div><span class="eyebrow">Utgivelse · sporregistrering</span><h1>{{ release.title }}</h1><p>Sportittel gjelder utgivelsen. Innspilling, krediteringer og ISRC er felles og kan brukes på flere utgivelser.</p></div>
+    <header class="release-header track-context-bar">
+      <div><strong>Sporregistrering</strong><p>Sportittel gjelder utgivelsen. Innspilling, krediteringer og ISRC er felles og kan brukes på flere utgivelser.</p></div>
       <div class="heading-actions"><button class="button" type="button" data-open-inspector hidden>Vis sporinspektør</button><span class="status {% if writes_enabled %}ok{% else %}muted{% endif %}">{% if writes_enabled %}Isolert lagring aktiv{% else %}Skrivebeskyttet prototype{% endif %}</span></div>
     </header>
 
@@ -68,6 +47,28 @@
     <template id="empty-track-row"><tr class="track-row new" data-index="__prefix__" data-has-files="false" data-server-issue="false"><td data-grid-cell data-field="sequence_number" tabindex="0">{{ formset.empty_form.track_id }}{{ formset.empty_form.recording_id }}{{ formset.empty_form.force_create }}{{ formset.empty_form.sequence_number }}</td><td data-grid-cell data-field="disc_number" tabindex="-1">{{ formset.empty_form.disc_number }}</td><td data-grid-cell data-field="side" tabindex="-1">{{ formset.empty_form.side }}</td><td data-grid-cell data-field="track_number" tabindex="-1">{{ formset.empty_form.track_number }}</td><td data-grid-cell data-field="title_override" tabindex="-1">{{ formset.empty_form.title_override }}</td><td data-grid-cell data-field="recording_title" tabindex="-1"><div class="recording-cell">{{ formset.empty_form.recording_title }}<div class="search-results" role="listbox" hidden></div></div></td><td data-grid-cell data-field="artists" tabindex="-1">{{ formset.empty_form.artists }}</td><td data-grid-cell data-field="composers" tabindex="-1">{{ formset.empty_form.composers }}</td><td data-grid-cell data-field="lyricists" tabindex="-1">{{ formset.empty_form.lyricists }}</td><td data-grid-cell data-field="arrangers" tabindex="-1">{{ formset.empty_form.arrangers }}</td><td data-grid-cell data-field="duration" tabindex="-1">{{ formset.empty_form.duration }}</td><td data-grid-cell data-field="isrc" tabindex="-1">{{ formset.empty_form.isrc }}</td><td class="row-actions"><button type="button" class="control-pill row-state" data-control-status aria-label="Vis kontrollbehov">Kontrollerer …</button><label class="compact-check" title="Tillat endring av metadata som deles av innspillingen">{{ formset.empty_form.update_shared_recording }} Felles</label><label class="compact-check danger" title="Fjern sporet fra denne utgivelsen">{{ formset.empty_form.remove }} Fjern</label></td></tr></template>
   </section>
 
-  <aside class="inspector release-inspector" id="v2-inspector"><button class="resize-handle" type="button" tabindex="0" aria-label="Endre bredden på detaljpanelet"></button><header><div><span class="eyebrow">Valgt spor</span><h2 id="inspector-track-title">{% if selected_track %}{{ selected_track.display_title }}{% else %}Velg et spor{% endif %}</h2><p>Felles innspilling</p></div><button type="button" class="icon-button" data-close-inspector aria-label="Lukk sporinspektøren">×</button></header><dl class="detail-grid"><dt>Innspilling</dt><dd id="inspector-common-title">{% if selected_track %}{{ selected_track.recording.title }}{% else %}Ikke valgt{% endif %}</dd><dt>Posisjon</dt><dd id="inspector-position">{% if selected_track %}{{ selected_track.side }}{{ selected_track.track_number|default:selected_track.sequence_number }}{% else %}—{% endif %}</dd><dt>Artist</dt><dd id="inspector-artist">{{ selected_track_data.artists|default:"Uavklart" }}</dd><dt>ISRC</dt><dd id="inspector-isrc">{{ selected_track_data.isrc|default:"Ikke registrert" }}</dd><dt>Kontrollbehov</dt><dd id="inspector-control">Velg et spor</dd>{% if selected_track %}<dt>Andre utgivelser</dt><dd>{{ selected_track.recording.release_tracks.count }}</dd><dt>Filer</dt><dd>{{ selected_track.file_assets.count }}</dd>{% endif %}</dl><p class="notice">Felles metadata kan påvirke samme innspilling på flere utgivelser. Velg «Felles» uttrykkelig før lagring.</p><a id="inspector-recording-link" class="button full" data-url-template="{% url 'workbench:recording' '00000000-0000-0000-0000-000000000000' %}" href="{% if selected_track %}{% url 'workbench:recording' selected_track.recording.pk %}?return={{ request.get_full_path|urlencode }}{% else %}#{% endif %}"{% if not selected_track %} hidden{% endif %}>Åpne full innspilling</a></aside>
+  <aside class="inspector release-inspector" id="v2-inspector"><button class="resize-handle" type="button" tabindex="0" aria-label="Endre bredden på detaljpanelet"></button><header><div><span class="eyebrow">Valgt spor</span><h2 id="inspector-track-title">{% if selected_track %}{{ selected_track.display_title }}{% else %}Velg et spor{% endif %}</h2><p>Felles innspilling</p></div><button type="button" class="icon-button" data-close-inspector aria-label="Lukk sporinspektøren">×</button></header><dl class="detail-grid"><dt>Innspilling</dt><dd id="inspector-common-title">{% if selected_track %}{{ selected_track.recording.title }}{% else %}Ikke valgt{% endif %}</dd><dt>Posisjon</dt><dd id="inspector-position">{% if selected_track %}{{ selected_track.side }}{{ selected_track.track_number|default:selected_track.sequence_number }}{% else %}—{% endif %}</dd><dt>Artist</dt><dd id="inspector-artist">{{ selected_track_data.artists|default:"Uavklart" }}</dd><dt>ISRC</dt><dd id="inspector-isrc">{{ selected_track_data.isrc|default:"Ikke registrert" }}</dd><dt>Kontrollbehov</dt><dd id="inspector-control">Velg et spor</dd>{% if selected_track %}<dt>Andre utgivelser</dt><dd>{{ selected_track.recording.release_tracks.count }}</dd><dt>Filer på sporet</dt><dd>{{ selected_track.file_assets.count }}</dd>{% endif %}</dl><p class="notice">Felles metadata kan påvirke samme innspilling på flere utgivelser. Velg «Felles» uttrykkelig før lagring.</p><a id="inspector-recording-link" class="button full" data-url-template="{% url 'workbench:recording' '00000000-0000-0000-0000-000000000000' %}" href="{% if selected_track %}{% url 'workbench:recording' selected_track.recording.pk %}?return={{ request.get_full_path|urlencode }}{% else %}#{% endif %}"{% if not selected_track %} hidden{% endif %}>Åpne full innspilling</a></aside>
+  </div>
+
+  {% elif active_tab == "details" %}
+  <section class="release-tab-content"><header><span class="eyebrow">Utgivelsesdetaljer</span><h2>Grunnopplysninger</h2><p>Disse opplysningene gjelder utgivelsen som helhet.</p></header>
+    <dl class="release-readonly"><dt>Tittel</dt><dd>{{ release.title }}</dd><dt>Artist</dt><dd>{{ release_artist_text }} <small>avledet fra sporene</small></dd><dt>Dato/år</dt><dd>{{ release.release_date|date:"d.m.Y"|default:release.release_year|default:"Ukjent" }}</dd><dt>Format</dt><dd>{{ release.get_release_type_display|default:"Ukjent" }}</dd><dt>Label</dt><dd>{{ release.label|default:"Ukjent" }}</dd><dt>Katalognummer</dt><dd>{{ release.catalogue_number|default:"Ikke registrert" }}</dd><dt>Strekkode</dt><dd>{% if release_barcode %}{{ release_barcode.normalized_value }}{% else %}Ikke registrert{% endif %}</dd></dl>
+    {% if perms.catalogue.change_release %}<form method="post" class="release-metadata-form integrated"><input type="hidden" name="action" value="release"><input type="hidden" name="tab" value="details">{% csrf_token %}{% for field in release_form %}<label>{{ field.label }}{{ field }}{% for error in field.errors %}<small class="cell-error">{{ error }}</small>{% endfor %}</label>{% endfor %}{% if release_form.non_field_errors %}<div class="form-errors">{{ release_form.non_field_errors }}</div>{% endif %}<p class="muted compact-note">Dagens Release-modell har ikke en egen albumartist. Visningen avledes fra sporenes artistkrediteringer.</p><button class="primary" type="submit" {% if not writes_enabled %}disabled{% endif %}>Lagre utgivelsen</button></form>{% endif %}
+  </section>
+
+  {% elif active_tab == "files" %}
+  <section class="release-tab-content"><header><span class="eyebrow">Filer og kilder</span><h2>Cover, dokumenter og kildespor</h2></header>
+    {% if release_cover %}<figure class="release-cover-large"><img src="{% url 'workbench:cover_image' release_cover.pk %}" alt="Cover til {{ release.title }}"><figcaption>{{ release_cover.filename }}</figcaption></figure>{% endif %}
+    <div class="release-file-grid">{% for asset in release_files %}<article class="file-card"><strong>{{ asset.filename }}</strong><span>{{ asset.get_role_display }} · {{ asset.mime_type|default:"Format ukjent" }}</span>{% for location in asset.locations.all %}<code>{{ location.relative_path }}</code><small>{{ location.get_status_display }}{% if location.is_current %} · nåværende{% endif %}</small>{% empty %}<small>Ingen plassering registrert</small>{% endfor %}</article>{% empty %}<p class="empty-state">Ingen filer er registrert direkte på utgivelsen.</p>{% endfor %}</div>
+    <h3>Kildeopplysninger</h3><div class="source-list">{% for assertion in release_sources %}<article><strong>{{ assertion.field_name }}</strong><span>{{ assertion.raw_value }}</span><small>{{ assertion.source_record.source_system.name }} · {{ assertion.get_status_display }}</small></article>{% empty %}<p class="empty-state">Ingen kildepåstander er registrert direkte på utgivelsen.</p>{% endfor %}</div>
+  </section>
+
+  {% elif active_tab == "rights" %}
+  <section class="release-tab-content"><header><span class="eyebrow">Rettigheter</span><h2>Rettighetsforhold for innspillingene</h2><p>Utgivelsen er arbeidskontekst. Rettighetskrav lagres på de underliggende innspillingene.</p></header>
+    {% if perms.rights.view_rightsclaim %}<div class="rights-summary-grid">{% for label, count in rights_summary %}<article><strong>{{ count }}</strong><span>{{ label }}</span></article>{% endfor %}</div>
+    <div class="rights-table-wrap"><table><thead><tr><th>Innspilling</th><th>Rettighetstype</th><th>Rettighetshaver</th><th>Andel</th><th>Status</th><th>Grunnlag</th></tr></thead><tbody>{% for claim in rights_claims %}<tr><td>{{ claim.recording.title }}</td><td>{{ claim.get_right_type_display }}</td><td>{{ claim.rights_holder }}</td><td>{{ claim.share|default_if_none:"Ukjent" }}{% if claim.share != None %} %{% endif %}</td><td>{{ claim.get_status_display }}</td><td>{% if claim.agreement %}{{ claim.agreement }}{% elif claim.source_record %}{{ claim.source_record.source_system.name }}{% else %}Ikke registrert{% endif %}</td></tr>{% empty %}<tr><td colspan="6">Ingen rettighetskrav er registrert for innspillingene.</td></tr>{% endfor %}</tbody></table></div>{% else %}<p class="empty-state">Du har ikke tilgang til rettighetsopplysningene.</p>{% endif %}
+    {% if can_manage_rights %}<details class="rights-bulk-panel"{% if rights_form.errors %} open{% endif %}><summary>Registrer rettigheter for valgte innspillinger</summary><form method="post" class="rights-bulk-form"><input type="hidden" name="action" value="rights"><input type="hidden" name="tab" value="rights">{% csrf_token %}{% for field in rights_form %}<label>{{ field.label }}{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{% for error in field.errors %}<small class="cell-error">{{ error }}</small>{% endfor %}</label>{% endfor %}{% if rights_form.non_field_errors %}<div class="form-errors">{{ rights_form.non_field_errors }}</div>{% endif %}<button class="primary" type="submit" {% if not writes_enabled %}disabled{% endif %}>Registrer rettighetskrav</button></form></details>{% endif %}
+  </section>
+  {% endif %}
 </div>
 {% endblock %}

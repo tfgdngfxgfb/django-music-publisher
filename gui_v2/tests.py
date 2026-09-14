@@ -14,6 +14,8 @@ from catalogue.models import ExternalIdentifier, Recording, RecordingContributio
 from managed_music.models import ManagedRecording
 from media_assets.models import FileAsset, FileLocation
 from music_library.models import Channel, MusicLibraryChannel, MusicLibraryEntry
+from parties.models import Party
+from rights.models import RightsClaim, RightsConfiguration
 
 
 class GuiV2WorkspaceTests(TestCase):
@@ -104,7 +106,7 @@ class GuiV2WorkspaceTests(TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertFalse(Release.objects.filter(title="Skal ikke opprettes").exists())
 
-    def test_release_grid_shows_cover_and_bulk_rights_entry_point(self):
+    def test_release_tabs_integrate_cover_details_files_and_rights(self):
         self._superuser()
         cover = FileAsset.objects.create(
             release=self.release,
@@ -120,11 +122,45 @@ class GuiV2WorkspaceTests(TestCase):
         detail_url = reverse("gui_v2:release_detail", args=[self.release.pk])
         response = self.client.get(detail_url)
         self.assertContains(response, reverse("workbench:cover_image", args=[cover.pk]))
-        self.assertContains(response, "Registrer rettigheter for innspillinger")
-        rights_url = reverse("workbench:release_rights_add", args=[self.release.pk])
-        rights_response = self.client.get(rights_url, {"return": detail_url})
-        self.assertEqual(rights_response.context["cancel_url"], detail_url)
-        self.assertEqual(rights_response.context["return_url"], detail_url)
+        for label in ("Sporliste", "Utgivelsesdetaljer", "Filer og kilder", "Rettigheter"):
+            self.assertContains(response, label)
+        self.assertNotContains(response, reverse("workbench:release", args=[self.release.pk]))
+        details = self.client.get(detail_url, {"tab": "details"})
+        self.assertContains(details, 'name="release-title"')
+        files = self.client.get(detail_url, {"tab": "files"})
+        self.assertContains(files, "cover.png")
+        rights = self.client.get(detail_url, {"tab": "rights"})
+        self.assertContains(rights, "Registrer rettigheter for valgte innspillinger")
+        self.assertContains(rights, 'id="id_rights-recordings"')
+
+    @override_settings(GUI_V2_WRITES_ENABLED=True)
+    def test_integrated_rights_tab_creates_claim_on_selected_recording(self):
+        self._superuser()
+        local = Party.objects.create(name="Lokal testorganisasjon", kind=Party.Kind.ORGANIZATION)
+        RightsConfiguration.objects.create(local_organization=local)
+        ReleaseTrack.objects.create(
+            release=self.release, recording=self.recording, sequence_number=1
+        )
+        response = self.client.post(
+            reverse("gui_v2:release_detail", args=[self.release.pk]),
+            {
+                "action": "rights", "tab": "rights",
+                "rights-recordings": str(self.recording.pk),
+                "rights-right_type": RightsClaim.RightType.DISTRIBUTION,
+                "rights-rights_holder": str(local.pk), "rights-grantor": "",
+                "rights-share": "", "rights-territory_mode": RightsClaim.TerritoryMode.WORLD,
+                "rights-valid_from": "", "rights-valid_until": "",
+                "rights-evidence_strength": RightsClaim.EvidenceStrength.NOT_ASSESSED,
+                "rights-source_record": "", "rights-agreement": "", "rights-notes": "Testgrunnlag",
+            },
+        )
+        self.assertRedirects(
+            response,
+            f"{reverse('gui_v2:release_detail', args=[self.release.pk])}?tab=rights",
+        )
+        claim = RightsClaim.objects.get()
+        self.assertEqual(claim.recording, self.recording)
+        self.assertEqual(claim.right_type, RightsClaim.RightType.DISTRIBUTION)
 
     def test_recording_search_matches_credited_artist(self):
         RecordingContribution.objects.create(

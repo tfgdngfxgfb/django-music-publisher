@@ -19,6 +19,10 @@ from flac_ingest.services import apply_batch, resolve_music_path, scan_directory
 from media_assets.models import FileAsset, FileLocation
 from music_library.models import MusicLibraryEntry
 from provenance.models import MetadataAssertion
+from rights.forms import ReleaseRightsClaimForm
+from rights.models import RightsClaim
+from rights.services import create_release_rights_claims, get_local_organization
+from rights.summaries import OwnershipCategory, local_confirmed_right_recording_ids, ownership_summaries_for_recordings
 
 from .forms import MusicLibraryFilterForm, ReleaseMetadataForm, TrackRowFormSet
 from .services import save_release_track_rows
@@ -365,6 +369,9 @@ def _require_track_write_permissions(user, rows):
 def release_detail(request, release_id):
     release = get_object_or_404(Release.objects.select_related("label"), pk=release_id)
     action = request.POST.get("action", "tracks") if request.method == "POST" else ""
+    active_tab = request.POST.get("tab") or request.GET.get("tab", "tracks")
+    if active_tab not in {"tracks", "details", "files", "rights"}:
+        active_tab = "tracks"
     return_url = _safe_return(request, reverse("gui_v2:release_list"))
     tracks = list(
         release.tracks.select_related("recording")
@@ -383,6 +390,18 @@ def release_detail(request, release_id):
     release_form = ReleaseMetadataForm(
         request.POST if action == "release" else None, instance=release, prefix="release"
     )
+    can_manage_rights = request.user.is_staff and request.user.has_perms(
+        ("rights.view_rightsclaim", "rights.add_rightsclaim")
+    )
+    rights_form = None
+    if can_manage_rights:
+        rights_form = ReleaseRightsClaimForm(
+            request.POST if action == "rights" else None, release=release, prefix="rights"
+        )
+        if not request.user.has_perm("rights.view_agreement"):
+            rights_form.fields["agreement"].queryset = rights_form.fields["agreement"].queryset.none()
+        if not request.user.has_perm("provenance.view_sourcerecord"):
+            rights_form.fields["source_record"].queryset = rights_form.fields["source_record"].queryset.none()
     if request.method == "POST" and action == "release":
         if not settings.GUI_V2_WRITES_ENABLED:
             raise PermissionDenied("GUI v2 er skrivebeskyttet utenfor den isolerte testdatabasen.")
@@ -393,8 +412,30 @@ def release_detail(request, release_id):
                 release_form.save()
                 release_form.save_barcode()
             messages.success(request, "Utgivelsesopplysningene er lagret.")
-            return redirect(request.get_full_path())
-    elif request.method == "POST":
+            return redirect(f"{reverse('gui_v2:release_detail', args=[release.pk])}?tab=details")
+    elif request.method == "POST" and action == "rights":
+        if not settings.GUI_V2_WRITES_ENABLED:
+            raise PermissionDenied("GUI v2 er skrivebeskyttet utenfor den isolerte testdatabasen.")
+        if not can_manage_rights:
+            raise PermissionDenied
+        if rights_form.is_valid():
+            data = rights_form.cleaned_data.copy()
+            recordings = data.pop("recordings")
+            territories = data.pop("territories")
+            try:
+                claims = create_release_rights_claims(
+                    release=release,
+                    recordings=recordings,
+                    territories=territories,
+                    allow_managed_registration=request.user.is_superuser,
+                    **data,
+                )
+            except ValidationError as error:
+                rights_form.add_error(None, error)
+            else:
+                messages.success(request, f"{len(claims)} rettighetskrav ble registrert som ikke verifisert.")
+                return redirect(f"{reverse('gui_v2:release_detail', args=[release.pk])}?tab=rights")
+    elif request.method == "POST" and action == "tracks":
         if not settings.GUI_V2_WRITES_ENABLED:
             raise PermissionDenied("GUI v2 er skrivebeskyttet utenfor den isolerte testdatabasen.")
         if formset.is_valid():
@@ -437,6 +478,35 @@ def release_detail(request, release_id):
             .distinct()
             .first()
         )
+    release_files = list(
+        release.file_assets.prefetch_related("locations").order_by("role", "filename")
+    ) if request.user.has_perm("media_assets.view_fileasset") else []
+    release_sources = list(
+        MetadataAssertion.objects.filter(
+            entity_type=MetadataAssertion.EntityType.RELEASE, entity_uuid=release.pk
+        ).select_related("source_record__source_system")
+    ) if request.user.has_perm("provenance.view_metadataassertion") else []
+    recording_ids = tuple(dict.fromkeys(track.recording_id for track in tracks))
+    rights_claims = []
+    rights_summary = []
+    if request.user.has_perm("rights.view_rightsclaim"):
+        rights_claims = list(
+            RightsClaim.objects.filter(recording_id__in=recording_ids)
+            .select_related("recording", "rights_holder", "grantor", "agreement", "source_record__source_system")
+            .prefetch_related("territories")
+            .order_by("recording__title", "right_type", "status")
+        )
+        local_organization = get_local_organization()
+        summaries = ownership_summaries_for_recordings(recording_ids, local_organization)
+        rights_summary = [
+            (OwnershipCategory.FULL.label, sum(item.category == OwnershipCategory.FULL for item in summaries.values())),
+            (OwnershipCategory.PARTIAL.label, sum(item.category == OwnershipCategory.PARTIAL for item in summaries.values())),
+            (OwnershipCategory.NOT_OWNED.label, sum(item.category == OwnershipCategory.NOT_OWNED for item in summaries.values())),
+            (OwnershipCategory.UNRESOLVED.label, sum(item.category == OwnershipCategory.UNRESOLVED for item in summaries.values())),
+            (OwnershipCategory.DISPUTED.label, sum(item.category == OwnershipCategory.DISPUTED for item in summaries.values())),
+            ("Administrert av lokal organisasjon", len(local_confirmed_right_recording_ids(recording_ids, local_organization, RightsClaim.RightType.ADMINISTRATION))),
+            ("Distribuert av lokal organisasjon", len(local_confirmed_right_recording_ids(recording_ids, local_organization, RightsClaim.RightType.DISTRIBUTION))),
+        ]
     return render(
         request,
         "gui_v2/release_tracks.html",
@@ -446,6 +516,10 @@ def release_detail(request, release_id):
             "release_form": release_form, "release_barcode": release_barcode,
             "release_artist_text": release_artist_text,
             "release_cover": release_cover,
+            "active_tab": active_tab,
+            "release_files": release_files, "release_sources": release_sources,
+            "rights_claims": rights_claims, "rights_summary": rights_summary,
+            "rights_form": rights_form, "can_manage_rights": can_manage_rights,
             "writes_enabled": settings.GUI_V2_WRITES_ENABLED,
             "return_query": request.GET.urlencode(),
             "return_url": return_url,
