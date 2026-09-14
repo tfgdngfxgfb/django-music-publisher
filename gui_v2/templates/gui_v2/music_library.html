@@ -1,7 +1,7 @@
 {% extends "gui_v2/base.html" %}{% load static %}{% block title %}Musikkarkiv{% endblock %}{% block body_class %}music-library-page{% endblock %}{% block content %}
 <div class="archive-layout{% if not selected %} no-inspector{% endif %}">
   <aside class="filter-panel">
-    <div class="panel-heading filter-panel-heading"><button type="button" class="icon-button" data-collapse="filters" aria-label="Skjul filtre">‹</button></div>
+    <button type="button" class="filter-toggle" data-collapse="filters" aria-label="Skjul filtre" title="Skjul filtre"><span data-filter-direction aria-hidden="true">‹</span></button>
     <form method="get" class="filter-form" id="library-filters" data-auto-submit-filters>
       {% if request.GET.q %}<input type="hidden" name="q" value="{{ request.GET.q }}">{% endif %}
       {% if request.GET.per_page %}<input type="hidden" name="per_page" value="{{ request.GET.per_page }}">{% endif %}

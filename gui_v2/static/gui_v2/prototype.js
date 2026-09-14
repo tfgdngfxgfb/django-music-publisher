@@ -114,8 +114,10 @@
   filterToggle?.addEventListener("click", () => {
     const page = filterToggle.closest(".archive-layout");
     const closed = page.classList.toggle("filters-closed");
-    filterToggle.textContent = closed ? "›" : "‹";
-    filterToggle.setAttribute("aria-label", closed ? "Vis filtre" : "Skjul filtre");
+    filterToggle.querySelector("[data-filter-direction]").textContent = closed ? "›" : "‹";
+    const label = closed ? "Vis filtre" : "Skjul filtre";
+    filterToggle.setAttribute("aria-label", label);
+    filterToggle.setAttribute("title", label);
     localStorage.setItem(`p7-v2-filters:${location.pathname}`, String(!closed));
   });
   if (filterToggle && localStorage.getItem(`p7-v2-filters:${location.pathname}`) === "false") filterToggle.click();
