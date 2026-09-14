@@ -373,6 +373,10 @@ class GuiV2WorkspaceTests(TestCase):
         self._superuser()
         with tempfile.TemporaryDirectory() as root, override_settings(P7_MUSIC_ROOT=root):
             asset = self._radio_file(root, self.recording, title="Tittel fra FLAC", genre="Rock", energy=5)
+            path = Path(root) / "radio/test.flac"
+            audio = FLAC(path)
+            audio["KANAL"] = "P7 Test"
+            audio.save()
             response = self.client.post(
                 reverse("gui_v2:rescan_library_file", args=[self.entry.pk, asset.pk]),
                 {"return": reverse("gui_v2:music_library")},
@@ -381,6 +385,34 @@ class GuiV2WorkspaceTests(TestCase):
             self.recording.refresh_from_db(); self.entry.refresh_from_db()
             self.assertEqual(self.recording.title, "Tittel fra FLAC")
             self.assertEqual((self.entry.genre, self.entry.energy), ("Rock", 5))
+            self.assertEqual(list(self.entry.channels.all()), [self.channel])
+
+            # Removing authoritative radio tags in OneTagger/FLAC removes the
+            # corresponding values from the music library on the next re-read.
+            audio = FLAC(path)
+            del audio["KANAL"]
+            del audio["GENRE"]
+            audio.save()
+            response = self.client.post(
+                reverse("gui_v2:rescan_library_file", args=[self.entry.pk, asset.pk]),
+                {"return": reverse("gui_v2:music_library")},
+            )
+            self.assertEqual(response.status_code, 302)
+            self.entry.refresh_from_db()
+            self.assertEqual(self.entry.genre, "")
+            self.assertFalse(self.entry.channels.exists())
+
+            # A later explicit re-read must also repair stale relations left by
+            # an older importer, even when the FLAC itself is now unchanged.
+            MusicLibraryChannel.objects.create(
+                library_entry=self.entry, channel=self.channel
+            )
+            response = self.client.post(
+                reverse("gui_v2:rescan_library_file", args=[self.entry.pk, asset.pk]),
+                {"return": reverse("gui_v2:music_library")},
+            )
+            self.assertEqual(response.status_code, 302)
+            self.assertFalse(self.entry.channels.exists())
 
     @override_settings(GUI_V2_WRITES_ENABLED=True)
     def test_single_file_rescan_preserves_managed_catalogue_but_updates_radio(self):
@@ -397,4 +429,5 @@ class GuiV2WorkspaceTests(TestCase):
             self.recording.refresh_from_db(); self.entry.refresh_from_db()
             self.assertEqual(self.recording.title, "Eksisterende innspilling")
             self.assertEqual((self.entry.genre, self.entry.energy), ("Ny radiosjanger", 4))
+            self.assertFalse(self.entry.channels.exists())
             self.assertEqual(ManagedRecording.objects.count(), rights_before)

@@ -263,13 +263,11 @@ def rescan_library_file(request, entry_id, asset_id):
         # ISRC conflicts instead of silently attaching another Recording.
         batch = scan_directory(
             relative_root=".", recursive=False, relative_paths=[location.relative_path],
-            allow_uuid_recovery=True, user=request.user,
+            allow_uuid_recovery=True, force_read=True, user=request.user,
         )
         item = batch.items.first()
         if not item:
             messages.error(request, "Filen kunne ikke leses – prøv igjen.")
-        elif item.action == FlacIngestItem.Action.UNCHANGED:
-            messages.info(request, "Ingen endringer funnet.")
         elif item.can_apply:
             apply_batch(batch, user=request.user)
             entry.refresh_from_db()

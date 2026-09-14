@@ -491,6 +491,7 @@ def scan_directory(
     user,
     relative_paths=None,
     allow_uuid_recovery=False,
+    force_read=False,
 ):
     # RECOVERY OVERRIDE: keep administrator-only and review before production use.
     if allow_uuid_recovery and not user.is_superuser:
@@ -547,6 +548,7 @@ def scan_directory(
         existing_asset = existing_locations[0].asset if existing_locations else None
         if (
             existing_asset
+            and not force_read
             and existing_asset.size_bytes == stat.st_size
             and existing_asset.source_modified_at
             and existing_asset.technical_metadata.get("tag_adapter_version")
@@ -1253,6 +1255,10 @@ def apply_item(item, *, user):
         )
     )
     entry, _ = MusicLibraryEntry.objects.get_or_create(recording=recording)
+    # Radio metadata is an exact snapshot of the FLAC tags for an already
+    # registered radio file. Missing tags therefore clear earlier values on a
+    # re-read; otherwise deleted OneTagger values would remain in the database.
+    existing_file_refresh = item.file_asset_id is not None
     scalar_fields = {
         "genre": parsed.get("genre"),
         "language": parsed.get("language"),
@@ -1260,7 +1266,7 @@ def apply_item(item, *, user):
         "gender": parsed.get("gender"),
     }
     for field, after in scalar_fields.items():
-        if field not in parsed:
+        if field not in parsed and not existing_file_refresh:
             continue
         before, base = getattr(entry, field), entry.revision
         assertion = _assertion(
@@ -1284,9 +1290,10 @@ def apply_item(item, *, user):
             "target_audiences",
         ),
     ):
-        if field not in parsed:
+        if field not in parsed and not existing_file_refresh:
             continue
-        before = _sync_library_relations(entry, model, through, relation, parsed[field])
+        values = parsed.get(field, [])
+        before = _sync_library_relations(entry, model, through, relation, values)
         base = entry.revision
         entry.save()
         assertion = _assertion(
@@ -1294,10 +1301,10 @@ def apply_item(item, *, user):
             MetadataAssertion.EntityType.MUSIC_LIBRARY_ENTRY,
             entry,
             field,
-            parsed[field],
+            values,
             user=user,
         )
-        _log_applied(assertion, entry, before, parsed[field], user, base)
+        _log_applied(assertion, entry, before, values, user, base)
     if entry.verification_status != VerificationStatus.CONFIRMED:
         entry.verification_status = VerificationStatus.CONFIRMED
         entry.save(update_fields=("verification_status",))
