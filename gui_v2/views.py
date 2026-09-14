@@ -9,7 +9,7 @@ from django.contrib.staticfiles import finders
 from django.core.exceptions import ImproperlyConfigured, PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Case, CharField, Count, Exists, F, OuterRef, Prefetch, Q, Subquery, Value, When
+from django.db.models import Case, CharField, Count, Exists, F, IntegerField, OuterRef, Prefetch, Q, Subquery, Value, When
 from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -19,8 +19,9 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 from catalogue.models import DuplicateCandidate, ExternalIdentifier, Recording, RecordingContribution, Release, ReleaseTrack
 from flac_ingest.models import FlacIngestItem
 from flac_ingest.services import apply_batch, resolve_music_path, scan_directory
+from managed_music.models import ManagedRecording
 from media_assets.models import FileAsset, FileLocation
-from music_library.models import Channel, MusicLibraryEntry, TargetAudience
+from music_library.models import Channel, MusicLibraryChannel, MusicLibraryEntry, MusicLibraryTargetAudience, TargetAudience
 from provenance.models import MetadataAssertion
 from rights.forms import ReleaseRightsClaimForm
 from rights.models import RightsClaim
@@ -105,6 +106,16 @@ def music_library(request):
     isrc_sort = ExternalIdentifier.objects.filter(
         recording_id=OuterRef("recording_id"), scheme=ExternalIdentifier.Scheme.ISRC
     ).values("normalized_value")[:1]
+    channel_sort = (
+        MusicLibraryChannel.objects.filter(library_entry_id=OuterRef("pk"))
+        .order_by("channel__name")
+        .values("channel__name")[:1]
+    )
+    target_sort = (
+        MusicLibraryTargetAudience.objects.filter(library_entry_id=OuterRef("pk"))
+        .order_by("target_audience__name")
+        .values("target_audience__name")[:1]
+    )
     queryset = (
         MusicLibraryEntry.objects.select_related("recording")
         .prefetch_related(
@@ -114,6 +125,9 @@ def music_library(request):
         .annotate(
             sort_artist=Subquery(artist_sort),
             sort_isrc=Subquery(isrc_sort),
+            sort_channel=Subquery(channel_sort),
+            sort_target=Subquery(target_sort),
+            sort_managed=Exists(ManagedRecording.objects.filter(library_entry_id=OuterRef("pk"))),
             has_radio_file=Exists(radio_assets),
             has_active_radio_location=Exists(FileLocation.objects.filter(
                 asset__recording_id=OuterRef("recording_id"), asset__role=FileAsset.Role.RADIO_FLAC,
@@ -128,6 +142,23 @@ def music_library(request):
             has_ingest_issue=Exists(FlacIngestItem.objects.filter(recording_id=OuterRef("recording_id"), applied_at__isnull=True, action__in=(
                 FlacIngestItem.Action.CONFLICT, FlacIngestItem.Action.RETRY, FlacIngestItem.Action.INVALID,
             ))),
+        )
+        .annotate(
+            sort_file_status=Case(
+                When(has_file_problem=True, then=Value(3)),
+                When(has_active_radio_location=True, then=Value(2)),
+                When(has_radio_file=True, then=Value(1)),
+                default=Value(0), output_field=IntegerField(),
+            ),
+            sort_follow_up=Case(
+                When(
+                    Q(has_radio_file=False) | Q(has_active_radio_location=False) | Q(has_file_problem=True)
+                    | Q(has_release=False) | Q(has_duplicate_a=True) | Q(has_duplicate_b=True)
+                    | Q(has_ingest_issue=True),
+                    then=Value(1),
+                ),
+                default=Value(0), output_field=IntegerField(),
+            ),
         )
     )
     if form.is_valid():
@@ -204,6 +235,11 @@ def music_library(request):
             "language": ("language", "recording__title", "id"), "-language": ("-language", "recording__title", "id"),
             "energy": ("energy", "recording__title", "id"), "-energy": ("-energy", "recording__title", "id"),
             "rotation": ("rotation_suitability", "recording__title", "id"), "-rotation": ("-rotation_suitability", "recording__title", "id"),
+            "channels": ("sort_channel", "recording__title", "id"), "-channels": ("-sort_channel", "recording__title", "id"),
+            "targets": ("sort_target", "recording__title", "id"), "-targets": ("-sort_target", "recording__title", "id"),
+            "file_status": ("sort_file_status", "recording__title", "id"), "-file_status": ("-sort_file_status", "recording__title", "id"),
+            "managed": ("sort_managed", "recording__title", "id"), "-managed": ("-sort_managed", "recording__title", "id"),
+            "follow_up": ("sort_follow_up", "recording__title", "id"), "-follow_up": ("-sort_follow_up", "recording__title", "id"),
             "-updated": ("-updated_at", "id"), "updated": ("updated_at", "id"),
         }.get(current_ordering, ("recording__title", "id"))
         queryset = queryset.order_by(*ordering)

@@ -151,6 +151,12 @@ class GuiV2WorkspaceTests(TestCase):
         self.assertNotContains(response, 'name="ordering" id="id_ordering"')
         self.assertContains(response, 'data-header-filter="genre"')
         self.assertContains(response, 'data-header-filter="channels"')
+        self.assertContains(response, "data-column-filter-trigger", count=9)
+        self.assertContains(response, "↕", count=13)
+        for ordering in ("channels", "targets", "file_status", "managed", "follow_up"):
+            sorted_response = self.client.get(reverse("gui_v2:music_library"), {"ordering": ordering})
+            self.assertEqual(sorted_response.status_code, 200)
+            self.assertEqual(sorted_response.context["current_ordering"], ordering)
 
     def test_library_places_page_navigation_beside_heading(self):
         self._superuser()

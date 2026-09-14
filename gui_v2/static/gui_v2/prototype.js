@@ -38,6 +38,20 @@
       if (!filter.contains(event.target)) filter.removeAttribute("open");
     });
   });
+  document.querySelectorAll("[data-column-filter-trigger]").forEach(header => {
+    header.addEventListener("click", event => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      const filter = header.closest(".table-heading")?.querySelector(".column-filter");
+      if (!filter) return;
+      event.preventDefault();
+      event.stopPropagation();
+      document.querySelectorAll(".column-filter[open]").forEach(item => {
+        if (item !== filter) item.removeAttribute("open");
+      });
+      filter.open = true;
+      filter.querySelector("select")?.focus();
+    });
+  });
 
   const libraryRows = [...document.querySelectorAll("[data-library-row]")];
   const keyboardFocusKey = `p7-v2-library-keyboard:${location.pathname}`;
