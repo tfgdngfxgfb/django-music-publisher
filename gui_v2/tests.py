@@ -125,6 +125,8 @@ class GuiV2WorkspaceTests(TestCase):
         self.assertEqual(response.context["page"].paginator.per_page, 1)
         self.assertContains(response, "data-auto-submit-filters")
         self.assertContains(response, "data-filter-direction")
+        self.assertContains(response, "data-filter-label")
+        self.assertContains(response, "Skjul filtre")
         self.assertContains(response, 'class="filter-toggle"')
         self.assertContains(response, 'class="player header-player"')
         self.assertNotContains(response, '<footer class="player"')

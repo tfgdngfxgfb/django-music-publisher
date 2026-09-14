@@ -161,6 +161,7 @@
     const closed = page.classList.toggle("filters-closed");
     filterToggle.querySelector("[data-filter-direction]").textContent = closed ? "›" : "‹";
     const label = closed ? "Vis filtre" : "Skjul filtre";
+    filterToggle.querySelector("[data-filter-label]").textContent = label;
     filterToggle.setAttribute("aria-label", label);
     filterToggle.setAttribute("title", label);
     localStorage.setItem(`p7-v2-filters:${location.pathname}`, String(!closed));
