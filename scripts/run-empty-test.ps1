@@ -27,6 +27,7 @@ if ($Reset -and (Test-Path -LiteralPath $DatabasePath)) {
 
 $DatabaseUrlPath = [System.IO.Path]::GetFullPath($DatabasePath).Replace("\", "/")
 $env:DATABASE_URL = "sqlite:///$DatabaseUrlPath"
+$env:GUI_V2_WRITES_ENABLED = "true"
 $env:DEBUG = "true"
 
 & (Join-Path $PSScriptRoot "run-dev.ps1") `
@@ -38,13 +39,14 @@ $env:DEBUG = "true"
 if ($LASTEXITCODE -ne 0) { throw "Kunne ikke klargjøre den tomme testdatabasen." }
 
 Write-Host ""
-Write-Host "P7 Arkiv og rettigheter bruker nå en tom, separat testdatabase."
+Write-Host "P7 Arkiv og rettigheter bruker den separate testdatabasen."
 Write-Host "Database: $DatabasePath"
-Write-Host "Adresse: http://${HostAddress}:$Port/"
+Write-Host "GUI v2: http://${HostAddress}:$Port/v2/"
+Write-Host "Tidligere Workbench: http://${HostAddress}:$Port/"
 Write-Host "Brukernavn: $AdminUsername"
-Write-Host "Katalogen inneholder ingen demo- eller importdata."
+Write-Host "-Reset arkiverer databasen og bygger den tom igjen."
 
 if (-not $CheckOnly) {
-    Write-Host "Trykk Ctrl+C for å stoppe programmet."
+    Write-Host "Stopp programmet med Ctrl+C."
     & $VenvPython (Join-Path $ProjectRoot "manage.py") runserver "${HostAddress}:$Port"
 }

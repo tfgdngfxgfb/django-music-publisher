@@ -20,7 +20,7 @@
     </nav>
     <div class="header-actions"><span class="prototype-mark">GUI v2 · prototype</span><button type="button" id="v2-theme-toggle" aria-label="Bytt lyst eller mørkt tema">◐</button><span class="user-chip">{{ request.user.get_username }}</span></div>
   </header>
-  <div class="prototype-strip"><span>Isolert arbeidsområde</span>{% if writes_enabled %}<strong>Lagring går bare til GUI-v2-testdatabasen</strong>{% else %}<strong>Ingen endringer lagres</strong>{% endif %}<a href="{% url 'home' %}">Dagens Workbench</a></div>
+  <div class="prototype-strip"><span>GUI v2 · testområde</span>{% if writes_enabled %}<strong>Endringer lagres i den separate testdatabasen</strong>{% else %}<strong>Ingen endringer lagres</strong>{% endif %}<a href="{% url 'home' %}">Tidligere Workbench</a></div>
   {% if messages %}<div class="messages" aria-live="polite">{% for message in messages %}<p class="message {{ message.tags }}">{{ message }}</p>{% endfor %}</div>{% endif %}
   <main id="v2-main" tabindex="-1">{% block content %}{% endblock %}</main>
   <footer class="player" aria-label="Avspillingsfelt">
