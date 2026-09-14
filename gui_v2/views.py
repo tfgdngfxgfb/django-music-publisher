@@ -9,7 +9,7 @@ from django.contrib.staticfiles import finders
 from django.core.exceptions import ImproperlyConfigured, PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Count, Exists, OuterRef, Prefetch, Q
+from django.db.models import Case, CharField, Count, Exists, F, OuterRef, Prefetch, Q, Subquery, Value, When
 from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -88,6 +88,23 @@ def music_library(request):
         queryset=RecordingContribution.objects.select_related("artist_identity", "party").order_by("display_order"),
     )
     radio_assets = FileAsset.objects.filter(recording_id=OuterRef("recording_id"), role=FileAsset.Role.RADIO_FLAC)
+    artist_sort = (
+        RecordingContribution.objects.filter(
+            recording_id=OuterRef("recording_id"),
+            role__in=(RecordingContribution.Role.PRIMARY, RecordingContribution.Role.FEATURED),
+        )
+        .annotate(sort_name=Case(
+            When(~Q(credited_as=""), then=F("credited_as")),
+            When(artist_identity__isnull=False, then=F("artist_identity__display_name")),
+            When(party__isnull=False, then=F("party__name")),
+            default=Value(""), output_field=CharField(),
+        ))
+        .order_by("display_order", "id")
+        .values("sort_name")[:1]
+    )
+    isrc_sort = ExternalIdentifier.objects.filter(
+        recording_id=OuterRef("recording_id"), scheme=ExternalIdentifier.Scheme.ISRC
+    ).values("normalized_value")[:1]
     queryset = (
         MusicLibraryEntry.objects.select_related("recording")
         .prefetch_related(
@@ -95,6 +112,8 @@ def music_library(request):
             "recording__file_assets__locations", "recording__release_tracks__release",
         )
         .annotate(
+            sort_artist=Subquery(artist_sort),
+            sort_isrc=Subquery(isrc_sort),
             has_radio_file=Exists(radio_assets),
             has_active_radio_location=Exists(FileLocation.objects.filter(
                 asset__recording_id=OuterRef("recording_id"), asset__role=FileAsset.Role.RADIO_FLAC,
@@ -175,16 +194,24 @@ def music_library(request):
             queryset = queryset.filter(needs_follow_up)
         elif data.get("follow_up") == "no":
             queryset = queryset.exclude(needs_follow_up)
+        current_ordering = data.get("ordering") or "title"
         ordering = {
             "title": ("recording__title", "id"), "-title": ("-recording__title", "id"),
+            "artist": ("sort_artist", "recording__title", "id"), "-artist": ("-sort_artist", "recording__title", "id"),
+            "isrc": ("sort_isrc", "recording__title", "id"), "-isrc": ("-sort_isrc", "recording__title", "id"),
+            "duration": ("recording__duration_ms", "recording__title", "id"), "-duration": ("-recording__duration_ms", "recording__title", "id"),
+            "genre": ("genre", "recording__title", "id"), "-genre": ("-genre", "recording__title", "id"),
+            "language": ("language", "recording__title", "id"), "-language": ("-language", "recording__title", "id"),
+            "energy": ("energy", "recording__title", "id"), "-energy": ("-energy", "recording__title", "id"),
+            "rotation": ("rotation_suitability", "recording__title", "id"), "-rotation": ("-rotation_suitability", "recording__title", "id"),
             "-updated": ("-updated_at", "id"), "updated": ("updated_at", "id"),
-        }.get(data.get("ordering"), ("recording__title", "id"))
+        }.get(current_ordering, ("recording__title", "id"))
         queryset = queryset.order_by(*ordering)
         simple_labels = {
             "q": "Søk", "genre": "Sjanger", "language": "Språk", "energy": "Energy",
             "gender": "Vokal", "rotation_suitability": "Rotasjon",
             "file_status": "Filstatus", "managed": "Forvaltning",
-            "follow_up": "Oppfølging", "ordering": "Sortering",
+            "follow_up": "Oppfølging",
         }
         for name, label in simple_labels.items():
             value = data.get(name)
@@ -196,6 +223,9 @@ def music_library(request):
             if values:
                 qualifier = "alle" if data.get(mode) == "all" else "minst én"
                 active_filters.append({"label": f"{label} ({qualifier}): {', '.join(str(value) for value in values)}", "query": _query_without(request, name, mode, "page")})
+    else:
+        current_ordering = "title"
+        queryset = queryset.order_by("recording__title", "id")
     queryset = queryset.distinct()
     paginator_size = max(queryset.count(), 1) if page_size == "all" else int(page_size)
     page = Paginator(queryset, paginator_size).get_page(request.GET.get("page"))
@@ -294,6 +324,8 @@ def music_library(request):
         {
             "section": "music_library", "filter_form": form, "page": page, "selected": selected,
             "query_without_page": _query_without(request, "page"),
+            "sort_query": _query_without(request, "ordering", "page", "selected"),
+            "current_ordering": current_ordering,
             "query_without_selected": _query_without(request, "selected"),
             "page_size": page_size,
             "page_size_params": [

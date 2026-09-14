@@ -1,0 +1,10 @@
+<details class="column-filter{% if value %} active{% endif %}">
+  <summary aria-label="{{ label }}" title="{{ label }}">⌄</summary>
+  <div class="column-filter-menu">
+    <label><span>{{ label }}</span>
+      <select data-header-filter="{{ name }}">
+        {% for choice in choices %}<option value="{{ choice.0 }}"{% if choice.0|stringformat:"s" == value %} selected{% endif %}>{{ choice.1 }}</option>{% endfor %}
+      </select>
+    </label>
+  </div>
+</details>

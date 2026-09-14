@@ -61,6 +61,13 @@ class MusicLibraryFilterForm(forms.Form):
         required=False,
         choices=(
             ("title", "Tittel A–Å"), ("-title", "Tittel Å–A"),
+            ("artist", "Artist A–Å"), ("-artist", "Artist Å–A"),
+            ("isrc", "ISRC stigende"), ("-isrc", "ISRC synkende"),
+            ("duration", "Kortest varighet"), ("-duration", "Lengst varighet"),
+            ("genre", "Sjanger A–Å"), ("-genre", "Sjanger Å–A"),
+            ("language", "Språk A–Å"), ("-language", "Språk Å–A"),
+            ("energy", "Lavest Energy"), ("-energy", "Høyest Energy"),
+            ("rotation", "Rotasjon stigende"), ("-rotation", "Rotasjon synkende"),
             ("-updated", "Sist endret først"), ("updated", "Eldst endret først"),
         ),
         initial="title",

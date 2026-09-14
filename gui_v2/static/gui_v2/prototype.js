@@ -33,6 +33,20 @@
     autoSubmitFilters.requestSubmit();
   });
 
+  document.querySelectorAll("[data-header-filter]").forEach(select => select.addEventListener("change", () => {
+    const params = new URLSearchParams(location.search);
+    params.delete(select.dataset.headerFilter);
+    params.delete("page");
+    params.delete("selected");
+    if (select.value) params.append(select.dataset.headerFilter, select.value);
+    location.href = `${location.pathname}?${params.toString()}`;
+  }));
+  document.addEventListener("click", event => {
+    document.querySelectorAll(".column-filter[open]").forEach(filter => {
+      if (!filter.contains(event.target)) filter.removeAttribute("open");
+    });
+  });
+
   const libraryRows = [...document.querySelectorAll("[data-library-row]")];
   const keyboardFocusKey = `p7-v2-library-keyboard:${location.pathname}`;
   document.querySelectorAll("[data-row-href]").forEach(row => row.addEventListener("click", event => {
@@ -46,6 +60,13 @@
 
   const inspector = document.querySelector("#v2-inspector");
   const layout = inspector?.parentElement;
+  const alignInspectorWithTable = () => {
+    if (!inspector || !layout) return;
+    const table = layout.querySelector(".table-scroll");
+    layout.style.setProperty("--inspector-offset", `${table?.offsetTop || 0}px`);
+  };
+  alignInspectorWithTable();
+  window.addEventListener("resize", alignInspectorWithTable);
   const inspectorKey = `p7-v2-inspector-open:${location.pathname}`;
   const inspectorOpeners = document.querySelectorAll("[data-open-inspector]");
   const setInspector = open => {
@@ -135,7 +156,6 @@
   const scroller = document.querySelector(".table-scroll");
   if (scroller) {
     scroller.scrollTop = Number(sessionStorage.getItem(scrollKey) || 0);
-    document.querySelectorAll(".row-link").forEach(link => link.addEventListener("click", () => sessionStorage.setItem(scrollKey, scroller.scrollTop)));
   }
   if (sessionStorage.getItem(keyboardFocusKey) === "true") {
     document.querySelector("[data-library-row].selected")?.focus({preventScroll: true});

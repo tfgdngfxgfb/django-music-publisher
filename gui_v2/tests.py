@@ -61,6 +61,17 @@ class GuiV2WorkspaceTests(TestCase):
         response = self.client.get(reverse("gui_v2:music_library"), {"channels": [self.channel.pk, other.pk], "channel_mode": "all"})
         self.assertContains(response, "Ingen innspillinger passer")
 
+    def test_library_whole_row_selects_inspector_content(self):
+        self._superuser()
+        response = self.client.get(
+            reverse("gui_v2:music_library"), {"selected": self.entry.pk}
+        )
+
+        self.assertContains(response, 'data-library-row')
+        self.assertContains(response, 'data-row-href=')
+        self.assertNotContains(response, 'class="row-link"')
+        self.assertContains(response, 'id="v2-inspector"')
+
     def test_library_renders_channel_choices_and_serves_custom_logo(self):
         self._superuser()
         built_in = Channel.objects.create(code="p7_riks", name="P7 Riks")
@@ -123,6 +134,37 @@ class GuiV2WorkspaceTests(TestCase):
         self.assertNotContains(response, ">Nullstill</a>")
         self.assertContains(response, '<option value="all" selected>Alle</option>', html=True)
 
+    def test_library_uses_table_headers_for_sorting_and_keeps_filters(self):
+        self._superuser()
+        second_recording = Recording.objects.create(title="Andre innspilling")
+        MusicLibraryEntry.objects.create(recording=second_recording, genre="Jazz")
+
+        response = self.client.get(
+            reverse("gui_v2:music_library"),
+            {"ordering": "-title", "per_page": "40"},
+        )
+
+        self.assertEqual(response.context["current_ordering"], "-title")
+        self.assertEqual(response.context["page"].object_list[0].recording, self.recording)
+        self.assertContains(response, 'class="sort-header"')
+        self.assertContains(response, "ordering=title")
+        self.assertNotContains(response, 'name="ordering" id="id_ordering"')
+        self.assertContains(response, 'data-header-filter="genre"')
+        self.assertContains(response, 'data-header-filter="channels"')
+
+    def test_library_places_page_navigation_beside_heading(self):
+        self._superuser()
+        for number in range(40):
+            recording = Recording.objects.create(title=f"Innspilling {number:02d}")
+            MusicLibraryEntry.objects.create(recording=recording)
+
+        response = self.client.get(reverse("gui_v2:music_library"))
+        content = response.content
+
+        self.assertEqual(response.context["page"].paginator.num_pages, 2)
+        self.assertEqual(content.count(b'pagination pagination-top'), 1)
+        self.assertLess(content.index(b'pagination pagination-top'), content.index(b'<table'))
+
     def test_channel_logo_requires_library_permission(self):
         with tempfile.TemporaryDirectory() as media_root, override_settings(MEDIA_ROOT=media_root):
             self.channel.logo.save("p7-test.png", ContentFile(b"custom-channel-logo"))
@@ -149,7 +191,7 @@ class GuiV2WorkspaceTests(TestCase):
         self.assertContains(response, '<option value="Evangelisk">Evangelisk</option>', html=True)
         self.assertContains(response, '<option value="Pop">Pop</option>', html=True)
         self.assertContains(response, '<option value="no">Norsk</option>', html=True)
-        self.assertEqual(response.content.count(b'<option value="no">Norsk</option>'), 1)
+        self.assertEqual(response.content.count(b'<option value="no">Norsk</option>'), 2)
         self.assertContains(response, 'data-library-search')
 
         filtered = self.client.get(reverse("gui_v2:music_library"), {"genre": "Evangelisk"})
