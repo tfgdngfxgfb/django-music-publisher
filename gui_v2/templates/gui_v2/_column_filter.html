@@ -1,11 +1,11 @@
-<details class="column-filter{% if value %} active{% endif %}">
-  <summary aria-label="{{ label }}" title="{{ label }}">⌄</summary>
-  <form method="get" class="column-filter-menu">
+<details class="column-filter{% if is_active %} active{% endif %}"{% if request.GET.column_filter == name %} open{% endif %}>
+  <summary aria-label="{{ label }}" title="{{ label }}">Filter</summary>
+  <form method="get" class="column-filter-menu" data-column-filter-form>
     {% for key, item in params %}<input type="hidden" name="{{ key }}" value="{{ item }}">{% endfor %}
-    <label><span>{{ label }}</span>
-      <select name="{{ name }}" data-header-filter="{{ name }}" onchange="this.form.submit()">
-        {% for choice in choices %}<option value="{{ choice.0 }}"{% if choice.0|stringformat:"s" == value %} selected{% endif %}>{{ choice.1 }}</option>{% endfor %}
-      </select>
-    </label>
+    <input type="hidden" name="column_filter" value="{{ name }}">
+    <fieldset>
+      <legend>{{ label }}</legend>
+      {% for option in options %}<label class="column-filter-option"><input type="checkbox" name="{{ name }}" value="{{ option.value }}"{% if option.selected %} checked{% endif %} onchange="this.form.requestSubmit()"><span>{{ option.label }}</span></label>{% empty %}<span class="filter-empty">Ingen tilgjengelige valg</span>{% endfor %}
+    </fieldset>
   </form>
 </details>

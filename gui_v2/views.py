@@ -171,32 +171,43 @@ def music_library(request):
                 | Q(recording__contributions__credited_as__icontains=term)
                 | Q(recording__identifiers__normalized_value__icontains=term)
             )
-        selected_genre = data.get("genre")
-        if selected_genre:
-            queryset = queryset.filter(
-                Q(genre__iexact=selected_genre)
-                | Q(genre__istartswith=f"{selected_genre};")
-                | Q(genre__iendswith=f"; {selected_genre}")
-                | Q(genre__iendswith=f";{selected_genre}")
-                | Q(genre__icontains=f"; {selected_genre};")
-                | Q(genre__icontains=f";{selected_genre};")
-            )
-        for field in ("language", "energy", "gender"):
-            if data.get(field) not in (None, ""):
-                queryset = queryset.filter(**{field: data[field]})
-        rotation = data.get("rotation_suitability")
-        if rotation == MusicLibraryEntry.RotationSuitability.SUITABLE:
-            queryset = queryset.filter(
-                Q(rotation_suitability=MusicLibraryEntry.RotationSuitability.SUITABLE)
-                | Q(channels__isnull=False)
-            ).exclude(rotation_suitability=MusicLibraryEntry.RotationSuitability.NOT_SUITABLE)
-        elif rotation == MusicLibraryEntry.RotationSuitability.NOT_SUITABLE:
-            queryset = queryset.filter(rotation_suitability=rotation)
-        elif rotation == "unassessed":
-            queryset = queryset.filter(rotation_suitability="", channels__isnull=True)
-        if data.get("managed") == "yes":
+        selected_genres = [value for value in request.GET.getlist("genre") if value]
+        if selected_genres:
+            genre_query = Q(pk__in=[])
+            for selected_genre in selected_genres:
+                genre_query |= (
+                    Q(genre__iexact=selected_genre)
+                    | Q(genre__istartswith=f"{selected_genre};")
+                    | Q(genre__iendswith=f"; {selected_genre}")
+                    | Q(genre__iendswith=f";{selected_genre}")
+                    | Q(genre__icontains=f"; {selected_genre};")
+                    | Q(genre__icontains=f";{selected_genre};")
+                )
+            queryset = queryset.filter(genre_query)
+        for field in ("language", "energy"):
+            values = [value for value in request.GET.getlist(field) if value]
+            if values:
+                queryset = queryset.filter(**{f"{field}__in": values})
+        if data.get("gender") not in (None, ""):
+            queryset = queryset.filter(gender=data["gender"])
+        rotations = [value for value in request.GET.getlist("rotation_suitability") if value]
+        if rotations:
+            rotation_query = Q(pk__in=[])
+            for rotation in rotations:
+                if rotation == MusicLibraryEntry.RotationSuitability.SUITABLE:
+                    rotation_query |= (
+                        Q(rotation_suitability=MusicLibraryEntry.RotationSuitability.SUITABLE)
+                        | Q(channels__isnull=False)
+                    ) & ~Q(rotation_suitability=MusicLibraryEntry.RotationSuitability.NOT_SUITABLE)
+                elif rotation == MusicLibraryEntry.RotationSuitability.NOT_SUITABLE:
+                    rotation_query |= Q(rotation_suitability=rotation)
+                elif rotation == "unassessed":
+                    rotation_query |= Q(rotation_suitability="", channels__isnull=True)
+            queryset = queryset.filter(rotation_query)
+        managed_values = set(request.GET.getlist("managed")) & {"yes", "no"}
+        if managed_values == {"yes"}:
             queryset = queryset.filter(managed_recording__isnull=False)
-        elif data.get("managed") == "no":
+        elif managed_values == {"no"}:
             queryset = queryset.filter(managed_recording__isnull=True)
         for relation, mode_name, chosen in (
             ("channels", "channel_mode", data.get("channels") or []),
@@ -207,23 +218,27 @@ def music_library(request):
                     queryset = queryset.filter(**{relation: value})
             elif chosen:
                 queryset = queryset.filter(**{f"{relation}__in": chosen})
-        file_status = data.get("file_status")
+        file_statuses = set(request.GET.getlist("file_status")) & {"available", "missing", "problem", "none"}
         radio = Q(recording__file_assets__role=FileAsset.Role.RADIO_FLAC)
-        if file_status == "available":
-            queryset = queryset.filter(radio, recording__file_assets__locations__status="active")
-        elif file_status == "missing":
-            queryset = queryset.filter(radio, recording__file_assets__locations__status="missing")
-        elif file_status == "problem":
-            queryset = queryset.filter(radio, recording__file_assets__sync_status__in=["conflict", "failed", "missing"])
-        elif file_status == "none":
-            queryset = queryset.exclude(radio)
+        if file_statuses:
+            file_query = Q(pk__in=[])
+            if "available" in file_statuses:
+                file_query |= radio & Q(recording__file_assets__locations__status="active")
+            if "missing" in file_statuses:
+                file_query |= radio & Q(recording__file_assets__locations__status="missing")
+            if "problem" in file_statuses:
+                file_query |= radio & Q(recording__file_assets__sync_status__in=["conflict", "failed", "missing"])
+            if "none" in file_statuses:
+                file_query |= Q(has_radio_file=False)
+            queryset = queryset.filter(file_query)
         needs_follow_up = (
             Q(has_radio_file=False) | Q(has_active_radio_location=False) | Q(has_file_problem=True)
             | Q(has_release=False) | Q(has_duplicate_a=True) | Q(has_duplicate_b=True) | Q(has_ingest_issue=True)
         )
-        if data.get("follow_up") == "yes":
+        follow_up_values = set(request.GET.getlist("follow_up")) & {"yes", "no"}
+        if follow_up_values == {"yes"}:
             queryset = queryset.filter(needs_follow_up)
-        elif data.get("follow_up") == "no":
+        elif follow_up_values == {"no"}:
             queryset = queryset.exclude(needs_follow_up)
         current_ordering = data.get("ordering") or "title"
         ordering = {
@@ -243,22 +258,31 @@ def music_library(request):
             "-updated": ("-updated_at", "id"), "updated": ("updated_at", "id"),
         }.get(current_ordering, ("recording__title", "id"))
         queryset = queryset.order_by(*ordering)
-        simple_labels = {
-            "q": "Søk", "genre": "Sjanger", "language": "Språk", "energy": "Energy",
-            "gender": "Vokal", "rotation_suitability": "Rotasjon",
-            "file_status": "Filstatus", "managed": "Forvaltning",
-            "follow_up": "Oppfølging",
-        }
+        simple_labels = {"q": "Søk", "gender": "Vokal"}
         for name, label in simple_labels.items():
             value = data.get(name)
             if value not in (None, ""):
                 display = dict(form.fields[name].choices).get(value, value) if hasattr(form.fields[name], "choices") else value
                 active_filters.append({"label": f"{label}: {display}", "query": _query_without(request, name, "page")})
+        multi_labels = {
+            "genre": "Sjanger", "language": "Språk", "energy": "Energy",
+            "rotation_suitability": "Rotasjon", "file_status": "Filstatus",
+            "managed": "Forvaltning", "follow_up": "Oppfølging",
+        }
+        for name, label in multi_labels.items():
+            values = [value for value in request.GET.getlist(name) if value]
+            if values:
+                choices = {str(key): str(value) for key, value in form.fields[name].choices}
+                display = ", ".join(choices.get(str(value), str(value)) for value in values)
+                active_filters.append({
+                    "label": f"{label}: {display}",
+                    "query": _query_without(request, name, "page", "column_filter"),
+                })
         for name, mode, label in (("channels", "channel_mode", "Kanal"), ("target_audiences", "target_mode", "Målgruppe")):
             values = data.get(name) or []
             if values:
                 qualifier = "alle" if data.get(mode) == "all" else "minst én"
-                active_filters.append({"label": f"{label} ({qualifier}): {', '.join(str(value) for value in values)}", "query": _query_without(request, name, mode, "page")})
+                active_filters.append({"label": f"{label} ({qualifier}): {', '.join(str(value) for value in values)}", "query": _query_without(request, name, mode, "page", "column_filter")})
     else:
         current_ordering = "title"
         queryset = queryset.order_by("recording__title", "id")
@@ -355,6 +379,22 @@ def music_library(request):
     target_filter_options = list(TargetAudience.objects.filter(is_active=True).order_by("name"))
     for target in target_filter_options:
         target.is_filter_selected = str(target.pk) in selected_target_ids
+    def header_choices(field_name):
+        selected_values = set(request.GET.getlist(field_name))
+        return [
+            {"value": str(value), "label": str(label), "selected": str(value) in selected_values}
+            for value, label in form.fields[field_name].choices
+            if str(value)
+        ]
+
+    header_channel_options = [
+        {"value": str(channel.pk), "label": channel.name, "selected": channel.is_filter_selected}
+        for channel in channel_filter_options
+    ]
+    header_target_options = [
+        {"value": str(target.pk), "label": target.name, "selected": target.is_filter_selected}
+        for target in target_filter_options
+    ]
     header_filter_names = (
         "genre", "language", "energy", "rotation_suitability", "channels",
         "target_audiences", "file_status", "managed", "follow_up",
@@ -363,7 +403,7 @@ def music_library(request):
         name: [
             (key, value)
             for key, values in request.GET.lists()
-            if key not in {name, "page", "selected"}
+            if key not in {name, "page", "selected", "column_filter"}
             for value in values
         ]
         for name in header_filter_names
@@ -395,6 +435,15 @@ def music_library(request):
             "channel_filter_options": channel_filter_options,
             "target_filter_options": target_filter_options,
             "header_filter_params": header_filter_params,
+            "header_genre_options": header_choices("genre"),
+            "header_language_options": header_choices("language"),
+            "header_energy_options": header_choices("energy"),
+            "header_rotation_options": header_choices("rotation_suitability"),
+            "header_channel_options": header_channel_options,
+            "header_target_options": header_target_options,
+            "header_file_status_options": header_choices("file_status"),
+            "header_managed_options": header_choices("managed"),
+            "header_follow_up_options": header_choices("follow_up"),
             "writes_enabled": settings.GUI_V2_WRITES_ENABLED,
         },
     )

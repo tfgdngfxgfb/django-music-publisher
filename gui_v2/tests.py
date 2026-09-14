@@ -149,8 +149,9 @@ class GuiV2WorkspaceTests(TestCase):
         self.assertContains(response, 'class="sort-header"')
         self.assertContains(response, "ordering=title")
         self.assertNotContains(response, 'name="ordering" id="id_ordering"')
-        self.assertContains(response, 'data-header-filter="genre"')
-        self.assertContains(response, 'data-header-filter="channels"')
+        self.assertContains(response, "data-column-filter-form", count=9)
+        self.assertContains(response, 'type="checkbox" name="genre" value="Jazz"')
+        self.assertContains(response, 'type="checkbox" name="channels"')
         self.assertContains(response, "data-column-filter-trigger", count=9)
         self.assertContains(response, "↕", count=13)
         for ordering in ("channels", "targets", "file_status", "managed", "follow_up"):
@@ -197,12 +198,22 @@ class GuiV2WorkspaceTests(TestCase):
         self.assertContains(response, '<option value="Evangelisk">Evangelisk</option>', html=True)
         self.assertContains(response, '<option value="Pop">Pop</option>', html=True)
         self.assertContains(response, '<option value="no">Norsk</option>', html=True)
-        self.assertEqual(response.content.count(b'<option value="no">Norsk</option>'), 2)
+        self.assertEqual(response.content.count(b'<option value="no">Norsk</option>'), 1)
+        self.assertContains(response, 'type="checkbox" name="language" value="no"')
         self.assertContains(response, 'data-library-search')
 
         filtered = self.client.get(reverse("gui_v2:music_library"), {"genre": "Evangelisk"})
         self.assertContains(filtered, "Eksisterende innspilling")
         self.assertContains(filtered, "Sjanger: Evangelisk")
+
+        jazz_recording = Recording.objects.create(title="Jazzinnspilling")
+        MusicLibraryEntry.objects.create(recording=jazz_recording, genre="Jazz")
+        multi_filtered = self.client.get(
+            reverse("gui_v2:music_library"), {"genre": ["Evangelisk", "Jazz"]}
+        )
+        self.assertContains(multi_filtered, "Eksisterende innspilling")
+        self.assertContains(multi_filtered, "Jazzinnspilling")
+        self.assertContains(multi_filtered, "Sjanger: Evangelisk, Jazz")
 
     def test_rotation_filter_derives_suitable_from_channel_membership(self):
         self._superuser()
