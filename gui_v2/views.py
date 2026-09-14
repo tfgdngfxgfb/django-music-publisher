@@ -379,36 +379,6 @@ def music_library(request):
     target_filter_options = list(TargetAudience.objects.filter(is_active=True).order_by("name"))
     for target in target_filter_options:
         target.is_filter_selected = str(target.pk) in selected_target_ids
-    def header_choices(field_name):
-        selected_values = set(request.GET.getlist(field_name))
-        return [
-            {"value": str(value), "label": str(label), "selected": str(value) in selected_values}
-            for value, label in form.fields[field_name].choices
-            if str(value)
-        ]
-
-    header_channel_options = [
-        {"value": str(channel.pk), "label": channel.name, "selected": channel.is_filter_selected}
-        for channel in channel_filter_options
-    ]
-    header_target_options = [
-        {"value": str(target.pk), "label": target.name, "selected": target.is_filter_selected}
-        for target in target_filter_options
-    ]
-    header_filter_names = (
-        "genre", "language", "energy", "rotation_suitability", "channels",
-        "target_audiences", "file_status", "managed", "follow_up",
-    )
-    header_filter_params = {
-        name: [
-            (key, value)
-            for key, values in request.GET.lists()
-            if key not in {name, "page", "selected", "column_filter"}
-            for value in values
-        ]
-        for name in header_filter_names
-    }
-
     return render(
         request,
         "gui_v2/music_library.html",
@@ -434,16 +404,6 @@ def music_library(request):
             "active_filters": active_filters,
             "channel_filter_options": channel_filter_options,
             "target_filter_options": target_filter_options,
-            "header_filter_params": header_filter_params,
-            "header_genre_options": header_choices("genre"),
-            "header_language_options": header_choices("language"),
-            "header_energy_options": header_choices("energy"),
-            "header_rotation_options": header_choices("rotation_suitability"),
-            "header_channel_options": header_channel_options,
-            "header_target_options": header_target_options,
-            "header_file_status_options": header_choices("file_status"),
-            "header_managed_options": header_choices("managed"),
-            "header_follow_up_options": header_choices("follow_up"),
             "writes_enabled": settings.GUI_V2_WRITES_ENABLED,
         },
     )

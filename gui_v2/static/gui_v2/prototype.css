@@ -87,3 +87,10 @@ body.music-library-page .archive-layout>.inspector{align-self:start;margin-top:v
 .header-actions>.player-show{position:static;right:auto;bottom:auto;z-index:auto;flex:0 0 34px;width:34px;height:34px;box-shadow:none}
 @media(max-width:1350px){.header-player.player{width:260px;min-width:210px}.header-player .player-title span{display:none}.header-actions .prototype-mark{display:none}}
 @media(max-width:900px){.header-player.player{min-width:142px;width:142px;grid-template-columns:24px 26px 28px 26px 24px}.header-player .player-title{display:none}.header-player .player-cover{width:24px;height:24px}.header-actions{gap:6px;padding-inline:8px}}
+
+/* The sidebar is the library's only filter surface; its toggle stays in the top toolbar. */
+.filter-toggle{position:static;z-index:auto;width:auto;height:32px;margin:0;padding:5px 9px;box-shadow:none}
+.filter-toggle [data-filter-direction]{margin-left:0}
+.archive-layout.filters-closed .filter-toggle{position:static;z-index:auto;width:auto;margin:0;background:var(--accent-soft);box-shadow:none}
+.archive-layout.filters-closed .filter-toggle [data-filter-direction]{margin-left:0}
+.archive-layout.filters-closed .archive-list>.list-heading{padding-left:16px}

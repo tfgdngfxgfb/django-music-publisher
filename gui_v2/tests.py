@@ -128,6 +128,10 @@ class GuiV2WorkspaceTests(TestCase):
         self.assertContains(response, "data-filter-label")
         self.assertContains(response, "Skjul filtre")
         self.assertContains(response, 'class="filter-toggle"')
+        self.assertGreater(
+            response.content.index(b'class="filter-toggle"'),
+            response.content.index(b'class="list-heading"'),
+        )
         self.assertContains(response, 'class="player header-player"')
         self.assertNotContains(response, '<footer class="player"')
         self.assertNotContains(response, "Bruk filtre")
@@ -151,11 +155,10 @@ class GuiV2WorkspaceTests(TestCase):
         self.assertContains(response, 'class="sort-header"')
         self.assertContains(response, "ordering=title")
         self.assertNotContains(response, 'name="ordering" id="id_ordering"')
-        self.assertContains(response, "data-column-filter-form", count=9)
-        self.assertNotContains(response, "this.form.requestSubmit()")
-        self.assertContains(response, 'type="checkbox" name="genre" value="Jazz"')
+        self.assertNotContains(response, "data-column-filter-form")
+        self.assertNotContains(response, "data-column-filter-trigger")
+        self.assertContains(response, '<select name="genre"')
         self.assertContains(response, 'type="checkbox" name="channels"')
-        self.assertContains(response, "data-column-filter-trigger", count=9)
         self.assertContains(response, "↕", count=13)
         for ordering in ("channels", "targets", "file_status", "managed", "follow_up"):
             sorted_response = self.client.get(reverse("gui_v2:music_library"), {"ordering": ordering})
@@ -202,7 +205,7 @@ class GuiV2WorkspaceTests(TestCase):
         self.assertContains(response, '<option value="Pop">Pop</option>', html=True)
         self.assertContains(response, '<option value="no">Norsk</option>', html=True)
         self.assertEqual(response.content.count(b'<option value="no">Norsk</option>'), 1)
-        self.assertContains(response, 'type="checkbox" name="language" value="no"')
+        self.assertNotContains(response, 'type="checkbox" name="language" value="no"')
         self.assertContains(response, 'data-library-search')
 
         filtered = self.client.get(reverse("gui_v2:music_library"), {"genre": "Evangelisk"})
