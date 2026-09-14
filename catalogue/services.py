@@ -90,16 +90,14 @@ def record_duplicate_candidates(recording, matches):
 
 
 @transaction.atomic
-def create_release_track(
+def resolve_release_track_recording(
     *,
-    release: Release,
-    sequence_number: int,
     recording=None,
     new_recording_title="",
     new_isrc="",
     force_create=False,
     artist_identity=None,
-    **track_fields,
+    duration_ms=None,
 ):
     if recording and new_recording_title.strip():
         raise ValueError(
@@ -112,7 +110,7 @@ def create_release_track(
         matches = find_recording_candidates(
             title=new_recording_title,
             isrc=new_isrc,
-            duration_ms=track_fields.get("duration_ms"),
+            duration_ms=duration_ms,
             artist_identity=artist_identity,
         )
         if matches and not force_create:
@@ -128,7 +126,7 @@ def create_release_track(
             )
         recording = Recording.objects.create(
             title=new_recording_title.strip(),
-            duration_ms=track_fields.get("duration_ms"),
+            duration_ms=duration_ms,
         )
         if new_isrc:
             ExternalIdentifier.objects.create(
@@ -145,6 +143,29 @@ def create_release_track(
                 credited_as=artist_identity.display_name,
             )
         record_duplicate_candidates(recording, matches)
+    return recording
+
+
+@transaction.atomic
+def create_release_track(
+    *,
+    release: Release,
+    sequence_number: int,
+    recording=None,
+    new_recording_title="",
+    new_isrc="",
+    force_create=False,
+    artist_identity=None,
+    **track_fields,
+):
+    recording = resolve_release_track_recording(
+        recording=recording,
+        new_recording_title=new_recording_title,
+        new_isrc=new_isrc,
+        force_create=force_create,
+        artist_identity=artist_identity,
+        duration_ms=track_fields.get("duration_ms"),
+    )
     return ReleaseTrack.objects.create(
         release=release,
         recording=recording,

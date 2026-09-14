@@ -1,3 +1,6 @@
+from contextlib import contextmanager
+from contextvars import ContextVar
+
 from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
@@ -12,8 +15,23 @@ from managed_music.models import ManagedRecording
 from rights.models import RightsClaim, RightsDecision
 
 
+_automatic_sync_suppressed = ContextVar(
+    "automatic_flac_sync_suppressed", default=False
+)
+
+
+@contextmanager
+def suppress_automatic_flac_sync():
+    """Prevent prototype writes from queuing or touching radio files."""
+    token = _automatic_sync_suppressed.set(True)
+    try:
+        yield
+    finally:
+        _automatic_sync_suppressed.reset(token)
+
+
 def _mark(recording_id):
-    if not recording_id:
+    if not recording_id or _automatic_sync_suppressed.get():
         return
     from .services import mark_recording_for_sync
 

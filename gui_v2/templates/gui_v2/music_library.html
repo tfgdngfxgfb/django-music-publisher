@@ -1,7 +1,39 @@
-{% extends "gui_v2/base.html" %}
-{% block title %}Musikkarkivprototype{% endblock %}
-{% block content %}
-<header class="v2-heading"><p>Musikkarkiv</p><h1>Liste og arbeidskontekst</h1><span>Strukturskisse med fiktive opplysninger. Søk og redigering er ikke aktivert.</span></header>
-<div class="v2-toolbar" aria-label="Ikke-aktiv prototypekontroll"><input type="search" placeholder="Søk i musikkarkivet" disabled><button type="button" disabled>Filtrer</button></div>
-<section class="v2-table-card"><table><thead><tr><th>Innspilling</th><th>Artist</th><th>Sjanger</th><th>Energy</th><th>Status</th></tr></thead><tbody>{% for recording in recordings %}<tr><td><strong>{{ recording.title }}</strong></td><td>{{ recording.artist }}</td><td>{{ recording.genre }}</td><td>{{ recording.energy }}</td><td><span class="v2-pill">{{ recording.status }}</span></td></tr>{% endfor %}</tbody></table></section>
-{% endblock %}
+{% extends "gui_v2/base.html" %}{% block title %}Musikkarkiv{% endblock %}{% block content %}
+<div class="archive-layout{% if not selected %} no-inspector{% endif %}">
+  <aside class="filter-panel">
+    <div class="panel-heading"><div><span class="eyebrow">Musikkarkiv</span><h1>Radiomusikk</h1></div><button type="button" class="icon-button" data-collapse="filters" aria-label="Skjul filtre">‹</button></div>
+    <form method="get" class="filter-form" id="library-filters">
+      <label class="search-field">⌕ {{ filter_form.q }}<span class="sr-only">Søk etter tittel, artist eller ISRC</span></label>
+      <details open><summary>Radioklassifisering</summary><label>{{ filter_form.genre.label }}{{ filter_form.genre }}</label><label>{{ filter_form.language.label }}{{ filter_form.language }}</label><div class="two-fields"><label>{{ filter_form.energy.label }}{{ filter_form.energy }}</label><label>{{ filter_form.gender.label }}{{ filter_form.gender }}</label></div></details>
+      <details open><summary>Kanaler</summary>{{ filter_form.channels }}{{ filter_form.channel_mode }}</details>
+      <details><summary>Målgrupper</summary>{{ filter_form.target_audiences }}{{ filter_form.target_mode }}</details>
+      <details open><summary>Fil og forvaltning</summary><label>{{ filter_form.file_status.label }}{{ filter_form.file_status }}</label><label>{{ filter_form.managed.label }}{{ filter_form.managed }}</label></details>
+      <div class="filter-actions"><button class="primary" type="submit">Bruk filtre</button><a class="button" href="{% url 'gui_v2:music_library' %}">Nullstill</a></div>
+    </form>
+    {% if perms.flac_ingest.view_ingestbatch %}<a class="ingest-link" href="{% url 'workbench:flac_ingest_start' %}"><span>⇩</span><strong>Les inn fra filer</strong><small>Åpnes i dagens sikre innlesingsflyt</small></a>{% endif %}
+  </aside>
+
+  <section class="archive-list">
+    <header class="list-heading"><div><span class="eyebrow">Arbeidsliste</span><h2>Musikkarkiv</h2><p>{{ page.paginator.count }} innspillinger · side {{ page.number }} av {{ page.paginator.num_pages }}</p></div><a class="button subtle" href="{% url 'workbench:library_add' %}">Manuell registrering</a></header>
+    <div class="table-scroll"><table class="data-table"><thead><tr><th>Innspilling</th><th>ISRC · varighet</th><th>Radio</th><th>Kanal / målgruppe</th><th>Fil</th><th>Forvaltning</th></tr></thead><tbody>
+    {% for entry in page.object_list %}<tr class="selectable{% if selected.pk == entry.pk %} selected{% endif %}">
+      <td><a class="row-link" href="?{% if query_without_selected %}{{ query_without_selected }}&amp;{% endif %}selected={{ entry.pk }}"><strong>{{ entry.recording.title }}</strong><span>{{ entry.artist_text }}</span></a></td>
+      <td><code>{{ entry.isrc|default:"ISRC ukjent" }}</code><span>{{ entry.duration_text|default:"Varighet ukjent" }}</span></td>
+      <td><strong>{{ entry.genre|default:"Ikke klassifisert" }}</strong><span>{{ entry.language|default:"Ukjent språk" }} · Energy {{ entry.energy|default:"–" }}</span></td>
+      <td><div class="tag-row">{% for channel in entry.channels.all %}<span class="tag">{{ channel.name }}</span>{% empty %}<span>Ingen kanal</span>{% endfor %}</div><span>{% for target in entry.target_audiences.all %}{{ target.name }}{% if not forloop.last %}, {% endif %}{% empty %}Ingen målgruppe{% endfor %}</span></td>
+      <td>{% if entry.radio_files %}<span class="status ok">Registrert</span><span>{{ entry.radio_files.0.get_sync_status_display }}</span>{% else %}<span class="status muted">Ingen radiofil</span>{% endif %}</td>
+      <td>{% if entry.is_managed %}<span class="status cyan">Forvaltet musikk</span>{% else %}<span class="status muted">Kun musikkarkiv</span>{% endif %}</td>
+    </tr>{% empty %}<tr><td colspan="6" class="empty-state">Ingen innspillinger passer til filtrene.</td></tr>{% endfor %}
+    </tbody></table></div>
+    {% if page.paginator.num_pages > 1 %}<nav class="pagination" aria-label="Sider">{% if page.has_previous %}<a href="?{% if query_without_page %}{{ query_without_page }}&amp;{% endif %}page={{ page.previous_page_number }}">← Forrige</a>{% endif %}<span>Side {{ page.number }} av {{ page.paginator.num_pages }}</span>{% if page.has_next %}<a href="?{% if query_without_page %}{{ query_without_page }}&amp;{% endif %}page={{ page.next_page_number }}">Neste →</a>{% endif %}</nav>{% endif %}
+  </section>
+
+  {% if selected %}<aside class="inspector" id="v2-inspector"><button class="resize-handle" type="button" aria-label="Endre bredden på detaljpanelet"></button>
+    <header><div class="cover">♫</div><div><span class="eyebrow">Valgt innspilling</span><h2>{{ selected.recording.title }}</h2><p>{{ selected.artist_text }}</p></div><button type="button" class="icon-button" data-close-inspector aria-label="Lukk detaljpanelet">×</button></header>
+    <div class="tabs" role="tablist"><button role="tab" aria-selected="true" data-tab="overview">Detaljer</button><button role="tab" data-tab="radio">Radio</button><button role="tab" data-tab="files">Filer</button><button role="tab" data-tab="rights">Forvaltning</button></div>
+    <section data-panel="overview"><dl class="detail-grid"><dt>ISRC</dt><dd>{{ selected.isrc|default:"Ikke registrert" }} <button class="copy" data-copy="{{ selected.isrc }}" type="button">Kopier</button></dd><dt>UUID</dt><dd><code>{{ selected.recording.pk }}</code> <button class="copy" data-copy="{{ selected.recording.pk }}" type="button">Kopier</button></dd><dt>Varighet</dt><dd>{{ selected.duration_text|default:"Ukjent" }}</dd><dt>Utgivelser</dt><dd>{% for release in selected.releases %}<a href="{% url 'gui_v2:release_detail' release.pk %}">{{ release.title }}</a>{% empty %}Ingen registrerte utgivelser{% endfor %}</dd></dl><a class="button full" href="{% url 'workbench:recording' selected.recording.pk %}">Åpne full visning</a></section>
+    <section data-panel="radio" hidden><dl class="detail-grid"><dt>Radiosjanger</dt><dd>{{ selected.genre|default:"Ukjent" }}</dd><dt>Radiospråk</dt><dd>{{ selected.language|default:"Ukjent" }}</dd><dt>Energy</dt><dd>{{ selected.energy|default:"Ukjent" }}</dd><dt>Kanaler</dt><dd>{% for value in selected.channels.all %}<span class="tag">{{ value.name }}</span>{% empty %}Ingen{% endfor %}</dd><dt>Målgrupper</dt><dd>{% for value in selected.target_audiences.all %}<span class="tag">{{ value.name }}</span>{% empty %}Ingen{% endfor %}</dd><dt>Kilde</dt><dd>FLAC / OneTagger</dd></dl><p class="notice">Radiometadata leses fra FLAC. Permanent redigering gjøres i radioarbeidsflyten og kan erstattes ved neste innlesing.</p></section>
+    <section data-panel="files" hidden>{% for file in selected.radio_files %}<article class="file-card"><strong>{{ file.filename }}</strong><span>{{ file.mime_type|default:"Format ukjent" }} · {{ file.get_sync_status_display }}</span><span>Sist lest: {{ file.metadata_read_at|date:"d.m.Y H:i"|default:"Ikke lest" }}</span>{% for location in file.locations.all %}<code>{{ location.relative_path }}</code><button class="copy" data-copy="{{ location.relative_path }}" type="button">Kopier sti</button>{% endfor %}</article>{% empty %}<p class="empty-state">Ingen radiofil er registrert.</p>{% endfor %}</section>
+    <section data-panel="rights" hidden>{% if selected.is_managed %}<span class="status cyan">Registrert i Forvaltet musikk</span><p>Forvaltningsregistrering innebærer ikke automatisk eierskap.</p><a class="button full" href="{% url 'workbench:recording' selected.recording.pk %}?tab=rights">Åpne rettighetsvisning</a>{% else %}<span class="status muted">Ikke forvaltet lokalt</span><p>Rettighetskontroll er ikke en del av den daglige visningen for uforvaltet radiomusikk.</p>{% endif %}</section>
+  </aside>{% endif %}
+</div>{% endblock %}

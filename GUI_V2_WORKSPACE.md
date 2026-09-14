@@ -1,16 +1,25 @@
-# GUI v2 – trygt prototypeområde
+# GUI v2 – isolert arbeidsområde
 
 - Branch: `feature/gui-v2-prototype`
-- URL: `/v2/`
-- Datakilde: statiske, tydelig fiktive Python-data i `gui_v2.views`.
-- Innlogging: eksisterende Django-auth. Musikkarkiv og utgivelse krever de
-  eksisterende visningstillatelsene.
-- Database: prototypen importerer ingen domenemodeller eller tjenester og har
-  bare GET-visninger. POST avvises. Ingen data kan lagres fra `/v2/`.
-- Filer: prototypen importerer eller kaller ingen FLAC-, ingest-, sync- eller
-  filskrivetjenester.
+- URL: `http://127.0.0.1:8000/v2/`
+- Standardmodus: lesing fra den valgte databasen; alle POST-handlinger er blokkert.
+- Trygg prøvebruk: `run-p7-gui-v2-test.cmd` bruker bare
+  `.local/gui-v2-test.sqlite3` og `.local/gui-v2-files`.
+- Testdata: `load_gui_v2_test_data` oppretter oppdiktede innspillinger,
+  utgivelser, radioklassifisering og filreferanser. Ingen lydfiler opprettes.
+- Filskriving: GUI v2 har ingen scan-, ingest-, writeback- eller sync-endepunkter.
+  Sporlagring undertrykker også automatisk FLAC-synkroniseringskø.
+- Innlogging og visningstillatelser er de samme som i Workbench.
 
-Templates, CSS og JavaScript ligger bare under `gui_v2` og kan erstattes eller
-fjernes uten migrasjon. Dagens `/`, `/arbeid/`, admin og Workbench er uendret.
-Neste designrunde kan erstatte de statiske skjermene og gradvis koble inn
-eksisterende read-only tjenester etter at arbeidsflyten er godkjent.
+Templates, CSS og JavaScript ligger under `gui_v2`. Ingen domenemodeller eller
+migrations er lagt til. Dagens `/`, `/arbeid/`, admin og Workbench er uendret.
+
+## Starte prøveområdet
+
+```powershell
+run-p7-gui-v2-test.cmd
+```
+
+Bruk `run-p7-gui-v2-test.cmd -Reset` for å arkivere den forrige GUI-v2-databasen
+og bygge en ny. Administratorpassord kan angis med `-AdminPassword` og lagres
+ikke i skriptet.

@@ -80,3 +80,7 @@ if S3_ENABLED:  # noqa: F405
 # logical relative paths.
 P7_NAS_ROOT = os.getenv("P7_NAS_ROOT", "")
 P7_MUSIC_ROOT = os.getenv("P7_MUSIC_ROOT", P7_NAS_ROOT)
+
+# GUI v2 remains read-only unless an isolated test process explicitly enables
+# catalogue writes. GUI v2 never exposes ingest apply or FLAC writeback routes.
+GUI_V2_WRITES_ENABLED = env_bool("GUI_V2_WRITES_ENABLED", False)
