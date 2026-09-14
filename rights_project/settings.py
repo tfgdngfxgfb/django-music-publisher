@@ -44,9 +44,7 @@ INSTALLED_APPS = [  # noqa: F405
 ROOT_URLCONF = "rights_project.urls"
 WSGI_APPLICATION = "rights_project.wsgi.application"
 LANGUAGE_CODE = "nb"
-TEMPLATES[0]["DIRS"] = [  # noqa: F405
-    PROJECT_DIR / "rights_project" / "templates"
-]
+TEMPLATES[0]["DIRS"] = [PROJECT_DIR / "rights_project" / "templates"]  # noqa: F405
 TEMPLATES[0].setdefault("OPTIONS", {}).setdefault("libraries", {})[  # noqa: F405
     "workbench_tags"
 ] = "workbench.templatetags.workbench_tags"
@@ -80,6 +78,10 @@ if S3_ENABLED:  # noqa: F405
 # logical relative paths.
 P7_NAS_ROOT = os.getenv("P7_NAS_ROOT") or os.getenv("P7_MUSIC_ROOT", "")
 P7_MUSIC_ROOT = os.getenv("P7_MUSIC_ROOT", P7_NAS_ROOT)
+
+# Existing archive files are read-only by default. Explicit tag-writing tools must
+# pass through this installation-level gate; ingest and maintenance never enable it.
+P7_ALLOW_FILE_WRITES = env_bool("P7_ALLOW_FILE_WRITES", False)
 
 # GUI v2 remains read-only unless an isolated test process explicitly enables
 # catalogue writes. GUI v2 never exposes ingest apply or FLAC writeback routes.

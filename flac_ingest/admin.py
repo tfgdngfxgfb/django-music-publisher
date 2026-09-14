@@ -2,7 +2,7 @@ from django.contrib import admin
 
 from rights_core.admin import CanonicalAdmin
 
-from .models import FlacIngestBatch, FlacIngestItem, FlacSyncLog
+from .models import FlacIngestBatch, FlacIngestItem, FlacMaintenanceJob, FlacSyncLog
 
 
 @admin.register(FlacIngestBatch)
@@ -50,3 +50,28 @@ class FlacSyncLogAdmin(CanonicalAdmin):
     list_display = ("asset", "result", "created_at")
     list_filter = ("result",)
     readonly_fields = ("asset", "result", "written_tags", "protected_tags", "error")
+
+
+@admin.register(FlacMaintenanceJob)
+class FlacMaintenanceJobAdmin(CanonicalAdmin):
+    list_display = (
+        "kind",
+        "status",
+        "relative_root",
+        "created_by",
+        "executed_by",
+        "created_at",
+    )
+    list_filter = ("kind", "status")
+    readonly_fields = (
+        "kind",
+        "status",
+        "relative_root",
+        "plan",
+        "result",
+        "error",
+        "created_by",
+        "executed_by",
+        "started_at",
+        "completed_at",
+    )

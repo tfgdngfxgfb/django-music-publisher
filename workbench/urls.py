@@ -101,6 +101,21 @@ urlpatterns = [
     path("artister/ny-identitet/", views.artist_add, name="artist_add"),
     path("kontroll/", views.control, name="control"),
     path(
+        "kontroll/musikkarkiv-vedlikehold/",
+        views.library_maintenance,
+        name="library_maintenance",
+    ),
+    path(
+        "kontroll/musikkarkiv-vedlikehold/analyser/",
+        views.library_maintenance_preview,
+        name="library_maintenance_preview",
+    ),
+    path(
+        "kontroll/musikkarkiv-vedlikehold/<uuid:pk>/utfor/",
+        views.library_maintenance_execute,
+        name="library_maintenance_execute",
+    ),
+    path(
         "kontroll/bekreft-flac/",
         views.confirm_flac_metadata,
         name="confirm_flac_metadata",

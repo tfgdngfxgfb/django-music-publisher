@@ -28,6 +28,7 @@ if ($Reset -and (Test-Path -LiteralPath $DatabasePath)) {
 $DatabaseUrlPath = [System.IO.Path]::GetFullPath($DatabasePath).Replace("\", "/")
 $env:DATABASE_URL = "sqlite:///$DatabaseUrlPath"
 $env:GUI_V2_WRITES_ENABLED = "true"
+$env:P7_ALLOW_FILE_WRITES = "false"
 $env:DEBUG = "true"
 
 & (Join-Path $PSScriptRoot "run-dev.ps1") `

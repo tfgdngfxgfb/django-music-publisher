@@ -57,6 +57,9 @@ from .adapter import (
 from .models import FlacIngestBatch, FlacIngestItem, FlacSyncLog
 
 SOURCE_SYSTEM_NAME = "P7 radio-FLAC"
+AUTOMATIC_FLAC_DECISION_NOTE = (
+    "Automatisk bekreftet ved anvendelse fra autoritativ radio-FLAC."
+)
 RELEASE_SIGNATURE_NAMESPACE = "p7-flac-release-signature-v1"
 RELEASE_CONTEXT_VERSION = 1
 DISC_FOLDER_PATTERN = re.compile(
@@ -469,9 +472,7 @@ def _existing_locations(relative_root, relative_paths):
         locations = []
         for offset in range(0, len(requested), 500):
             locations.extend(
-                base_queryset.filter(
-                    relative_path__in=requested[offset : offset + 500]
-                )
+                base_queryset.filter(relative_path__in=requested[offset : offset + 500])
             )
     else:
         prefix = str(PurePosixPath(relative_root or "."))
@@ -484,6 +485,87 @@ def _existing_locations(relative_root, relative_paths):
     for location in locations:
         result.setdefault(location.relative_path, []).append(location)
     return result
+
+
+def _moved_asset_candidate(parsed, technical):
+    """Find one compatible radio file by STREAMINFO PCM MD5.
+
+    PCM MD5 survives tag edits, but identical audio can legitimately occur in
+    several files. It is therefore accepted only with one candidate and a
+    compatible catalogue signal; it never merges Recordings by itself.
+    """
+    audio_md5 = technical.get("audio_md5")
+    if not audio_md5 or audio_md5 == "0" * 32:
+        return None
+    assets = list(
+        FileAsset.objects.filter(
+            role=FileAsset.Role.RADIO_FLAC,
+            technical_metadata__audio_md5=audio_md5,
+            recording__isnull=False,
+        )
+        .select_related("recording")
+        .prefetch_related("locations")[:2]
+    )
+    if len(assets) != 1:
+        return None
+    asset = assets[0]
+    p7uuid = parsed.get("p7uuid")
+    if p7uuid:
+        return asset if str(asset.recording_id) == p7uuid else None
+    file_isrc = parsed.get("isrc")
+    if file_isrc:
+        try:
+            return (
+                asset
+                if _recording_isrc(asset.recording) == normalize_isrc(file_isrc)
+                else None
+            )
+        except ValidationError:
+            return None
+    duration = technical.get("duration_ms")
+    title_matches = (
+        parsed.get("title", "").strip().casefold()
+        == asset.recording.title.strip().casefold()
+    )
+    duration_matches = (
+        duration is not None
+        and asset.recording.duration_ms is not None
+        and abs(duration - asset.recording.duration_ms) <= 2000
+    )
+    return asset if title_matches and duration_matches else None
+
+
+def reconcile_missing_file_locations(
+    *, relative_root=".", relative_paths=None, recursive=True
+):
+    """Mark absent registered radio locations without deleting catalogue data."""
+    root, _folder = resolve_music_path(relative_root)
+    locations = _existing_locations(relative_root, relative_paths)
+    changed = 0
+    prefix = PurePosixPath(relative_root or ".")
+    for logical_path, candidates in locations.items():
+        if (
+            not recursive
+            and relative_paths is None
+            and PurePosixPath(logical_path).parent != prefix
+        ):
+            continue
+        path = root.joinpath(*PurePosixPath(logical_path).parts)
+        if path.exists():
+            continue
+        for location in candidates:
+            if location.asset.role != FileAsset.Role.RADIO_FLAC:
+                continue
+            if location.status != FileLocation.Status.MISSING:
+                location.status = FileLocation.Status.MISSING
+                location.save(update_fields=("status",))
+                changed += 1
+            asset = location.asset
+            if asset.sync_status != FileAsset.SyncStatus.MISSING:
+                asset.sync_status = FileAsset.SyncStatus.MISSING
+                asset.sync_error = "Radio-FLAC mangler på registrert plassering."
+                asset.save(update_fields=("sync_status", "sync_error"))
+    return changed
 
 
 def scan_directory(
@@ -609,6 +691,8 @@ def scan_directory(
             **snapshot.technical,
             "release_context_version": RELEASE_CONTEXT_VERSION,
         }
+        if not existing_asset:
+            existing_asset = _moved_asset_candidate(parsed, technical)
         recording, method, candidates, messages, conflict = _match_recording(
             parsed,
             technical,
@@ -624,7 +708,11 @@ def scan_directory(
                 )
             elif not conflict:
                 recording = path_recording
-                method = "file_location"
+                method = "audio_md5_move" if not existing_locations else "file_location"
+                if method == "audio_md5_move":
+                    messages.append(
+                        "Samme lydinnhold er funnet på en ny filplassering."
+                    )
         if not parsed.get("title"):
             conflict = True
             messages.append("TITLE mangler; innspilling opprettes ikke fra filnavnet.")
@@ -640,9 +728,7 @@ def scan_directory(
                 conflict = True
         release_candidates = _release_candidates(parsed)
         if len(release_candidates) > 1:
-            messages.append(
-                "Utgivelsesidentifikatorene peker mot ulike utgivelser."
-            )
+            messages.append("Utgivelsesidentifikatorene peker mot ulike utgivelser.")
             conflict = True
         action = (
             FlacIngestItem.Action.CONFLICT
@@ -659,10 +745,7 @@ def scan_directory(
         )
         if recording and database_is_catalogue_authority(recording):
             differences = []
-            if (
-                parsed.get("title")
-                and parsed["title"] != recording.title
-            ):
+            if parsed.get("title") and parsed["title"] != recording.title:
                 differences.append("TITLE avviker fra databaseverdien")
             existing_isrc = _recording_isrc(recording)
             if (
@@ -689,6 +772,11 @@ def scan_directory(
             release=(release_candidates[0] if len(release_candidates) == 1 else None),
             file_asset=existing_asset,
         )
+    reconcile_missing_file_locations(
+        relative_root=relative_root,
+        relative_paths=relative_paths,
+        recursive=recursive,
+    )
     return batch
 
 
@@ -714,16 +802,17 @@ def _release_is_sufficient(parsed):
 def _resolve_or_create_release(parsed):
     candidates = _release_candidates(parsed)
     if len(candidates) > 1:
-        raise ValidationError(
-            "Utgivelsesidentifikatorene peker mot ulike utgivelser."
-        )
+        raise ValidationError("Utgivelsesidentifikatorene peker mot ulike utgivelser.")
     release = _find_release(parsed)
     signature = _release_signature(parsed)
     if release:
-        if signature and not release.identifiers.filter(
-            scheme=ExternalIdentifier.Scheme.EXTERNAL,
-            namespace=RELEASE_SIGNATURE_NAMESPACE,
-        ).exists():
+        if (
+            signature
+            and not release.identifiers.filter(
+                scheme=ExternalIdentifier.Scheme.EXTERNAL,
+                namespace=RELEASE_SIGNATURE_NAMESPACE,
+            ).exists()
+        ):
             ExternalIdentifier.objects.create(
                 release=release,
                 scheme=ExternalIdentifier.Scheme.EXTERNAL,
@@ -778,7 +867,11 @@ def _attach_release_cover(release, parsed):
         for path in images
         if path.stem.casefold() in {"cover", "folder", "front", "album"}
     ]
-    candidate = preferred[0] if len(preferred) == 1 else (images[0] if len(images) == 1 else None)
+    candidate = (
+        preferred[0]
+        if len(preferred) == 1
+        else (images[0] if len(images) == 1 else None)
+    )
     if not candidate:
         return None
     root = music_root()
@@ -886,7 +979,7 @@ def _assertion(source_record, entity_type, entity, field, value, *, user):
         assertion=assertion,
         decision=VerificationStatus.CONFIRMED,
         decided_by=user,
-        note="Automatisk bekreftet ved anvendelse fra autoritativ radio-FLAC.",
+        note=AUTOMATIC_FLAC_DECISION_NOTE,
     )
     return assertion
 
@@ -1152,9 +1245,7 @@ def apply_item(item, *, user):
         and parsed.get("p7uuid")
     ):
         recording = (
-            Recording.objects.select_for_update()
-            .filter(pk=parsed["p7uuid"])
-            .first()
+            Recording.objects.select_for_update().filter(pk=parsed["p7uuid"]).first()
         )
     # Several files in the same preview may carry the same previously unseen
     # ISRC. The first applied row creates the Recording; later rows must
@@ -1186,9 +1277,7 @@ def apply_item(item, *, user):
             and parsed.get("p7uuid")
         ):
             recording_values["pk"] = parsed["p7uuid"]
-        recording = Recording.objects.create(
-            **recording_values
-        )
+        recording = Recording.objects.create(**recording_values)
         title_assertion = _assertion(
             source_record,
             MetadataAssertion.EntityType.RECORDING,
@@ -1321,7 +1410,7 @@ def apply_item(item, *, user):
         .select_related("asset")
         .first()
     )
-    asset = location.asset if location else None
+    asset = location.asset if location else item.file_asset
     if asset and asset.recording_id not in {None, recording.pk}:
         raise ValidationError(
             "Filplasseringen er allerede knyttet til en annen innspilling."
@@ -1347,6 +1436,23 @@ def apply_item(item, *, user):
             verification_status=FileLocation.VerificationStatus.VERIFIED,
         )
     else:
+        if location is None:
+            for previous in asset.locations.filter(is_current=True):
+                previous.is_current = False
+                previous.status = FileLocation.Status.MOVED
+                previous.ended_at = timezone.now()
+                previous.save(update_fields=("is_current", "status", "ended_at"))
+            location = FileLocation.objects.create(
+                asset=asset,
+                storage_type=FileLocation.StorageType.NAS,
+                relative_path=item.relative_path,
+                status=FileLocation.Status.ACTIVE,
+                verification_status=FileLocation.VerificationStatus.VERIFIED,
+            )
+        elif location.status != FileLocation.Status.ACTIVE:
+            location.status = FileLocation.Status.ACTIVE
+            location.verification_status = FileLocation.VerificationStatus.VERIFIED
+            location.save(update_fields=("status", "verification_status"))
         asset.recording = recording
         asset.release_track = asset.release_track or release_track
         asset.filename = absolute.name
@@ -1359,6 +1465,13 @@ def apply_item(item, *, user):
         asset.sync_status = FileAsset.SyncStatus.SYNCED
         asset.sync_error = ""
         asset.save()
+    if catalogue_authority and _catalogue_metadata_differs(asset, parsed):
+        asset.sync_status = FileAsset.SyncStatus.PENDING
+        asset.sync_requested_at = timezone.now()
+        asset.sync_error = (
+            "Katalogmetadata avviker fra radio-FLAC. Filen er ikke endret."
+        )
+        asset.save(update_fields=("sync_status", "sync_requested_at", "sync_error"))
     FileChecksum.objects.get_or_create(
         asset=asset,
         sha256=item.sha256,
@@ -1371,9 +1484,6 @@ def apply_item(item, *, user):
     item.source_record = source_record
     item.applied_at = timezone.now()
     item.save()
-    transaction.on_commit(
-        lambda: sync_file_asset(asset.pk, p7uuid_only=not catalogue_authority)
-    )
     return item
 
 
@@ -1487,6 +1597,46 @@ def _catalogue_tags(asset, p7uuid_only=False):
     return values
 
 
+def _catalogue_metadata_differs(asset, parsed):
+    """Compare the writable catalogue subset without treating P7UUID as required."""
+    expected = _catalogue_tags(asset)
+
+    def scalar(value):
+        return str(value or "").strip().casefold()
+
+    if scalar(parsed.get("title")) != scalar(expected.get("TITLE")):
+        return True
+    try:
+        source_isrc = normalize_isrc(parsed["isrc"]) if parsed.get("isrc") else ""
+    except ValidationError:
+        return True
+    if source_isrc != expected.get("ISRC", ""):
+        return True
+    if scalar((parsed.get("artists") or [""])[0]) != scalar(expected.get("ARTIST")):
+        return True
+    for field, tag in (
+        ("composers", "COMPOSER"),
+        ("lyricists", "LYRICIST"),
+        ("arrangers", "ARRANGER"),
+    ):
+        actual = [scalar(value) for value in parsed.get(field, [])]
+        wanted = [scalar(value) for value in expected.get(tag, [])]
+        if actual != wanted:
+            return True
+    if asset.release_track_id:
+        for field, tag in (
+            ("album", "ALBUM"),
+            ("track_number", "TRACKNUMBER"),
+            ("disc_number", "DISCNUMBER"),
+            ("date", "DATE"),
+            ("catalogue_number", "CATALOGNUMBER"),
+            ("barcode", "BARCODE"),
+        ):
+            if scalar(parsed.get(field)) != scalar(expected.get(tag)):
+                return True
+    return False
+
+
 def _asset_path(asset):
     location = asset.locations.filter(
         storage_type=FileLocation.StorageType.NAS, is_current=True
@@ -1502,6 +1652,13 @@ def sync_file_asset(asset_id, *, p7uuid_only=False):
         pk=asset_id
     )
     if asset.role != FileAsset.Role.RADIO_FLAC or not asset.recording_id:
+        return None
+    if not getattr(settings, "P7_ALLOW_FILE_WRITES", False):
+        if asset.sync_status != FileAsset.SyncStatus.PENDING:
+            asset.sync_status = FileAsset.SyncStatus.PENDING
+            asset.sync_requested_at = timezone.now()
+            asset.sync_error = ""
+            asset.save(update_fields=("sync_status", "sync_requested_at", "sync_error"))
         return None
     if not p7uuid_only and not database_is_catalogue_authority(asset.recording):
         message = (

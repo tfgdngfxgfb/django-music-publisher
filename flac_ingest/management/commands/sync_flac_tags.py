@@ -1,4 +1,5 @@
-from django.core.management.base import BaseCommand
+from django.conf import settings
+from django.core.management.base import BaseCommand, CommandError
 
 from flac_ingest.services import sync_file_asset
 from media_assets.models import FileAsset
@@ -15,6 +16,11 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        if not getattr(settings, "P7_ALLOW_FILE_WRITES", False):
+            raise CommandError(
+                "Filskriving er deaktivert. P7_ALLOW_FILE_WRITES må aktiveres "
+                "uttrykkelig før denne synkroniseringskommandoen kan brukes."
+            )
         statuses = [FileAsset.SyncStatus.PENDING]
         if options["all_failed"]:
             statuses.extend((FileAsset.SyncStatus.MISSING, FileAsset.SyncStatus.FAILED))

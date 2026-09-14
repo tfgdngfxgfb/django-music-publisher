@@ -1,0 +1,87 @@
+{% extends "workbench/base.html" %}
+
+{% block subtitle %}<p>Kontrollert opprydding og gjenoppbygging av den FLAC-avledede delen av Musikkarkivet.</p>{% endblock %}
+
+{% block content %}
+<section class="panel">
+  <div class="panel-heading">
+    <div>
+      <h2>Read-only mot lydarkivet</h2>
+      <p>Analyse, opprydding og rebuild leser FLAC-filene, men endrer ikke tags, cover, filnavn eller filinnhold. Manglende filer slettes aldri automatisk.</p>
+    </div>
+  </div>
+  <form method="post" action="{% url 'workbench:library_maintenance_preview' %}" class="form-grid">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <div class="inline-actions">
+      {% if can_preview_cleanup %}<button class="button" type="submit" name="kind" value="cleanup">Analyser opprydding</button>{% endif %}
+      {% if can_preview_rebuild %}<button class="button primary" type="submit" name="kind" value="rebuild">Lag rebuild-plan</button>{% endif %}
+    </div>
+  </form>
+</section>
+
+{% if selected_job %}
+<section class="panel">
+  <div class="panel-heading">
+    <div>
+      <p class="eyebrow">{{ selected_job.get_kind_display }}</p>
+      <h2>{{ selected_job.get_status_display }}</h2>
+      <p>Område: <code>{{ selected_job.relative_root }}</code> · Analysert {{ selected_job.created_at|date:"d.m.Y H:i" }} av {{ selected_job.created_by }}</p>
+    </div>
+  </div>
+
+  {% if selected_job.kind == 'cleanup' %}
+    {% if selected_job.plan.recording_id %}<p class="notice">Dette er en uttrykkelig fjerning av én Musikkarkiv-post. Selve FLAC-filen og innspillingen beholdes; filen kan oppdages igjen ved en senere skann.</p>{% endif %}
+    <div class="stats-grid">
+      <div><strong>{{ selected_job.plan.stats.missing_locations|default:0 }}</strong><span>Manglende plasseringer</span></div>
+      <div><strong>{{ selected_job.plan.stats.entries_without_active_file|default:0 }}</strong><span>Poster uten aktiv fil</span></div>
+      <div><strong>{{ selected_job.plan.stats.safe_to_remove|default:0 }}</strong><span>Kan fjernes fra Musikkarkiv</span></div>
+      <div><strong>{{ selected_job.plan.stats.protected|default:0 }}</strong><span>Bevares</span></div>
+    </div>
+    {% if selected_job.plan.items %}
+      <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Innspilling</th><th>Manglende fil</th><th>Vurdering</th></tr></thead>
+        <tbody>{% for item in selected_job.plan.items|slice:":100" %}<tr>
+          <td>{{ item.title }}<br><small>{{ item.recording_id }}</small></td>
+          <td>{% for path in item.missing_paths %}<code>{{ path }}</code>{% if not forloop.last %}<br>{% endif %}{% endfor %}</td>
+          <td>{% if item.removable %}<span class="status status-confirmed">Kun regenererbar Musikkarkiv-tilhørighet kan fjernes</span>{% else %}<span class="status status-disputed">Beholdes</span>{% for reason in item.protected_reasons %}<br><small>{{ reason }}</small>{% empty %}<br><small>Filen finnes fortsatt på en annen registrert plassering.</small>{% endfor %}{% endif %}</td>
+        </tr>{% endfor %}</tbody>
+      </table></div>
+    {% else %}<p class="empty">Ingen manglende filplasseringer ble funnet.</p>{% endif %}
+  {% else %}
+    <div class="stats-grid">
+      <div><strong>{{ selected_job.plan.stats.flac_files|default:0 }}</strong><span>FLAC-filer leses</span></div>
+      <div><strong>{{ selected_job.plan.stats.regenerable_entries|default:0 }}</strong><span>Poster regenereres</span></div>
+      <div><strong>{{ selected_job.plan.stats.recordings_reused|default:0 }}</strong><span>Innspillinger gjenbrukes</span></div>
+      <div><strong>{{ selected_job.plan.stats.protected_recordings|default:0 }}</strong><span>Beskyttede innspillinger</span></div>
+      <div><strong>0</strong><span>Forvaltede innspillinger endres</span></div>
+    </div>
+    {% if selected_job.plan.protected %}<details><summary>Vis beskyttet kunnskap ({{ selected_job.plan.stats.protected_recordings }})</summary><div class="table-wrap"><table class="data-table"><thead><tr><th>Innspilling</th><th>Bevares fordi</th></tr></thead><tbody>{% for item in selected_job.plan.protected|slice:":100" %}<tr><td>{{ item.title }}</td><td>{{ item.protected_reasons|join:" " }}</td></tr>{% endfor %}</tbody></table></div></details>{% endif %}
+  {% endif %}
+
+  {% if selected_job.status == 'preview' %}
+    <form method="post" action="{% url 'workbench:library_maintenance_execute' selected_job.pk %}" class="panel inset" data-submit-once>
+      {% csrf_token %}
+      {% if selected_job.kind == 'cleanup' %}
+        <p>Dette vil fjerne {{ selected_job.plan.stats.safe_to_remove|default:0 }} regenererbare Musikkarkiv-tilhørigheter. Innspillinger, filhistorikk og beskyttet kunnskap beholdes.</p>
+      {% else %}
+        <p>Dette vil regenerere {{ selected_job.plan.stats.regenerable_entries|default:0 }} uforvaltede Musikkarkiv-poster fra {{ selected_job.plan.stats.flac_files|default:0 }} FLAC-filer. All Forvaltet musikk og beskyttet kunnskap beholdes.</p>
+        <label><input type="checkbox" name="backup_confirmed" value="yes" required> Databasebackup er tatt eller bevisst vurdert.</label>
+      {% endif %}
+      <label><input type="checkbox" name="confirmed" value="yes" required> Jeg har lest planen og forstår hva som fjernes, beholdes og regenereres.</label>
+      {% if selected_job.kind == 'cleanup' and can_run_cleanup %}<button class="button danger" type="submit">Utfør kontrollert opprydding</button>{% elif selected_job.kind == 'rebuild' and can_run_rebuild %}<button class="button danger" type="submit">Bygg uforvaltet Musikkarkiv på nytt</button>{% else %}<p class="muted">Du har tilgang til planen, men ikke til å utføre den.</p>{% endif %}
+    </form>
+  {% elif selected_job.result %}
+    <h3>Resultat</h3>
+    <dl class="summary-list">{% for key, value in selected_job.result.items %}<div><dt>{{ key }}</dt><dd>{{ value }}</dd></div>{% endfor %}</dl>
+  {% endif %}
+</section>
+{% endif %}
+
+<section class="panel">
+  <div class="panel-heading"><div><h2>Tidligere planer og jobber</h2><p>Kort revisjonsspor for vedlikehold av Musikkarkivet.</p></div></div>
+  <div class="table-wrap"><table class="data-table"><thead><tr><th>Opprettet</th><th>Type</th><th>Område</th><th>Status</th><th>Utført av</th></tr></thead><tbody>
+    {% for job in recent_jobs %}<tr><td><a href="?job={{ job.pk }}">{{ job.created_at|date:"d.m.Y H:i" }}</a></td><td>{{ job.get_kind_display }}</td><td>{{ job.relative_root }}</td><td>{{ job.get_status_display }}</td><td>{{ job.executed_by|default:"Ikke utført" }}</td></tr>{% empty %}<tr><td colspan="5" class="empty">Ingen vedlikeholdsplaner er opprettet.</td></tr>{% endfor %}
+  </tbody></table></div>
+</section>
+{% endblock %}

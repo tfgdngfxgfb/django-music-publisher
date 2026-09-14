@@ -14,6 +14,7 @@ $DemoDatabase = (Join-Path $ProjectRoot ".local\p7-demo.sqlite3").Replace("\", "
 $env:DATABASE_URL = "sqlite:///$DemoDatabase"
 $env:P7_NAS_ROOT = $DemoRoot
 $env:P7_MUSIC_ROOT = $DemoRoot
+$env:P7_ALLOW_FILE_WRITES = "false"
 $env:DEBUG = "true"
 
 & (Join-Path $PSScriptRoot "run-dev.ps1") -HostAddress $HostAddress -Port $Port -AdminUsername $AdminUsername -AdminPassword $AdminPassword -CheckOnly

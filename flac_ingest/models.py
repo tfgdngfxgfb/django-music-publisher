@@ -145,7 +145,8 @@ class FlacIngestItem(CanonicalModel):
     @property
     def can_apply(self):
         return (
-            self.action in {
+            self.action
+            in {
                 self.Action.NEW,
                 self.Action.MATCHED,
                 self.Action.UPDATED,
@@ -182,3 +183,60 @@ class FlacSyncLog(CanonicalModel):
 
     def __str__(self):
         return f"{self.asset} – {self.get_result_display()}"
+
+
+class FlacMaintenanceJob(CanonicalModel):
+    class Kind(models.TextChoices):
+        CLEANUP = "cleanup", "Rydd Musikkarkiv"
+        REBUILD = "rebuild", "Bygg uforvaltet Musikkarkiv på nytt"
+
+    class Status(models.TextChoices):
+        PREVIEW = "preview", "Forhåndsvisning klar"
+        RUNNING = "running", "Kjører"
+        PARTIAL = "partial", "Delvis fullført"
+        COMPLETED = "completed", "Fullført"
+        FAILED = "failed", "Feilet"
+
+    kind = models.CharField("vedlikeholdstype", max_length=20, choices=Kind.choices)
+    status = models.CharField(
+        "status", max_length=20, choices=Status.choices, default=Status.PREVIEW
+    )
+    relative_root = models.CharField(
+        "avgrenset mappe",
+        max_length=1000,
+        default=".",
+        validators=[validate_logical_path],
+    )
+    plan = models.JSONField("forhåndsvist plan", default=dict, blank=True)
+    result = models.JSONField("resultat", default=dict, blank=True)
+    error = models.TextField("feil", blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="flac_maintenance_jobs",
+        verbose_name="analysert av",
+    )
+    executed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="executed_flac_maintenance_jobs",
+        verbose_name="utført av",
+        null=True,
+        blank=True,
+    )
+    started_at = models.DateTimeField("startet", null=True, blank=True)
+    completed_at = models.DateTimeField("avsluttet", null=True, blank=True)
+
+    class Meta:
+        verbose_name = "vedlikehold av Musikkarkiv"
+        verbose_name_plural = "vedlikehold av Musikkarkiv"
+        ordering = ("-created_at", "id")
+        permissions = (
+            ("preview_library_cleanup", "Kan se forhåndsvisning av opprydding"),
+            ("run_library_cleanup", "Kan utføre opprydding"),
+            ("preview_library_rebuild", "Kan se forhåndsvisning av rebuild"),
+            ("run_library_rebuild", "Kan starte rebuild"),
+        )
+
+    def __str__(self):
+        return f"{self.get_kind_display()} – {self.get_status_display()}"

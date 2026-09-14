@@ -1,7 +1,10 @@
 {% extends "workbench/base.html" %}
 {% block eyebrow %}<a class="back-link" href="{{ return_url }}">← Tilbake til arbeidslisten</a>{% endblock %}
 {% block subtitle %}<p>{% for identifier in recording.identifiers.all %}{% if identifier.scheme == 'ISRC' %}<code>{{ identifier.normalized_value }}</code> · {% endif %}{% endfor %}UUID <code class="copy-value">{{ recording.pk }}</code></p>{% endblock %}
-{% block page_actions %}{% if perms.catalogue.change_recording %}<a class="button" href="{% url 'workbench:recording_edit' recording.pk %}?return={{ request.get_full_path|urlencode }}">Rediger innspilling</a>{% endif %}{% endblock %}
+{% block page_actions %}
+{% if recording.music_library_entry and not is_managed and perms.flac_ingest.preview_library_cleanup %}<form method="post" action="{% url 'workbench:library_maintenance_preview' %}" class="inline-actions">{% csrf_token %}<input type="hidden" name="kind" value="cleanup"><input type="hidden" name="relative_root" value="."><input type="hidden" name="recording" value="{{ recording.pk }}"><button class="button" type="submit">Analyser fjerning fra Musikkarkiv</button></form>{% endif %}
+{% if perms.catalogue.change_recording %}<a class="button" href="{% url 'workbench:recording_edit' recording.pk %}?return={{ request.get_full_path|urlencode }}">Rediger innspilling</a>{% endif %}
+{% endblock %}
 {% block content %}
 <nav class="tabs" aria-label="Detaljfaner">
 {% for key,label in recording_tabs %}{% endfor %}

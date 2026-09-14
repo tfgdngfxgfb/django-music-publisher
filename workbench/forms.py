@@ -241,6 +241,31 @@ class FlacScanForm(forms.Form):
         return value
 
 
+class LibraryMaintenanceScopeForm(forms.Form):
+    relative_root = forms.ChoiceField(label="Område i musikkarkivet", choices=())
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        configured = str(getattr(settings, "P7_MUSIC_ROOT", "") or "").strip()
+        choices = []
+        if configured:
+            root = Path(configured).expanduser()
+            if root.is_dir():
+                choices.append((".", "Hele musikkarkivet"))
+                choices.extend(
+                    (path.name, path.name)
+                    for path in sorted(
+                        root.iterdir(), key=lambda item: item.name.casefold()
+                    )
+                    if path.is_dir()
+                )
+        self.fields["relative_root"].choices = choices
+        if not choices:
+            self.fields["relative_root"].help_text = (
+                "P7_MUSIC_ROOT er ikke konfigurert eller finnes ikke."
+            )
+
+
 class FlacIngestReviewForm(forms.Form):
     resolution = forms.ChoiceField(label="Kobling til innspilling", choices=())
     title = forms.CharField(label="Tittel", max_length=500)
@@ -496,7 +521,10 @@ class WorkbenchTrackCreationForm(TrackCreationForm):
                 "data-track-field": "title_override",
             },
             "artist_identity": {"data-track-field": "artist_identity"},
-            "new_isrc": {"placeholder": "NO-XXX-26-00001", "data-track-field": "new_isrc"},
+            "new_isrc": {
+                "placeholder": "NO-XXX-26-00001",
+                "data-track-field": "new_isrc",
+            },
             "new_recording_title": {
                 "placeholder": "Tittel på ny innspilling",
                 "data-track-field": "new_recording_title",

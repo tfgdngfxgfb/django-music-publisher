@@ -30,14 +30,19 @@ from catalogue.models import (
     ReleaseTrack,
 )
 from catalogue.services import create_release_track
-from flac_ingest.models import FlacIngestBatch, FlacIngestItem
+from flac_ingest.maintenance import (
+    create_cleanup_preview,
+    create_rebuild_preview,
+    execute_cleanup,
+    execute_rebuild,
+)
+from flac_ingest.models import FlacIngestBatch, FlacIngestItem, FlacMaintenanceJob
 from flac_ingest.services import (
     SOURCE_SYSTEM_NAME,
     apply_batch,
     confirm_existing_flac_assertions,
     review_item,
     scan_directory,
-    sync_recording_files,
 )
 from managed_music.forms import ManagedRecordingCreationForm
 from managed_music.models import ManagedRecording
@@ -87,6 +92,7 @@ from .forms import (
     FileLocationForm,
     FlacIngestReviewForm,
     FlacScanForm,
+    LibraryMaintenanceScopeForm,
     LibraryMembershipForm,
     ManagedFilterForm,
     MusicLibraryFilterForm,
@@ -331,8 +337,7 @@ def library_list(request):
                 if location.is_current
             ]
             if any(
-                location.verification_status
-                == FileLocation.VerificationStatus.VERIFIED
+                location.verification_status == FileLocation.VerificationStatus.VERIFIED
                 for location in locations
             ):
                 entry.file_state = "verified"
@@ -356,7 +361,11 @@ def library_list(request):
     if selected and request.user.has_perm("media_assets.view_fileasset"):
         panel_assets = list(selected.recording.file_assets.all())
         panel_file = next(
-            (asset for asset in panel_assets if asset.role == FileAsset.Role.RADIO_FLAC),
+            (
+                asset
+                for asset in panel_assets
+                if asset.role == FileAsset.Role.RADIO_FLAC
+            ),
             panel_assets[0] if panel_assets else None,
         )
         if panel_file:
@@ -481,9 +490,7 @@ def managed_list(request):
                     for recording_id, summary in summaries.items()
                     if summary.category == ownership
                 ]
-                queryset = queryset.filter(
-                    library_entry__recording_id__in=matching_ids
-                )
+                queryset = queryset.filter(library_entry__recording_id__in=matching_ids)
             for field_name, right_type in (
                 (
                     "local_administration",
@@ -516,9 +523,7 @@ def managed_list(request):
     if can_view_rights:
         for managed in rows:
             claims = tuple(managed.recording.rights_claims.all())
-            managed.ownership_summary = classify_ownership(
-                claims, local_organization
-            )
+            managed.ownership_summary = classify_ownership(claims, local_organization)
             managed.local_administration = has_local_confirmed_right(
                 claims,
                 local_organization,
@@ -906,11 +911,6 @@ def release_detail(request, pk):
         form = ReleaseForm(request.POST or None, instance=release)
         if request.method == "POST" and form.is_valid():
             form.save()
-            recordings = Recording.objects.filter(
-                release_tracks__release=release
-            ).distinct()
-            for recording in recordings:
-                sync_recording_files(recording)
             messages.success(request, "Utgivelsen ble lagret.")
             return redirect(
                 _safe_return(request, reverse("workbench:release", args=(pk,)))
@@ -1127,9 +1127,7 @@ def recording_detail(request, pk):
             )
             .prefetch_related("territories", "decisions__decided_by")
         )
-        ownership_summary = classify_ownership(
-            rights_claims, local_organization
-        )
+        ownership_summary = classify_ownership(rights_claims, local_organization)
     return render(
         request,
         "workbench/recording_detail.html",
@@ -1202,9 +1200,7 @@ def rights_claim_add(request, pk):
         data = form.cleaned_data.copy()
         territories = data.pop("territories")
         try:
-            create_rights_claim(
-                recording=recording, territories=territories, **data
-            )
+            create_rights_claim(recording=recording, territories=territories, **data)
         except ValidationError as error:
             form.add_error(None, error)
         else:
@@ -1530,12 +1526,6 @@ def recording_edit(request, pk):
     form = RecordingForm(request.POST or None, instance=recording)
     if request.method == "POST" and form.is_valid():
         form.save()
-        sync_results = sync_recording_files(recording)
-        if any(result and result.result != "success" for result in sync_results):
-            messages.warning(
-                request,
-                "Katalogendringen er lagret, men én eller flere radiofiler venter på synkronisering.",
-            )
         messages.success(request, "Innspillingen ble lagret.")
         return redirect(
             _safe_return(request, reverse("workbench:recording", args=(pk,)))
@@ -1565,7 +1555,6 @@ def recording_identifier_add(request, pk):
         identifier = form.save(commit=False)
         identifier.recording = recording
         identifier.save()
-        sync_recording_files(recording)
         messages.success(request, "Identifikatoren ble registrert.")
         return redirect("workbench:recording", pk=pk)
     return render(
@@ -1590,7 +1579,6 @@ def contribution_add(request, pk):
         contribution = form.save(commit=False)
         contribution.recording = recording
         contribution.save()
-        sync_recording_files(recording)
         messages.success(request, "Den medvirkende ble registrert.")
         return redirect(
             reverse("workbench:recording", args=(pk,)) + "?fane=contributors"
@@ -1823,11 +1811,128 @@ def artist_add(request):
     )
 
 
+def _maintenance_kinds_for(user):
+    kinds = []
+    if user.has_perm("flac_ingest.preview_library_cleanup"):
+        kinds.append(FlacMaintenanceJob.Kind.CLEANUP)
+    if user.has_perm("flac_ingest.preview_library_rebuild"):
+        kinds.append(FlacMaintenanceJob.Kind.REBUILD)
+    return kinds
+
+
+@staff
+def library_maintenance(request):
+    allowed_kinds = _maintenance_kinds_for(request.user)
+    if not allowed_kinds:
+        return HttpResponseForbidden(
+            "Du har ikke tilgang til vedlikehold av Musikkarkivet."
+        )
+    jobs = FlacMaintenanceJob.objects.filter(kind__in=allowed_kinds).select_related(
+        "created_by", "executed_by"
+    )
+    selected_job = None
+    if request.GET.get("job"):
+        selected_job = get_object_or_404(jobs, pk=request.GET["job"])
+    return render(
+        request,
+        "workbench/library_maintenance.html",
+        _page_context(
+            "control",
+            "Vedlikehold av Musikkarkivet",
+            form=LibraryMaintenanceScopeForm(),
+            selected_job=selected_job,
+            recent_jobs=jobs[:20],
+            can_preview_cleanup=request.user.has_perm(
+                "flac_ingest.preview_library_cleanup"
+            ),
+            can_run_cleanup=request.user.has_perm("flac_ingest.run_library_cleanup"),
+            can_preview_rebuild=request.user.has_perm(
+                "flac_ingest.preview_library_rebuild"
+            ),
+            can_run_rebuild=request.user.has_perm("flac_ingest.run_library_rebuild"),
+        ),
+    )
+
+
+@require_POST
+@staff
+def library_maintenance_preview(request):
+    kind = request.POST.get("kind")
+    permission = {
+        FlacMaintenanceJob.Kind.CLEANUP: "flac_ingest.preview_library_cleanup",
+        FlacMaintenanceJob.Kind.REBUILD: "flac_ingest.preview_library_rebuild",
+    }.get(kind)
+    if not permission or not request.user.has_perm(permission):
+        return HttpResponseForbidden("Du kan ikke lage denne vedlikeholdsplanen.")
+    form = LibraryMaintenanceScopeForm(request.POST)
+    if not form.is_valid():
+        messages.error(request, "Velg et tilgjengelig område i musikkarkivet.")
+        return redirect("workbench:library_maintenance")
+    creator = (
+        create_cleanup_preview
+        if kind == FlacMaintenanceJob.Kind.CLEANUP
+        else create_rebuild_preview
+    )
+    try:
+        arguments = {
+            "user": request.user,
+            "relative_root": form.cleaned_data["relative_root"],
+        }
+        if kind == FlacMaintenanceJob.Kind.CLEANUP:
+            arguments["recording_id"] = request.POST.get("recording") or None
+        job = creator(**arguments)
+    except ValidationError as error:
+        messages.error(request, " ".join(error.messages))
+        return redirect("workbench:library_maintenance")
+    messages.success(request, "Planen er klar. Ingen data eller filer er endret.")
+    return redirect(f'{reverse("workbench:library_maintenance")}?job={job.pk}')
+
+
+@require_POST
+@staff
+def library_maintenance_execute(request, pk):
+    job = get_object_or_404(FlacMaintenanceJob, pk=pk)
+    permission = {
+        FlacMaintenanceJob.Kind.CLEANUP: "flac_ingest.run_library_cleanup",
+        FlacMaintenanceJob.Kind.REBUILD: "flac_ingest.run_library_rebuild",
+    }[job.kind]
+    if not request.user.has_perm(permission):
+        return HttpResponseForbidden("Du kan ikke utføre denne vedlikeholdsplanen.")
+    if request.POST.get("confirmed") != "yes":
+        messages.error(request, "Les planen og bekreft konsekvensene før utføring.")
+        return redirect(f'{reverse("workbench:library_maintenance")}?job={job.pk}')
+    if (
+        job.kind == FlacMaintenanceJob.Kind.REBUILD
+        and request.POST.get("backup_confirmed") != "yes"
+    ):
+        messages.error(request, "Bekreft at databasebackup er vurdert før rebuild.")
+        return redirect(f'{reverse("workbench:library_maintenance")}?job={job.pk}')
+    executor = (
+        execute_cleanup
+        if job.kind == FlacMaintenanceJob.Kind.CLEANUP
+        else execute_rebuild
+    )
+    try:
+        job = executor(job, user=request.user)
+    except ValidationError as error:
+        messages.error(request, " ".join(error.messages))
+    else:
+        if job.status == FlacMaintenanceJob.Status.COMPLETED:
+            messages.success(request, "Vedlikeholdsjobben ble fullført.")
+        else:
+            messages.warning(
+                request,
+                "Jobben ble delvis fullført. Se resultatet og blokkeringene nedenfor.",
+            )
+    return redirect(f'{reverse("workbench:library_maintenance")}?job={job.pk}')
+
+
 @staff
 def control(request):
     if not (
         request.user.has_perm("catalogue.view_duplicatecandidate")
         or request.user.has_perm("provenance.view_metadataassertion")
+        or _maintenance_kinds_for(request.user)
     ):
         return HttpResponseForbidden("Du har ikke tilgang til kontrolloppgavene.")
     selected = request.GET.get("type", "dubletter")

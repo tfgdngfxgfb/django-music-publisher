@@ -7,6 +7,7 @@ import re
 import unicodedata
 from uuid import UUID
 
+from django.conf import settings
 from mutagen import MutagenError
 from mutagen.flac import FLAC, FLACNoHeaderError
 
@@ -297,6 +298,9 @@ def read_flac(path):
             "channels": info.channels,
             "length_seconds": round(info.length, 6),
             "duration_ms": round(info.length * 1000),
+            # STREAMINFO identifies decoded PCM and survives ordinary retagging.
+            # It is a file-reconciliation signal, not a Recording merge key.
+            "audio_md5": format(info.md5_signature, "032x"),
         }
     except (AttributeError, TypeError, ValueError) as error:
         raise FlacReadError(
@@ -307,6 +311,10 @@ def read_flac(path):
 
 def write_catalogue_tags(path, values):
     """Write an explicit catalogue allowlist and verify every other text tag."""
+    if not getattr(settings, "P7_ALLOW_FILE_WRITES", False):
+        raise FlacWriteError(
+            "Filskriving er deaktivert av P7_ALLOW_FILE_WRITES-policyen."
+        )
     path = Path(path)
     try:
         before = FLAC(path)

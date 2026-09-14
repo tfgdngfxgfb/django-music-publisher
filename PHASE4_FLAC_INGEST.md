@@ -1,5 +1,9 @@
 # Fase 4 — automatisk FLAC-innlesing
 
+> **Gjeldende filpolicy:** Fase 4.2 erstatter den tidligere automatiske
+> writeback-policyen. Eksisterende FLAC-filer er read-only ved all innlesing og
+> vedlikehold. Se `PHASE4_2_REGENERABLE_LIBRARY.md`.
+
 ## Autoritet og tagger
 
 - Ikke-forvaltet musikk uten bekreftet lokalt mastereierskap bruker normalt
@@ -12,8 +16,8 @@
   vurdert innspillingen som uegnet for rotasjon. `RATING` betyr P7 Energy.
   Både direkteverdier `1–5` og OneTaggers lagring `20/40/60/80/100` tolkes
   som Energy `1–5`.
-- Writeback har en eksplisitt allowlist for katalogtags. Radiotags og ukjente
-  tags bevares og kontrolleres etter skriving. `P7UUID` gir stabil filkobling.
+- Eksplisitt writeback har en allowlist for katalogtags og er sperret av en
+  standard-avslått installasjonsinnstilling. Import skriver aldri P7UUID.
 
 `flac_ingest.adapter` samler dagens tag-aliaser og holder StationPlaylist- og
 OneTagger-representasjon ute av domenemodellen. Alle rå Vorbis Comments og
@@ -45,8 +49,8 @@ filens eller Recordingens identitet. Uendrede filer hoppes over ved ny skann.
 ## Synkronisering og migrasjoner
 
 Endringer i autoritative katalogobjekter markerer radio-FLAC som ventende.
-Vanlige Workbench-endringer prøver writeback straks; manglende filer og feil
-beholder databaseendringen og kan prøves igjen med `sync_flac_tags`. Lyddata
+Vanlige Workbench-endringer skriver ikke til filen. En eksplisitt administrativ
+synkronisering kan bare kjøres når `P7_ALLOW_FILE_WRITES=true`. Lyddata
 transkodes aldri.
 
 - `catalogue.0005`: krediteringsroller for komponist, tekstforfatter og

@@ -17,6 +17,7 @@
       {% if perms.managed_music.view_managedrecording %}<a href="{% url 'workbench:managed' %}">Forvaltet musikk</a>{% endif %}
       {% if perms.parties.view_party %}<a href="{% url 'workbench:parties' %}">Artister/personer</a>{% endif %}
       {% if perms.media_assets.view_fileasset %}<a href="{% url 'workbench:files' %}">Filer</a>{% endif %}
+      {% if perms.flac_ingest.preview_library_cleanup or perms.flac_ingest.preview_library_rebuild %}<a href="{% url 'workbench:library_maintenance' %}">Kontroll</a>{% endif %}
     </nav>
     <div class="header-actions"><div class="player header-player" id="v2-player" role="region" aria-label="Avspillingsfelt"><div class="player-cover">♫</div><div class="player-title"><strong>Avspilling ikke tilkoblet</strong><span>Ingen lydfil åpnes eller endres i prototypen</span></div><button type="button" disabled aria-label="Forrige">◀</button><button class="play" type="button" disabled aria-label="Spill av">▶</button><button type="button" disabled aria-label="Neste">▶|</button><button class="player-hide" type="button" data-player-hide aria-label="Skjul avspilleren" title="Skjul avspilleren">×</button></div><button class="player-show" type="button" data-player-show aria-label="Vis avspilleren" title="Vis avspilleren" hidden>♫</button><span class="prototype-mark">GUI v2 · prototype</span><button type="button" id="v2-theme-toggle" aria-label="Bytt lyst eller mørkt tema">◐</button><span class="user-chip">{{ request.user.get_username }}</span></div>
   </header>
