@@ -212,6 +212,9 @@ class GuiV2WorkspaceTests(TestCase):
         self.assertContains(response, reverse("gui_v2:release_detail", args=[self.release.pk]))
         self.assertContains(response, reverse("workbench:cover_image", args=[cover.pk]))
         self.assertContains(response, "genre%3DPop")
+        self.assertContains(response, "Ingen åpne oppgaver")
+        self.assertNotContains(response, "Krever oppfølging")
+        self.assertNotContains(response, "Kreditering trenger identitetsavklaring")
         self.assertEqual(response.context["overview"]["releases"][0].pk, track.pk)
 
     def test_recording_overview_does_not_choose_between_multiple_radio_files(self):

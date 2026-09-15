@@ -174,8 +174,6 @@ def build_recording_overview(recording, *, can_view_files, can_view_releases):
             follow_up.append({"kind": "error", "title": "Radiofilen er ikke tilgjengelig", "text": "Innspillingen og katalogdataene er fortsatt bevart."})
     if open_duplicate:
         follow_up.append({"kind": "warning", "title": "Mulig dublett må vurderes", "text": "En åpen katalogsak berører denne innspillingen."})
-    if unresolved_credits:
-        follow_up.append({"kind": "neutral", "title": "Kreditering trenger identitetsavklaring", "text": f"{len(unresolved_credits)} kreditert navn er ikke koblet til Party eller ArtistIdentity."})
     ingest_issue = recording.flac_ingest_items.filter(
         action__in=(FlacIngestItem.Action.CONFLICT, FlacIngestItem.Action.INVALID, FlacIngestItem.Action.RETRY),
         applied_at__isnull=True,
