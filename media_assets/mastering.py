@@ -788,7 +788,7 @@ def generate_candidate(*, generation, user):
 @transaction.atomic
 def activate_candidate(*, generation, user):
     generation = (
-        RadioFlacGeneration.objects.select_for_update()
+        RadioFlacGeneration.objects.select_for_update(of=("self",))
         .select_related("recording", "candidate_asset")
         .get(pk=generation.pk)
     )

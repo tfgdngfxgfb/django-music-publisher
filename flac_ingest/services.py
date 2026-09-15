@@ -1372,7 +1372,7 @@ def _verify_item_source(item):
 def review_item(item, *, parsed, resolution, user, note=""):
     """Approve corrected interpreted metadata without changing the source FLAC."""
     item = (
-        FlacIngestItem.objects.select_for_update()
+        FlacIngestItem.objects.select_for_update(of=("self",))
         .select_related("recording", "file_asset__recording")
         .get(pk=item.pk)
     )
@@ -1458,7 +1458,7 @@ def review_item(item, *, parsed, resolution, user, note=""):
 @transaction.atomic
 def apply_item(item, *, user):
     item = (
-        FlacIngestItem.objects.select_for_update()
+        FlacIngestItem.objects.select_for_update(of=("self",))
         .select_related("batch__import_batch__source_system", "recording", "file_asset")
         .get(pk=item.pk)
     )
@@ -1901,7 +1901,7 @@ def split_radio_file_to_new_recording(*, asset_id, user):
 
     with transaction.atomic():
         asset = (
-            FileAsset.objects.select_for_update()
+            FileAsset.objects.select_for_update(of=("self",))
             .select_related("recording", "release_track")
             .get(pk=asset.pk)
         )
