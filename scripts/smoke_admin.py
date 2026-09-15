@@ -154,7 +154,8 @@ def main():
                 )
                 library_html, _ = request("/arbeid/musikkarkiv/")
                 require(
-                    "Radiometadata" in library_html,
+                    "<h1>Musikkarkiv</h1>" in library_html
+                    and "Radiodata" in library_html,
                     "Musikkarkivet er ikke tilgjengelig",
                 )
                 releases_html, _ = request("/arbeid/utgivelser/")

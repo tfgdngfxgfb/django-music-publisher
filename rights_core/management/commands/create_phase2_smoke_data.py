@@ -19,6 +19,7 @@ from music_library.models import (
 from parties.models import ArtistIdentity, Party
 from provenance.models import MetadataAssertion, SourceRecord, SourceSystem
 from provenance.services import decide_assertion
+from rights.models import RightsClaim, RightsConfiguration
 from rights_core.models import VerificationStatus
 
 
@@ -86,9 +87,14 @@ class Command(BaseCommand):
         MusicLibraryEntry.objects.create(
             recording=archive_only, genre="Salme", language="nb"
         )
+        local_organization = Party.objects.create(
+            name="P7 smoke-organisasjon",
+            kind=Party.Kind.ORGANIZATION,
+        )
+        RightsConfiguration.objects.create(local_organization=local_organization)
         managed = create_managed_recording(
             recording=first_track.recording,
-            status="active",
+            relationship_type=RightsClaim.RightType.ADMINISTRATION,
             notes="Uttrykkelig adminhandling",
         )
         if managed.library_entry_id != library_entry.pk:
