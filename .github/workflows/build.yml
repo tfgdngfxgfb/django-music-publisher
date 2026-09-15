@@ -62,6 +62,7 @@ jobs:
       if: steps.cache.outputs.cache-hit != 'true'
 
     - name: Test
+      if: ${{ !matrix.experimental }}
       env:
           SECRET_KEY: 't569yezjg#_c^4(3_ly=pp+qehy3g$mnu6u4*nkjhvy3bqq356'
           DATABASE_URL: 'postgres://postgres:postgres@localhost:${{ job.services.postgres.ports[5432] }}/postgres'
@@ -69,7 +70,21 @@ jobs:
       run: |
         coverage run  --omit=manage.py manage.py test 
 
+    - name: Python prerelease compatibility
+      if: ${{ matrix.experimental }}
+      env:
+          SECRET_KEY: 't569yezjg#_c^4(3_ly=pp+qehy3g$mnu6u4*nkjhvy3bqq356'
+          DATABASE_URL: 'postgres://postgres:postgres@localhost:${{ job.services.postgres.ports[5432] }}/postgres'
+          OPTION_FILES: 1
+      run: >-
+        python manage.py test
+        media_assets.test_mastering
+        media_assets.test_postgresql
+        media_assets.tests
+        flac_ingest.tests
+
     - name: Coveralls
+      if: ${{ !matrix.experimental }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
