@@ -14,14 +14,15 @@ from django.core.exceptions import (
 )
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
-from catalogue.models import Label, Release
+from catalogue.models import Label, Release, ReleaseTrack
 from media_assets.digitization import (
     apply_plan,
+    delete_empty_batch,
     preview_operation,
     preview_registration,
     require_operator,
@@ -32,9 +33,16 @@ from media_assets.models import (
     DigitizationDerivation,
     DigitizationPlan,
     FileAsset,
+    FileDerivation,
     MediaAssetEvent,
     RecordingMediaSelection,
     RadioFlacGeneration,
+)
+from media_assets.pipeline_status import (
+    CurrentRadioState,
+    GenerationState,
+    MasterState,
+    get_recording_media_pipeline_status,
 )
 from .forms import MasterRegistrationForm, ReleaseMetadataForm
 from .recording_files import _location_data, _technical, _size
@@ -103,6 +111,56 @@ def _write_access(request):
         )
 
 
+def _present_pipeline_status(status):
+    master = {
+        MasterState.NO_MASTER: ("Mangler", "muted"),
+        MasterState.SELECTED: ("Valgt", "success"),
+    }[status.master_state]
+    current = {
+        CurrentRadioState.NO_RADIO: ("Ingen radiofil", "muted"),
+        CurrentRadioState.CURRENT_WITHOUT_MASTER: (
+            "Gjeldende radiofil",
+            "success",
+        ),
+        CurrentRadioState.MATCHES_SELECTED_MASTER: (
+            "Oppdatert fra valgt master",
+            "success",
+        ),
+        CurrentRadioState.FROM_PREVIOUS_MASTER: (
+            "Fra tidligere master",
+            "warning",
+        ),
+        CurrentRadioState.LINEAGE_UNKNOWN: (
+            "Masteropprinnelse ukjent",
+            "muted",
+        ),
+    }[status.current_state]
+    generation = {
+        GenerationState.NONE: ("Ingen kandidat", "muted"),
+        GenerationState.PLANNED: ("Generering planlagt", "muted"),
+        GenerationState.IN_PROGRESS: ("Generering pågår", "warning"),
+        GenerationState.FAILED: ("Generering feilet", "error"),
+        GenerationState.CANDIDATE_FROM_SELECTED_MASTER: (
+            "Ny radiofil klar til aktivering",
+            "success",
+        ),
+        GenerationState.CANDIDATE_FROM_OTHER_MASTER: (
+            "Kandidat fra annen master",
+            "warning",
+        ),
+    }[status.generation_state]
+    return {
+        "facts": status,
+        "master_label": master[0],
+        "master_kind": master[1],
+        "current_label": current[0],
+        "current_kind": current[1],
+        "generation_label": generation[0],
+        "generation_kind": generation[1],
+        "show_generation": status.generation_state != GenerationState.NONE,
+    }
+
+
 def batch_workspace(batch):
     """Bounded query groups; rendering never checks physical file availability."""
     tracks = list(
@@ -120,13 +178,21 @@ def batch_workspace(batch):
     ids = {track.recording_id for track in tracks} | {
         asset.recording_id for asset in files if asset.recording_id
     }
+    recordings = {track.recording_id: track.recording for track in tracks}
+    recordings.update(
+        {
+            asset.recording_id: asset.recording
+            for asset in files
+            if asset.recording_id
+        }
+    )
     selections = {
         item.recording_id: item
         for item in RecordingMediaSelection.objects.filter(
             recording_id__in=ids
         ).select_related("selected_master", "current_radio")
     }
-    derivations = list(
+    digitization_derivations = list(
         DigitizationDerivation.objects.filter(
             derived_asset_id__in=[asset.pk for asset in files]
         )
@@ -134,13 +200,57 @@ def batch_workspace(batch):
         .order_by("-created_at")
     )
     active_sources = {
-        item.derived_asset_id: item for item in derivations if item.is_active
+        item.derived_asset_id: item
+        for item in digitization_derivations
+        if item.is_active
     }
     generations = list(
         RadioFlacGeneration.objects.filter(recording_id__in=ids)
-        .select_related("candidate_asset")
-        .order_by("-created_at")
+        .select_related("master_asset", "candidate_asset")
+        .order_by("-created_at", "id")
     )
+    current_ids = {
+        selection.current_radio_id
+        for selection in selections.values()
+        if selection.current_radio_id
+    }
+    candidate_ids = {
+        generation.candidate_asset_id
+        for generation in generations
+        if generation.candidate_asset_id
+    }
+    machine_derivations = list(
+        FileDerivation.objects.filter(
+            derived_asset_id__in=current_ids | candidate_ids
+        )
+        .select_related("source_asset", "derived_asset")
+        .order_by("-created_at", "id")
+    )
+    generations_by_recording = {
+        recording_id: [
+            generation
+            for generation in generations
+            if generation.recording_id == recording_id
+        ]
+        for recording_id in ids
+    }
+    statuses = {
+        recording_id: _present_pipeline_status(
+            get_recording_media_pipeline_status(
+                recordings[recording_id],
+                selection=selections.get(recording_id),
+                generations=generations_by_recording[recording_id],
+                derivations=machine_derivations,
+            )
+        )
+        for recording_id in ids
+    }
+    release_counts = {
+        item["recording_id"]: item["count"]
+        for item in ReleaseTrack.objects.filter(recording_id__in=ids)
+        .values("recording_id")
+        .annotate(count=Count("release_id", distinct=True))
+    }
     rows, raws = [], []
     for asset in files:
         selection = selections.get(asset.recording_id)
@@ -153,11 +263,13 @@ def batch_workspace(batch):
             ],
             "selection": selection,
             "source": active_sources.get(asset.pk),
+            "pipeline_status": statuses.get(asset.recording_id),
+            "release_count": release_counts.get(asset.recording_id, 0),
         }
         if asset.role == FileAsset.Role.RAW_DIGITIZATION:
             row["outputs"] = [
                 item
-                for item in derivations
+                for item in digitization_derivations
                 if item.source_asset_id == asset.pk and item.is_active
             ]
             raws.append(row)
@@ -206,6 +318,8 @@ def batch_workspace(batch):
                     ),
                     None,
                 ),
+                "pipeline_status": statuses.get(track.recording_id),
+                "release_count": release_counts.get(track.recording_id, 0),
             }
         )
     return {
@@ -237,7 +351,7 @@ def batch_workspace(batch):
                 for row in pipeline
             ),
         },
-        "derivations": derivations,
+        "derivations": digitization_derivations,
     }
 
 
@@ -365,6 +479,18 @@ def detail(request, batch_id):
         _write_access(request)
         operation = request.POST.get("operation")
         try:
+            if operation == "delete_batch":
+                if request.POST.get("confirmed") != "yes":
+                    raise ValidationError(
+                        "Bekreft at digitaliseringsbatchen skal fjernes."
+                    )
+                release_title = batch.release.title
+                delete_empty_batch(batch=batch, user=request.user)
+                messages.success(
+                    request,
+                    f"Digitaliseringsbatchen ble fjernet. Utgivelsen {release_title} er beholdt.",
+                )
+                return redirect("gui_v2:digitization_index")
             if operation == "apply":
                 plan = get_object_or_404(
                     DigitizationPlan,
@@ -382,7 +508,7 @@ def detail(request, batch_id):
                     "Alle viste endringer er lagret. Lydfilene er urørt.",
                 )
                 return redirect(
-                    "gui_v2:digitization_detail", batch_id=batch.pk
+                    f"{reverse('gui_v2:digitization_detail', args=[batch.pk])}?applied=1"
                 )
             elif operation == "register":
                 folder_form = FolderForm(request.POST)

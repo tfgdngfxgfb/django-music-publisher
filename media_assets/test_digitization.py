@@ -15,6 +15,7 @@ from catalogue.models import Recording, Release, ReleaseTrack
 from flac_ingest.maintenance import _protection_map
 from media_assets.digitization import (
     apply_plan,
+    delete_empty_batch,
     preview_operation,
     preview_registration,
     suggest_tracks,
@@ -270,6 +271,139 @@ class DigitizationWorkflowTests(TestCase):
             apply_plan(plan=plan, user=self.user)
         self.assertEqual(RecordingMediaSelection.objects.count(), 1)
 
+    def test_relevant_recording_change_rejects_recording_link_preview(self):
+        _, masters = self.prepare()
+        recording = Recording.objects.create(title="Opprinnelig tittel")
+        track = ReleaseTrack.objects.create(
+            release=self.release,
+            recording=recording,
+            sequence_number=1,
+        )
+        plan = self.preview(
+            "recording_link",
+            {"rows": [{"asset": str(masters[0].pk), "track": str(track.pk)}]},
+        )
+        recording.title = "Endret etter forhåndsvisning"
+        recording.save()
+
+        with self.assertRaisesMessage(ValidationError, "Arbeidsgrunnlaget"):
+            apply_plan(plan=plan, user=self.user)
+        masters[0].refresh_from_db()
+        self.assertIsNone(masters[0].recording_id)
+
+    def test_irrelevant_recording_change_does_not_stale_raw_link_preview(self):
+        raw, masters = self.prepare()
+        recording = Recording.objects.create(title="Ikke del av råkoblingen")
+        ReleaseTrack.objects.create(
+            release=self.release,
+            recording=recording,
+            sequence_number=1,
+        )
+        plan = self.preview(
+            "raw_link",
+            {"source": str(raw[0].pk), "assets": [str(masters[0].pk)]},
+        )
+        recording.title = "Relevant for katalogen, ikke denne handlingen"
+        recording.save()
+
+        apply_plan(plan=plan, user=self.user)
+
+        self.assertTrue(
+            DigitizationDerivation.objects.filter(
+                source_asset=raw[0], derived_asset=masters[0], is_active=True
+            ).exists()
+        )
+
+    def test_multiple_masters_may_link_to_one_recording_but_not_bulk_select(
+        self,
+    ):
+        _, masters = self.prepare()
+        recording = Recording.objects.create(title="Samme innspilling")
+        track = ReleaseTrack.objects.create(
+            release=self.release,
+            recording=recording,
+            sequence_number=1,
+        )
+        self.apply(
+            "recording_link",
+            {
+                "rows": [
+                    {"asset": str(asset.pk), "track": str(track.pk)}
+                    for asset in masters[:2]
+                ]
+            },
+        )
+        self.assertEqual(
+            FileAsset.objects.filter(
+                recording=recording,
+                role=FileAsset.Role.EDITED_WAV_MASTER,
+            ).count(),
+            2,
+        )
+        with self.assertRaisesMessage(
+            ValidationError, "bare én master per innspilling"
+        ):
+            self.preview(
+                "select_master",
+                {"assets": [str(asset.pk) for asset in masters[:2]]},
+            )
+
+    def test_global_master_effect_and_release_title_button_are_visible(self):
+        _, masters = self.prepare()
+        tracks = self.link(masters)
+        other_release = Release.objects.create(title="Samleutgivelse")
+        ReleaseTrack.objects.create(
+            release=other_release,
+            recording=tracks[0].recording,
+            sequence_number=1,
+        )
+        other_batch = DigitizationBatch.objects.create(
+            release=other_release,
+            title="Annet digitaliseringsforsøk",
+            created_by=self.user,
+        )
+        other_master = FileAsset.objects.create(
+            recording=tracks[0].recording,
+            filename="Alternativ master.wav",
+            role=FileAsset.Role.EDITED_WAV_MASTER,
+        )
+        DigitizationFile.objects.create(batch=other_batch, asset=other_master)
+        select_master(
+            recording=tracks[0].recording,
+            asset=FileAsset.objects.get(pk=masters[0].pk),
+            user=self.user,
+        )
+        current = FileAsset.objects.create(
+            recording=tracks[0].recording,
+            filename="legacy.flac",
+            role=FileAsset.Role.RADIO_FLAC,
+            lifecycle_status=FileAsset.LifecycleStatus.CURRENT,
+        )
+        selection = RecordingMediaSelection.objects.get(
+            recording=tracks[0].recording
+        )
+        selection.current_radio = current
+        selection.save()
+        from gui_v2.digitization import batch_workspace
+
+        other_workspace = batch_workspace(other_batch)
+        self.assertEqual(
+            other_workspace["masters"][0]["selection"].selected_master_id,
+            masters[0].pk,
+        )
+        plan = self.preview("select_master", {"assets": [str(masters[0].pk)]})
+        self.assertIn("forekommer på 2 utgivelser", plan.consequences[0])
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            reverse("gui_v2:digitization_detail", args=[self.batch.pk])
+        )
+        self.assertContains(response, "Gjelder 2 utgivelser")
+        self.assertContains(response, "Masteropprinnelse ukjent")
+        index = self.client.get(reverse("gui_v2:digitization_index"))
+        self.assertContains(index, "data-use-release-title")
+        self.assertContains(index, "Bruk utgivelsestittel")
+
     def test_redigitization_and_partial_replacement_preserve_previous_choice(
         self,
     ):
@@ -478,6 +612,45 @@ class DigitizationWorkflowTests(TestCase):
             self.client.get(reverse("gui_v2:digitization_index")).status_code,
             403,
         )
+
+    def test_empty_batch_can_be_removed_without_removing_release(self):
+        batch_id = self.batch.pk
+        release_id = self.release.pk
+
+        delete_empty_batch(batch=self.batch, user=self.user)
+
+        self.assertFalse(
+            DigitizationBatch.objects.filter(pk=batch_id).exists()
+        )
+        self.assertTrue(Release.objects.filter(pk=release_id).exists())
+
+    def test_batch_with_registered_files_cannot_be_removed(self):
+        self.register("raw", FileAsset.Role.RAW_DIGITIZATION)
+
+        with self.assertRaisesMessage(ValidationError, "registrerte filer"):
+            delete_empty_batch(batch=self.batch, user=self.user)
+
+        self.assertTrue(
+            DigitizationBatch.objects.filter(pk=self.batch.pk).exists()
+        )
+
+    def test_gui_requires_confirmation_before_removing_empty_batch(self):
+        self.client.force_login(self.user)
+        url = reverse("gui_v2:digitization_detail", args=[self.batch.pk])
+        response = self.client.post(url, {"operation": "delete_batch"})
+        self.assertContains(response, "Bekreft at digitaliseringsbatchen")
+        self.assertTrue(
+            DigitizationBatch.objects.filter(pk=self.batch.pk).exists()
+        )
+
+        response = self.client.post(
+            url, {"operation": "delete_batch", "confirmed": "yes"}
+        )
+        self.assertRedirects(response, reverse("gui_v2:digitization_index"))
+        self.assertFalse(
+            DigitizationBatch.objects.filter(pk=self.batch.pk).exists()
+        )
+        self.assertTrue(Release.objects.filter(pk=self.release.pk).exists())
 
     def test_batch_render_queries_do_not_scale_with_fifty_masters(self):
         from django.db import connection

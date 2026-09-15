@@ -12,6 +12,7 @@ from pathlib import PurePosixPath
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
+from django.db.models import Count
 from django.utils import timezone
 
 from catalogue.models import Recording, Release, ReleaseTrack
@@ -47,7 +48,35 @@ def require_operator(user):
         )
 
 
-def _state(batch):
+def _relevant_recording_ids(batch, operation, payload, files):
+    """Recordings whose catalogue data informed this concrete preview."""
+    if operation == "select_master":
+        selected = set(payload.get("assets", ()))
+        return {
+            item.asset.recording_id
+            for item in files
+            if str(item.asset_id) in selected and item.asset.recording_id
+        }
+    if operation != "recording_link":
+        return set()
+    rows = payload.get("rows", ())
+    ids = {row.get("recording") for row in rows if row.get("recording")}
+    track_ids = {row.get("track") for row in rows if row.get("track")}
+    ids.update(
+        batch.release.tracks.filter(pk__in=track_ids).values_list(
+            "recording_id", flat=True
+        )
+    )
+    selected_assets = {str(row.get("asset")) for row in rows}
+    ids.update(
+        item.asset.recording_id
+        for item in files
+        if str(item.asset_id) in selected_assets and item.asset.recording_id
+    )
+    return {pk for pk in ids if pk}
+
+
+def _state(batch, operation=None, payload=None):
     """Include selections on this Release, even when edited in another batch."""
     files = list(batch.files.select_related("asset").order_by("pk"))
     recording_ids = set(
@@ -55,6 +84,9 @@ def _state(batch):
     )
     recording_ids.update(
         item.asset.recording_id for item in files if item.asset.recording_id
+    )
+    relevant_recording_ids = _relevant_recording_ids(
+        batch, operation, payload or {}, files
     )
     data = {
         "batch": batch.revision,
@@ -82,6 +114,11 @@ def _state(batch):
             DigitizationDerivation.objects.filter(
                 derived_asset_id__in=[f.asset_id for f in files]
             )
+            .order_by("pk")
+            .values_list("pk", "revision")
+        ),
+        "recordings": list(
+            Recording.objects.filter(pk__in=relevant_recording_ids)
             .order_by("pk")
             .values_list("pk", "revision")
         ),
@@ -280,6 +317,14 @@ def _validate(batch, operation, payload):
     elif operation == "select_master":
         assets = _assets(batch, payload["assets"])
         seen = set()
+        release_counts = {
+            row["recording_id"]: row["count"]
+            for row in ReleaseTrack.objects.filter(
+                recording_id__in=[asset.recording_id for asset in assets]
+            )
+            .values("recording_id")
+            .annotate(count=Count("release_id", distinct=True))
+        }
         for asset in assets:
             if (
                 asset.role != FileAsset.Role.EDITED_WAV_MASTER
@@ -302,7 +347,9 @@ def _validate(batch, operation, payload):
                     f"{asset.recording.title} har allerede valgt master {old.filename}. Bruk individuelt mastervalg under Innspilling → Filer."
                 )
             changes.append(
-                f"{asset.recording.title} → valgt master {asset.filename}"
+                f"{asset.recording.title} → valgt master {asset.filename} · "
+                f"gjelder innspillingen globalt · forekommer på "
+                f"{release_counts.get(asset.recording_id, 0)} utgivelser"
             )
     else:
         raise ValidationError("Ukjent digitaliseringshandling.")
@@ -320,7 +367,7 @@ def preview_operation(*, batch, operation, payload, user):
         batch=batch,
         operation=operation,
         payload=payload,
-        expected_state=_state(batch),
+        expected_state=_state(batch, operation, payload),
         consequences=consequences,
         created_by=user,
     )
@@ -334,6 +381,25 @@ def preview_registration(*, batch, root_key, relative_path, role, user):
     return preview_operation(
         batch=batch, operation="register", payload={"files": files}, user=user
     )
+
+
+@transaction.atomic
+def delete_empty_batch(*, batch, user):
+    """Remove an unused work context while preserving its Release."""
+    require_operator(user)
+    batch = DigitizationBatch.objects.select_for_update().get(pk=batch.pk)
+    if batch.files.exists() or batch.events.exists():
+        raise ValidationError(
+            "Digitaliseringen har registrerte filer eller historikk og kan "
+            "ikke fjernes. Bevar eller avslutt den i stedet."
+        )
+    if batch.plans.filter(applied_at__isnull=False).exists():
+        raise ValidationError(
+            "Digitaliseringen har utførte arbeidsplaner og kan ikke fjernes."
+        )
+    # Unapplied previews are operational drafts, not protected catalogue data.
+    batch.plans.all().delete()
+    batch.delete()
 
 
 def apply_plan(*, plan, user):
@@ -397,7 +463,7 @@ def apply_plan(*, plan, user):
             .filter(digitization_file__batch=batch)
             .order_by("pk")
         )
-        if _state(batch) != plan.expected_state:
+        if _state(batch, plan.operation, plan.payload) != plan.expected_state:
             raise ValidationError(
                 "Arbeidsgrunnlaget er endret siden forhåndsvisningen. Lag en ny forhåndsvisning."
             )

@@ -1,6 +1,38 @@
 (() => {
   const workspace = document.querySelector('[data-digitization]');
   if (!workspace) return;
+  const draftKey = `digitization:draft:${location.pathname}`;
+  const bulkForm = workspace.querySelector('[data-bulk-form]');
+  if (workspace.dataset.clearDraft === 'true') {
+    sessionStorage.removeItem(draftKey);
+    const cleanUrl = new URL(location.href);
+    cleanUrl.searchParams.delete('applied');
+    history.replaceState(null, '', cleanUrl);
+  }
+  const saveDraft = () => {
+    if (!bulkForm) return;
+    const fields = [...bulkForm.querySelectorAll('input[name],select[name],textarea[name]')]
+      .filter(field => field.name !== 'csrfmiddlewaretoken')
+      .map(field => ({name: field.name, type: field.type, value: field.value, checked: field.checked}));
+    sessionStorage.setItem(draftKey, JSON.stringify(fields));
+  };
+  if (bulkForm) {
+    try {
+      const fields = JSON.parse(sessionStorage.getItem(draftKey) || '[]');
+      const controls = [...bulkForm.querySelectorAll('input[name],select[name],textarea[name]')];
+      fields.forEach(saved => {
+        const target = controls.find(field => field.name === saved.name && (!['checkbox','radio'].includes(saved.type) || field.value === saved.value));
+        if (!target) return;
+        if (['checkbox','radio'].includes(saved.type)) target.checked = Boolean(saved.checked);
+        else target.value = saved.value;
+      });
+    } catch {
+      sessionStorage.removeItem(draftKey);
+    }
+    bulkForm.addEventListener('input', saveDraft);
+    bulkForm.addEventListener('change', saveDraft);
+    bulkForm.addEventListener('submit', saveDraft);
+  }
   const rows = [...workspace.querySelectorAll('[data-digitization-row]')];
   const select = row => {
     rows.forEach(item => {const active = item === row; item.classList.toggle('selected', active); item.setAttribute('aria-selected', String(active)); item.tabIndex = active ? 0 : -1;});
@@ -53,7 +85,7 @@
           if (request !== serial) return;
           for (const recording of data.results || []) {
             const button = document.createElement('button'); button.type = 'button'; button.textContent = `${recording.title} · ${recording.artist || ''}`;
-            button.addEventListener('click', () => {picker.querySelector('[data-recording-id]').value = recording.id; picker.querySelector('[data-recording-choice]').textContent = button.textContent; results.replaceChildren();}); results.append(button);
+            button.addEventListener('click', () => {picker.querySelector('[data-recording-id]').value = recording.id; picker.querySelector('[data-recording-choice]').textContent = button.textContent; results.replaceChildren(); saveDraft();}); results.append(button);
           }
         } catch {if (request === serial) results.textContent = 'Søket kunne ikke fullføres.';}
       }, 180);
