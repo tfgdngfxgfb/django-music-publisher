@@ -1500,7 +1500,7 @@ def apply_item(item, *, user):
     ):
         normalized_isrc = normalize_isrc(parsed["isrc"])
         identifier = (
-            ExternalIdentifier.objects.select_for_update()
+            ExternalIdentifier.objects.select_for_update(of=("self",))
             .select_related("recording")
             .filter(
                 scheme=ExternalIdentifier.Scheme.ISRC,

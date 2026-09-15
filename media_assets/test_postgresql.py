@@ -111,6 +111,9 @@ class PostgreSQLMasteringConcurrencyTests(TransactionTestCase):
                 candidate_asset=candidate,
                 target_root_key="generated_media",
                 target_relative_path=f"P7-generert/{candidate.filename}",
+                technical_plan={"codec": "FLAC"},
+                expected_tags={"TITLE": "PostgreSQL-test"},
+                metadata_diff={"changed": []},
                 status=RadioFlacGeneration.Status.VERIFIED,
                 created_by=self.user,
             )
@@ -326,6 +329,7 @@ class PostgreSQLMasteringConcurrencyTests(TransactionTestCase):
         )
         FileLocation.objects.create(
             asset=radio,
+            storage_type=FileLocation.StorageType.NAS,
             storage_root_key="music_library",
             relative_path="radio/source.flac",
             status=FileLocation.Status.ACTIVE,
