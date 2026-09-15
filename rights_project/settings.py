@@ -38,6 +38,7 @@ INSTALLED_APPS = [  # noqa: F405
     "music_library",
     "managed_music",
     "media_assets",
+    "delivery.apps.DeliveryConfig",
     "rights",
     "flac_ingest.apps.FlacIngestConfig",
     "workbench",
@@ -114,6 +115,15 @@ if P7_GENERATED_MEDIA_ROOT:
     }
 
 P7_ALLOW_FILE_WRITES = env_bool("P7_ALLOW_FILE_WRITES", False)
+
+# Delivery artifacts are generated outside authoritative archive roots and have
+# their own short retention period. Source media remains read-only.
+P7_DELIVERY_ARTIFACT_ROOT = Path(
+    os.getenv("P7_DELIVERY_ARTIFACT_ROOT", PROJECT_DIR / "var" / "delivery")
+)
+P7_DELIVERY_ARTIFACT_TTL_HOURS = int(
+    os.getenv("P7_DELIVERY_ARTIFACT_TTL_HOURS", "24")
+)
 
 # GUI v2 remains read-only unless an isolated test process explicitly enables
 # catalogue writes. GUI v2 never exposes ingest apply or FLAC writeback routes.

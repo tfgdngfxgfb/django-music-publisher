@@ -7,6 +7,7 @@ admin.site.site_title = "P7 Arkiv og rettigheter"
 admin.site.site_url = "/"
 
 urlpatterns = [
+    path("v2/leveranser/", include("delivery.urls")),
     path(
         "",
         home,

@@ -1,0 +1,16 @@
+{% extends "gui_v2/base.html" %}
+{% block title %}Ny leveranse{% endblock %}
+{% block content %}<div class="delivery-page">
+  <header class="delivery-heading"><span class="eyebrow">Delivery</span><h1>Ny leveranse</h1><p>Formålet dokumenterer hensikt og er ikke en rettighetsklarering.</p></header>
+  {% if not preview %}<form method="post" class="recording-card delivery-form">{% csrf_token %}
+    {% for id in selected_ids %}<input type="hidden" name="recording" value="{{ id }}">{% endfor %}
+    {{ form.non_field_errors }}
+    <div class="delivery-form-grid">{% for field in form %}<label{% if field.field.widget.input_type == 'checkbox' %} class="delivery-check"{% endif %}>{{ field.label }}{{ field }}{{ field.errors }}</label>{% endfor %}</div>
+    <div class="delivery-actions"><a class="button subtle" href="{% url 'gui_v2:music_library' %}">Avbryt</a><button class="primary" type="submit" name="preview">Forhåndsvis</button></div>
+  </form>{% else %}
+  <section class="recording-card delivery-preview">
+    <header><div><span class="eyebrow">Forhåndsvisning</span><h2>{{ preview.items|length }} innspillinger</h2></div><dl><dt>Profil</dt><dd>{{ preview.profile_label }}</dd><dt>Formål</dt><dd>{{ preview.purpose_label }}</dd><dt>Mottaker</dt><dd>{{ preview.recipient_name }}</dd></dl></header>
+    <table><thead><tr><th>Status</th><th>Innspilling</th><th>Artist</th><th>Filnavn</th></tr></thead><tbody>{% for item in preview.items %}<tr><td><span class="status {% if item.status == 'ready' %}ok{% else %}warning{% endif %}">{% if item.status == 'ready' %}Klar{% else %}{{ item.message }}{% endif %}</span></td><td>{{ item.title }}</td><td>{{ item.artist|default:'—' }}</td><td>{{ item.output_filename|default:'—' }}</td></tr>{% endfor %}</tbody></table>
+    <form method="post" class="delivery-confirm">{% csrf_token %}<input type="hidden" name="preview_token" value="{{ preview.token }}">{% for item in preview.items %}<input type="hidden" name="recording" value="{{ item.recording_id }}">{% endfor %}<label class="delivery-check"><input type="checkbox" name="allow_partial"> Opprett levering med klare filer selv om noen hoppes over</label><div class="delivery-actions"><a class="button subtle" href="{% url 'delivery:create' %}{% for id in selected_ids %}{% if forloop.first %}?{% else %}&amp;{% endif %}recording={{ id }}{% endfor %}">Tilbake</a><button class="primary" type="submit" name="confirm">Opprett leveranse</button></div></form>
+  </section>{% endif %}
+</div>{% endblock %}
