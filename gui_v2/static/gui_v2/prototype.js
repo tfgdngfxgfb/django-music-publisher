@@ -171,11 +171,40 @@
   alignInspectorWithTable();
   window.addEventListener("resize", alignInspectorWithTable);
   const inspectorOpeners = document.querySelectorAll("[data-open-inspector]");
+  const animateLibraryInspector = layout?.matches(".archive-layout");
+  const inspectorMotionMs = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 170;
+  let inspectorMotionTimer = 0;
   const setInspector = open => {
     if (!inspector) return;
-    inspector.hidden = !open;
-    layout?.classList.toggle("inspector-closed", !open);
     inspectorOpeners.forEach(button => { button.hidden = open; });
+    if (!animateLibraryInspector) {
+      inspector.hidden = !open;
+      layout?.classList.toggle("inspector-closed", !open);
+      return;
+    }
+    if (open && !inspector.hidden && !inspector.classList.contains("inspector-leaving")) {
+      layout?.classList.remove("inspector-closed");
+      return;
+    }
+    window.clearTimeout(inspectorMotionTimer);
+    if (open) {
+      layout?.classList.remove("inspector-closed");
+      inspector.hidden = false;
+      inspector.classList.add("inspector-transitioning", "inspector-leaving");
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        inspector.classList.remove("inspector-leaving");
+      }));
+      inspectorMotionTimer = window.setTimeout(() => {
+        inspector.classList.remove("inspector-transitioning");
+      }, inspectorMotionMs);
+      return;
+    }
+    inspector.classList.add("inspector-transitioning", "inspector-leaving");
+    inspectorMotionTimer = window.setTimeout(() => {
+      inspector.hidden = true;
+      inspector.classList.remove("inspector-transitioning", "inspector-leaving");
+      layout?.classList.add("inspector-closed");
+    }, inspectorMotionMs);
   };
   document.addEventListener("click", event => {
     if (event.target.closest("[data-close-inspector]")) setInspector(false);
