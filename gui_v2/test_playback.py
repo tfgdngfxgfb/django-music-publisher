@@ -203,6 +203,7 @@ class RadioPlaybackTests(TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertContains(response, expected)
             self.assertContains(response, "data-play-recording")
+            self.assertContains(response, "data-player-primary")
         self.assertNotContains(library, "autoplay")
         self.assertNotContains(overview, "autoplay")
         self.assertNotContains(release_page, "autoplay")

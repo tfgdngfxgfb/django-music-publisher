@@ -139,6 +139,7 @@
       play.setAttribute("aria-label", play.dataset.playUrl ? `Spill ${play.dataset.playTitle}` : (row.dataset.playbackMessage || "Ingen spillbar radiofil"));
     }
     if (playbackStatus) playbackStatus.textContent = row.dataset.playbackUrl ? "" : (row.dataset.playbackMessage || "Sporet er ikke koblet til en spillbar radiofil.");
+    document.dispatchEvent(new CustomEvent("p7:playback-context-changed"));
   };
   function focusCell(cell, keepRange = false) {
     if (!cell || cell.closest("tr")?.hidden) return;

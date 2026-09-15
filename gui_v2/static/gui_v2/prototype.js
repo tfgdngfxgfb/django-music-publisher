@@ -34,6 +34,19 @@
   const playerProgress = document.querySelector("[data-player-progress]");
   let playingRecording = "";
   let playingArtist = "";
+  const primaryPlaybackTrigger = () => {
+    const trigger = document.querySelector("[data-player-primary][data-play-recording]");
+    return trigger && !trigger.disabled && trigger.dataset.playUrl ? trigger : null;
+  };
+  const syncPlayerAvailability = () => {
+    if (!playerToggle || audio?.src) return;
+    const trigger = primaryPlaybackTrigger();
+    playerToggle.disabled = !trigger;
+    playerToggle.setAttribute(
+      "aria-label",
+      trigger ? `Spill ${trigger.dataset.playTitle || "valgt innspilling"}` : "Spill av"
+    );
+  };
   const timeText = value => {
     if (!Number.isFinite(value)) return "0:00";
     const seconds = Math.max(0, Math.floor(value));
@@ -87,7 +100,11 @@
     startPlayback(trigger);
   });
   playerToggle?.addEventListener("click", async () => {
-    if (!audio?.src) return;
+    if (!audio?.src) {
+      const trigger = primaryPlaybackTrigger();
+      if (trigger) await startPlayback(trigger);
+      return;
+    }
     if (audio.paused) {
       try { await audio.play(); } catch { playerSubtitle.textContent = "Radiofilen kunne ikke leses eller spilles."; }
     } else audio.pause();
@@ -113,6 +130,8 @@
     playerSubtitle.textContent = "Radiofilen kunne ikke leses eller spilles.";
     updatePlaybackButtons();
   });
+  document.addEventListener("p7:playback-context-changed", syncPlayerAvailability);
+  syncPlayerAvailability();
 
   const autoSubmitFilters = document.querySelector("[data-auto-submit-filters]");
   autoSubmitFilters?.addEventListener("change", event => {
