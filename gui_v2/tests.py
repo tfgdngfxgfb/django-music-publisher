@@ -147,6 +147,8 @@ class GuiV2WorkspaceTests(TestCase):
         )
         self.assertContains(response, "Omslag fra Eldre utgivelse")
         self.assertContains(response, 'class="library-cover-thumb"')
+        self.assertContains(response, 'class="library-inspector-header"')
+        self.assertContains(response, 'aria-label="Skjul detaljpanelet"')
 
         fragment = self.client.get(
             reverse("gui_v2:music_library"),
