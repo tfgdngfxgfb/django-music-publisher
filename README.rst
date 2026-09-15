@@ -66,7 +66,8 @@ Publisher. The master catalogue accepts a recording with only a title; no
 musical work, artist, ISRC or rights owner is required. DMP remains available
 for publishing Works, Writers and CWR.
 
-Use **Python 3.13** (tested on Windows). No Node.js or database installation is
+Use **Python 3.14**. This is P7's only supported stable runtime; Python 3.15 is
+tested separately as a pre-release compatibility target. No Node.js or database installation is
 needed for the default SQLite development setup. Until this feature is merged,
 check out its branch explicitly:
 

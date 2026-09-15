@@ -29,6 +29,7 @@ setuptools.setup(
         "Django>=4.2.13,<5.0",
         "requests>=2.32.3",
     ),
+    python_requires=">=3.14",
     include_package_data=True,
     classifiers=[
         "Development Status :: 5 - Production/Stable",
@@ -41,9 +42,7 @@ setuptools.setup(
         "Operating System :: OS Independent",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3 :: Only",
-        "Programming Language :: Python :: 3.11",
-        "Programming Language :: Python :: 3.12",
-        "Programming Language :: Python :: 3.13",
+        "Programming Language :: Python :: 3.14",
     ],
     zip_safe=False,
 )

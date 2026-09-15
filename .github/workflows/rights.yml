@@ -7,12 +7,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - python: "3.13"
-            database: sqlite
-            experimental: false
-          - python: "3.13"
-            database: postgres
-            experimental: false
           - python: "3.14"
             database: sqlite
             experimental: false

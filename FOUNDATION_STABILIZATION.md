@@ -13,7 +13,7 @@ Dato: 13. september 2026. Prosjektet heter **P7 Archive & Rights / P7 Arkiv og r
 
 ## Dependencies
 
-Python 3.13.12 og Django 5.2.17 beholdes. Django 5.2 er siste patch i LTS-serien; Django 6.1 er nyere, men gir ingen nødvendig gevinst før fase 2. Python 3.14 var ikke installert lokalt, mens Django 5.2 støtter en senere separat CI-test på 3.14.
+Python 3.14 og Django 5.2.17 er prosjektets stabile runtime-grunnlag. Python 3.15 testes separat som en pre-release kompatibilitetsjobb og er ikke produksjonskrav.
 
 Oppgradert og testet: Django REST Framework 3.18.1, Pillow 12.3.0, psycopg2-binary 2.9.13, WhiteNoise 6.12.0 og den kompatible AWS-gruppen boto3/botocore 1.43.93 + s3transfer 0.19.0. Beholdt: django-storages 1.14.6, dj-database-url 3.1.2, python-dotenv 1.2.3 og Waitress 3.0.2 fordi de allerede er siste relevante stabile versjoner. `psycopg2-binary` er praktisk for utvikling/testing; produksjonsdriver vurderes ved deploy.
 
