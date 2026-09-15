@@ -27,14 +27,19 @@ jobs:
           POSTGRES_DB: postgres
         ports: ['5432:5432']
     strategy:
+      fail-fast: false
       matrix:
         include:
-          - python: '3.11'
-            postgresql-version: 15
-          - python: '3.12'
-            postgresql-version: 16
           - python: '3.13'
-            postgresql-version: 17
+            postgresql-version: '17.11'
+            experimental: false
+          - python: '3.14'
+            postgresql-version: '17.11'
+            experimental: false
+          - python: '3.15.0-rc.2'
+            postgresql-version: '17.11'
+            experimental: true
+    continue-on-error: ${{ matrix.experimental }}
     
     steps:
     - name: Checkout
