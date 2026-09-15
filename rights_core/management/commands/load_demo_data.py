@@ -27,7 +27,11 @@ from catalogue.models import (
     ReleaseTrack,
 )
 from managed_music.models import ManagedRecording
-from media_assets.models import FileAsset, FileLocation
+from media_assets.models import (
+    FileAsset,
+    FileLocation,
+    RecordingMediaSelection,
+)
 from music_library.models import (
     Channel,
     MusicLibraryChannel,
@@ -668,6 +672,25 @@ class Command(BaseCommand):
                     "verification_status": FileLocation.VerificationStatus.VERIFIED,
                 },
             )
+            if role == FileAsset.Role.RADIO_FLAC:
+                selection, _ = RecordingMediaSelection.objects.get_or_create(
+                    recording=recording_target
+                )
+                if selection.current_radio_id is None:
+                    current = list(
+                        FileAsset.objects.filter(
+                            recording=recording_target,
+                            role=FileAsset.Role.RADIO_FLAC,
+                            lifecycle_status=FileAsset.LifecycleStatus.CURRENT,
+                        )[:2]
+                    )
+                    if not current:
+                        asset.lifecycle_status = FileAsset.LifecycleStatus.CURRENT
+                        asset.save(update_fields=("lifecycle_status",))
+                        current = [asset]
+                    if len(current) == 1:
+                        selection.current_radio = current[0]
+                        selection.save(update_fields=("current_radio",))
 
     def _rights_records(
         self,

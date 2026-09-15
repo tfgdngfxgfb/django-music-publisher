@@ -9,7 +9,11 @@ from django.test import TestCase, override_settings
 
 from catalogue.models import DuplicateCandidate, Recording, Release
 from managed_music.models import ManagedRecording
-from media_assets.models import FileAsset, FileLocation
+from media_assets.models import (
+    FileAsset,
+    FileLocation,
+    RecordingMediaSelection,
+)
 from music_library.models import MusicLibraryEntry
 from parties.models import Party
 from provenance.models import MetadataAssertion
@@ -120,6 +124,16 @@ class DemoDataTests(TestCase):
                     "P7-Demo/Aurora/P7-DEMO-001/Cover/p7-demo-cover.png",
                 ).is_file()
             )
+            radio = FileAsset.objects.get(
+                pk="70000000-0000-4000-8000-000000000155"
+            )
+            selection = RecordingMediaSelection.objects.get(
+                recording_id="70000000-0000-4000-8000-000000000030"
+            )
+            self.assertEqual(
+                radio.lifecycle_status, FileAsset.LifecycleStatus.CURRENT
+            )
+            self.assertEqual(selection.current_radio_id, radio.pk)
             self.assertTrue(
                 Path(
                     folder,
