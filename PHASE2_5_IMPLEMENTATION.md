@@ -60,7 +60,7 @@ Eierskap, andeler, territorier og avtalegrunnlag er ikke implementert. Neste fas
 ### Fast demo-datasett
 
 Kommandoen ``load_demo_data`` oppretter et deterministisk, fiktivt datasett og
-små testfiler. ``run-p7-demo.cmd`` bruker en separat SQLite-database og separat
+små testfiler. Den historiske demoen brukte en separat SQLite-database og separat
 filrot under ``.local``. Kommandoen er idempotent og sperret når ``DEBUG=false``.
 Fase-2.5-demoen omfattet katalog, radiometadata, forvaltning, kilder, konflikt,
 mulig dublett og filplassering. Fase 3 utvider samme kommando med tydelig merkede,

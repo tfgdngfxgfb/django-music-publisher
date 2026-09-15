@@ -10,6 +10,7 @@ param(
 $ErrorActionPreference = "Stop"
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 $VenvPython = Join-Path $ProjectRoot ".venv\Scripts\python.exe"
+$VenvPip = Join-Path $ProjectRoot ".venv\Scripts\pip.exe"
 $Requirements = Join-Path $ProjectRoot "requirements-dev.txt"
 $RequirementsStamp = Join-Path $ProjectRoot ".venv\.requirements-dev.stamp"
 
@@ -17,15 +18,16 @@ Set-Location $ProjectRoot
 
 if (-not (Test-Path $VenvPython)) {
     $Python = Get-Command py -ErrorAction SilentlyContinue
-    if ($Python) {
-        & py -3.13 -m venv .venv
-    } else {
-        $Python = Get-Command python -ErrorAction SilentlyContinue
-        if (-not $Python) {
-            throw "Python 3.13 was not found. Install Python, then run this script again."
-        }
-        & python -m venv .venv
+    if (-not $Python) {
+        throw "Den nye Python-launcheren ble ikke funnet. Installer eller endre den manuelt før du fortsetter."
     }
+    & $Python.Source -V:3.14 -m venv .venv
+    if ($LASTEXITCODE -ne 0) { throw "Kunne ikke opprette .venv med Python 3.14." }
+}
+
+$VenvVersion = & $VenvPython -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"
+if ($LASTEXITCODE -ne 0 -or $VenvVersion.Trim() -ne "3.14") {
+    throw ".venv må bruke Python 3.14. Miljøet ble ikke endret automatisk."
 }
 
 $RequiredStamp = (Get-Item $Requirements).LastWriteTimeUtc.Ticks.ToString()
@@ -37,7 +39,7 @@ $InstalledStamp = if (Test-Path $RequirementsStamp) {
 
 if ($RequiredStamp -ne $InstalledStamp) {
     Write-Host "Installing/updating Python dependencies..."
-    & $VenvPython -m pip install --disable-pip-version-check -r $Requirements
+    & $VenvPip install --disable-pip-version-check -r $Requirements
     if ($LASTEXITCODE -ne 0) { throw "Dependency installation failed." }
     Set-Content -Path $RequirementsStamp -Value $RequiredStamp -Encoding ascii
 }

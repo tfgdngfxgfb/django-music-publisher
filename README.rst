@@ -7,59 +7,32 @@ Running P7 Arkiv og rettigheter locally
 Quick start on Windows
 ----------------------
 
-Double-click ``run-p7.cmd`` in the project folder, or run this in PowerShell::
+Double-click ``run-p7-gui-v2-test.cmd`` in the project folder, or run this in
+PowerShell::
 
-   .\run-p7.cmd
+   .\run-p7-gui-v2-test.cmd
 
-The script creates the virtual environment and ``.env`` file when needed,
-installs or updates dependencies, migrates the database, prepares a local
-administrator and starts the application. On the first run it prints a strong,
-random password once. Existing administrator passwords are never reset unless
-you explicitly pass ``-AdminPassword``.
+The script uses Python 3.14, creates ``.venv`` and ``.env`` when needed,
+installs or updates dependencies, migrates the persistent local GUI-v2 database,
+prepares a local administrator and starts the application. On the first run it
+prints a strong, random password once. Existing administrator passwords are
+never reset unless you explicitly pass ``-AdminPassword``.
 
 The account is only intended for local development. Stop the application with
 ``Ctrl+C``. The longer manual setup remains available below.
 
-Empty test database
--------------------
-
-Double-click ``run-p7-empty-test.cmd`` to start with a separate, persistent
-SQLite database containing no demo or imported catalogue data. The first run
-applies migrations and creates a local administrator; a generated password is
-printed once. The database is stored under
-``.local\p7-empty-test.sqlite3`` and is excluded from Git together with all
-locally imported music files.
+The database is stored under ``.local\p7-empty-test.sqlite3`` and is excluded
+from Git together with all locally imported music files. It is therefore kept
+locally and is never published to GitHub.
 
 To archive the current test database and start again with an empty catalogue,
 run::
 
-   .\run-p7-empty-test.cmd -Reset
+   .\run-p7-gui-v2-test.cmd -Reset
 
 Reset archives the previous database under ``.local\database-backups``. It
 does not delete or modify FLAC, WAV, cover or document files. An empty test
 database still contains Django system tables and the local administrator.
-
-Demo with fixed test data and files
------------------------------------
-
-Double-click ``run-p7-demo.cmd`` to start a separate demo database containing
-only fictional data. The launcher creates five recordings, two releases, four
-tracks, artists, ISRC/EAN/UPC values, radio metadata, one explicitly managed
-recording, source conflicts, a duplicate candidate and registered file
-locations. It also generates a copyright-free two-second WAV test tone, a
-short silent radio-FLAC with fictional tags, a demo cover and UTF-8 JSON/CSV
-metadata under ``.local\demo-nas``.
-
-The UUIDs and content are fixed, and rerunning the launcher does not create
-duplicates. The demo uses ``.local\p7-demo.sqlite3`` and therefore does not mix
-test records with the ordinary development database. To load the same set into
-an already selected development database instead, run::
-
-   .\.venv\Scripts\python.exe manage.py load_demo_data
-
-The command works only with ``DEBUG=true``. Every visible name includes
-``(demo)`` or otherwise identifies the content as fictional. The generated WAV
-contains a simple test tone and is not a music master.
 
 This fork now contains a runnable master catalogue alongside Django Music
 Publisher. The master catalogue accepts a recording with only a title; no
@@ -75,12 +48,20 @@ check out its branch explicitly:
 
    git clone --branch feature/flac-music-library-ingest https://github.com/tfgdngfxgfb/django-music-publisher.git
    cd django-music-publisher
-   python -m venv .venv
-   .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+   py -V:3.14 -m venv .venv
+   .\.venv\Scripts\pip.exe install -r requirements-dev.txt
    Copy-Item .env.example .env
    .\.venv\Scripts\python.exe manage.py migrate
    .\.venv\Scripts\python.exe manage.py createsuperuser
    .\.venv\Scripts\python.exe manage.py runserver
+
+Python 3.15 preview can be checked without changing the ordinary ``.venv``::
+
+   .\scripts\verify-python-315.ps1
+
+The script uses the existing new Python launcher and an isolated ignored
+environment under ``.local\venvs\python315``. It never installs or repairs a
+Python launcher or runtime.
 
 Using the virtual environment's Python directly avoids PowerShell activation
 policy problems. If you prefer activation, run ``.\.venv\Scripts\Activate.ps1``

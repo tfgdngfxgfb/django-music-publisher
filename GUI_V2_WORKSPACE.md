@@ -4,8 +4,8 @@
 - URL: `http://127.0.0.1:8000/v2/`
 - Standardmodus: lesing fra den valgte databasen. Skriving krever både
   `GUI_V2_WRITES_ENABLED=1` og relevante Django-rettigheter.
-- Trygg prøvebruk: `run-p7-empty-test.cmd` og `run-p7-gui-v2-test.cmd`
-  bruker begge `.local/p7-empty-test.sqlite3`.
+- Lokal start: `run-p7-gui-v2-test.cmd` bruker den vedvarende databasen
+  `.local/p7-empty-test.sqlite3`.
 - GUI-v2-startskriptet er nå et alias og laster ikke kunstige GUI-v2-data.
   Den tidligere `.local/gui-v2-test.sqlite3` brukes ikke.
 - Musikkarkivet kan lese én allerede registrert radio-FLAC på nytt gjennom den
@@ -52,7 +52,6 @@ filtrere listen til spor som trenger arbeid.
 run-p7-gui-v2-test.cmd
 ```
 
-Bruk `run-p7-empty-test.cmd` eller `run-p7-gui-v2-test.cmd`. Begge åpner GUI v2
-mot samme testkatalog. `-Reset` arkiverer testdatabasen og bygger en ny, helt
-tom database. Administratorpassord kan angis med `-AdminPassword` og lagres
-ikke i skriptet.
+`run-p7-gui-v2-test.cmd` åpner GUI v2 mot den vedvarende testkatalogen. `-Reset`
+arkiverer testdatabasen og bygger en ny, helt tom database.
+Administratorpassord kan angis med `-AdminPassword` og lagres ikke i skriptet.
