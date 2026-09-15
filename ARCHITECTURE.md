@@ -293,3 +293,25 @@ Before those follow-on workflows, obtain representative agreements, import files
 ## 9. Assessment completion
 
 The repository was cloned and compared with original upstream; the existing model and workflow boundaries were inspected. This document is the only new tracked-content candidate. No application code, settings, dependency files or migrations were modified, and nothing was pushed to GitHub. The next step is implementing the bounded milestone above after reviewing this architecture.
+
+## 10. Implemented digitization boundary (phase 4.5B)
+
+The preceding assessment describes the initial milestone. The implemented
+music workflow now adds `Release → DigitizationBatch → raw FileAsset → edited
+master → Recording → selected_master`, handing off to the existing 4.5A
+generator, verification and activation. See
+[PHASE4_5B_DIGITIZATION.md](PHASE4_5B_DIGITIZATION.md).
+
+Batch membership and human-declared raw-to-edited provenance are separate
+from Recording assignment. Raw audio never requires a Recording; edited
+masters may be registered before assignment. Preview/apply services reuse
+canonical FileAssets, FileLocations, storage and 4.5A master selection.
+Existing media remain read-only. Editing/splitting occurs outside P7.
+
+First radio generation without a prior radio FLAC uses explicitly confirmed
+database metadata through the same generator. Existing radio files retain
+the established source-authority policy. Possession, generation and master
+selection never imply rights or Managed Music membership.
+
+Future program digitization may reuse this working pattern, but no program
+objects, generic polymorphic models, Delivery or deployment are implemented.
