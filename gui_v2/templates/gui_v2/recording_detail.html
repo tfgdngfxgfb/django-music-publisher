@@ -117,6 +117,7 @@
 
       <section class="recording-card quick-actions">
         <h2>Hurtighandlinger</h2>
+        {% if perms.delivery.create_delivery %}<a href="{% url 'delivery:create' %}?recording={{ recording.pk }}">Lever / last ned</a>{% endif %}
         {% if can_view_files %}<a href="{{ tab_urls.files }}">Gå til Filer</a>{% endif %}
         {% if perms.provenance.view_metadataassertion %}<a href="{{ tab_urls.sources }}">Vis kilder og historikk</a>{% endif %}
         {% if overview.isrc %}<button type="button" data-copy="{{ overview.isrc }}">Kopier ISRC</button>{% endif %}
