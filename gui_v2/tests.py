@@ -11,7 +11,7 @@ from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from mutagen.flac import FLAC
 
-from catalogue.models import ExternalIdentifier, Recording, RecordingContribution, Release, ReleaseTrack
+from catalogue.models import DuplicateCandidate, ExternalIdentifier, Recording, RecordingContribution, Release, ReleaseTrack
 from managed_music.models import ManagedRecording
 from media_assets.models import FileAsset, FileLocation
 from music_library.models import Channel, MusicLibraryChannel, MusicLibraryEntry
@@ -106,6 +106,199 @@ class GuiV2WorkspaceTests(TestCase):
         self.assertContains(response, 'data-row-href=')
         self.assertNotContains(response, 'class="row-link"')
         self.assertContains(response, 'id="v2-inspector"')
+
+    def test_library_opens_gui_v2_recording_overview_with_return_context(self):
+        self._superuser()
+        response = self.client.get(
+            reverse("gui_v2:music_library"),
+            {"q": "Eksisterende", "selected": self.entry.pk},
+        )
+        detail_url = reverse("gui_v2:recording_detail", args=[self.recording.pk])
+        self.assertContains(response, detail_url)
+        self.assertNotContains(
+            response,
+            f'href="{reverse("workbench:recording", args=[self.recording.pk])}?return=',
+        )
+
+    def test_recording_overview_requires_recording_view_permission(self):
+        self.client.force_login(self.user)
+        url = reverse("gui_v2:recording_detail", args=[self.recording.pk])
+        self.assertEqual(self.client.get(url).status_code, 403)
+        self.user.user_permissions.add(
+            Permission.objects.get(
+                content_type__app_label="catalogue", codename="view_recording"
+            )
+        )
+        self.client.force_login(get_user_model().objects.get(pk=self.user.pk))
+        self.assertEqual(self.client.get(url).status_code, 200)
+
+    def test_release_track_inspector_opens_gui_v2_recording_overview(self):
+        self._superuser()
+        ReleaseTrack.objects.create(
+            release=self.release, recording=self.recording, sequence_number=1
+        )
+        response = self.client.get(
+            reverse("gui_v2:release_detail", args=[self.release.pk])
+        )
+        self.assertContains(
+            response, reverse("gui_v2:recording_detail", args=[self.recording.pk])
+        )
+
+    def test_recording_overview_shows_identity_radio_release_and_managed_status(self):
+        self._superuser()
+        self.entry.language = "nb"
+        self.entry.rotation_suitability = MusicLibraryEntry.RotationSuitability.SUITABLE
+        self.entry.save()
+        ManagedRecording.objects.create(library_entry=self.entry, status=ManagedRecording.Status.ACTIVE)
+        RecordingContribution.objects.create(
+            recording=self.recording,
+            role=RecordingContribution.Role.PRIMARY,
+            credited_as="Kreditert artist",
+        )
+        RecordingContribution.objects.create(
+            recording=self.recording,
+            role=RecordingContribution.Role.COMPOSER,
+            credited_as="Uavklart komponist",
+        )
+        ExternalIdentifier.objects.create(
+            recording=self.recording,
+            scheme=ExternalIdentifier.Scheme.ISRC,
+            value="NO-P7T-26-00601",
+        )
+        self.release.release_type = Release.Type.CD
+        self.release.release_year = 2026
+        self.release.catalogue_number = "P7-601"
+        self.release.save()
+        track = ReleaseTrack.objects.create(
+            release=self.release, recording=self.recording, sequence_number=1, track_number=1
+        )
+        cover = FileAsset.objects.create(
+            release=self.release, filename="cover.png", role=FileAsset.Role.COVER_IMAGE
+        )
+        FileLocation.objects.create(
+            asset=cover,
+            storage_type=FileLocation.StorageType.NAS,
+            relative_path="covers/overview.png",
+            status=FileLocation.Status.ACTIVE,
+        )
+        radio = FileAsset.objects.create(
+            recording=self.recording,
+            filename="radio.flac",
+            role=FileAsset.Role.RADIO_FLAC,
+            mime_type="audio/flac",
+            technical_metadata={"sample_rate": 48000, "bits_per_sample": 24, "channels": 2, "duration_ms": 183000},
+        )
+        FileLocation.objects.create(
+            asset=radio,
+            storage_type=FileLocation.StorageType.NAS,
+            relative_path="radio/radio.flac",
+            status=FileLocation.Status.ACTIVE,
+        )
+
+        response = self.client.get(
+            reverse("gui_v2:recording_detail", args=[self.recording.pk]),
+            {"return": reverse("gui_v2:music_library") + "?genre=Pop"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        for text in (
+            "Eksisterende innspilling", "Kreditert artist", "NOP7T2600601",
+            "Katalogtilhørighet", "Aktiv forvaltning", "Forvaltet betyr ikke",
+            "Radiometadata", "Norsk bokmål", "P7 Test", "Utgivelsesforekomster (1)",
+            "Testutgivelse", "radio.flac", "48 kHz", "24 bit", "2 (stereo)",
+            "Identitet ikke avklart",
+        ):
+            self.assertContains(response, text)
+        self.assertContains(response, reverse("gui_v2:release_detail", args=[self.release.pk]))
+        self.assertContains(response, reverse("workbench:cover_image", args=[cover.pk]))
+        self.assertContains(response, "genre%3DPop")
+        self.assertEqual(response.context["overview"]["releases"][0].pk, track.pk)
+
+    def test_recording_overview_does_not_choose_between_multiple_radio_files(self):
+        self._superuser()
+        for number in range(2):
+            FileAsset.objects.create(
+                recording=self.recording,
+                filename=f"alternativ-{number}.flac",
+                role=FileAsset.Role.RADIO_FLAC,
+            )
+        response = self.client.get(
+            reverse("gui_v2:recording_detail", args=[self.recording.pk])
+        )
+        self.assertContains(response, "2 radiofiler registrert")
+        self.assertContains(response, "Ingen fil velges automatisk")
+        self.assertNotContains(response, "alternativ-0.flac")
+        self.assertIsNone(response.context["overview"]["single_radio_file"])
+
+    def test_recording_overview_handles_missing_file_and_empty_recording(self):
+        self._superuser()
+        asset = FileAsset.objects.create(
+            recording=self.recording,
+            filename="savnet.flac",
+            role=FileAsset.Role.RADIO_FLAC,
+            sync_status=FileAsset.SyncStatus.MISSING,
+        )
+        FileLocation.objects.create(
+            asset=asset,
+            storage_type=FileLocation.StorageType.NAS,
+            relative_path="savnet/savnet.flac",
+            status=FileLocation.Status.MISSING,
+        )
+        response = self.client.get(
+            reverse("gui_v2:recording_detail", args=[self.recording.pk])
+        )
+        self.assertContains(response, "Radiofilen er ikke tilgjengelig")
+        self.assertContains(response, "Innspillingen og katalogdataene er fortsatt bevart")
+
+        empty = Recording.objects.create(title="Bare en katalogpost")
+        response = self.client.get(reverse("gui_v2:recording_detail", args=[empty.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Bare en katalogpost")
+        self.assertContains(response, "Ingen utgivelsesforekomster er registrert")
+
+    def test_recording_overview_shows_known_isrc_collision_as_resolved(self):
+        self._superuser()
+        other = Recording.objects.create(title="Annen innspilling")
+        DuplicateCandidate.objects.create(
+            recording_a=self.recording,
+            recording_b=other,
+            signals=["reported_isrc_collision", "manual_separate_recordings"],
+            score=100,
+            status=DuplicateCandidate.Status.DISMISSED,
+            notes="Kontrollert og holdes adskilt.",
+        )
+        response = self.client.get(
+            reverse("gui_v2:recording_detail", args=[self.recording.pk])
+        )
+        self.assertContains(response, "Kjent ISRC-kollisjon · avklart")
+        self.assertContains(response, "Innspillingene skal holdes adskilt")
+        self.assertNotContains(response, "ISRC-kollisjon må vurderes")
+
+    def test_recording_overview_get_is_read_only_for_media_and_database(self):
+        self._superuser()
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / "overview.flac"
+            path.write_bytes(b"recording overview must be read only")
+            asset = FileAsset.objects.create(
+                recording=self.recording,
+                filename=path.name,
+                role=FileAsset.Role.RADIO_FLAC,
+            )
+            FileLocation.objects.create(
+                asset=asset,
+                storage_type=FileLocation.StorageType.NAS,
+                relative_path=path.name,
+            )
+            before_file = (path.read_bytes(), path.stat().st_mtime_ns)
+            before_revision = self.recording.revision
+            with override_settings(P7_MUSIC_ROOT=root, P7_NAS_ROOT=root):
+                response = self.client.get(
+                    reverse("gui_v2:recording_detail", args=[self.recording.pk])
+                )
+            self.recording.refresh_from_db()
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual((path.read_bytes(), path.stat().st_mtime_ns), before_file)
+            self.assertEqual(self.recording.revision, before_revision)
 
     def test_library_renders_channel_choices_and_serves_custom_logo(self):
         self._superuser()

@@ -1,0 +1,132 @@
+{% extends "gui_v2/base.html" %}
+{% block title %}{{ recording.title }}{% endblock %}
+{% block content %}
+<div class="recording-page">
+  <header class="recording-object-header">
+    <a class="recording-back" href="{{ return_url }}">← {{ return_label }}</a>
+    <div class="recording-heading">
+      <span class="eyebrow">Innspilling</span>
+      <h1>{{ recording.title }}</h1>
+      <p>{{ overview.artist_text }}</p>
+      <div class="recording-head-facts">
+        {% if overview.isrc %}<span>ISRC {{ overview.isrc }}</span>{% endif %}
+        {% if overview.duration %}<span>{{ overview.duration }}</span>{% endif %}
+        {% if recording.version_designation %}<span>{{ recording.version_designation }}</span>{% endif %}
+      </div>
+    </div>
+    <nav class="recording-tabs" aria-label="Innspillingens arbeidsområder">
+      <a aria-current="page" href="{% url 'gui_v2:recording_detail' recording.pk %}?return={{ return_url|urlencode }}">Oversikt</a>
+      <a href="{{ tab_urls.radio }}">Radio</a>
+      <a href="{{ tab_urls.releases }}">Utgivelser</a>
+      <a href="{{ tab_urls.contributors }}">Medvirkende og opphavere</a>
+      <a href="{{ tab_urls.files }}">Filer</a>
+      {% if perms.rights.view_rightsclaim %}<a href="{{ tab_urls.rights }}">Rettigheter</a>{% endif %}
+      {% if perms.provenance.view_metadataassertion %}<a href="{{ tab_urls.sources }}">Kilder og historikk</a>{% endif %}
+    </nav>
+  </header>
+
+  <div class="recording-overview-grid">
+    <aside class="recording-identity" aria-label="Innspillingsidentitet">
+      <section class="recording-card identity-card">
+        <div class="recording-cover">
+          {% if overview.cover %}
+            <img src="{% url 'workbench:cover_image' overview.cover.asset.pk %}" alt="Omslag fra {{ overview.cover.release.title }}">
+          {% else %}<span aria-hidden="true">♫</span>{% endif %}
+        </div>
+        {% if overview.cover %}<p class="cover-source">Omslag fra «{{ overview.cover.release.title }}»</p>{% endif %}
+        <h2>{{ recording.title }}</h2>
+        <p class="identity-artist">{{ overview.artist_text }}</p>
+        <dl class="compact-definition-list">
+          {% if overview.duration %}<dt>Varighet</dt><dd>{{ overview.duration }}</dd>{% endif %}
+          {% if overview.isrc %}<dt>ISRC</dt><dd>{{ overview.isrc }}</dd>{% endif %}
+          {% if recording.version_designation %}<dt>Versjon</dt><dd>{{ recording.version_designation }}</dd>{% endif %}
+          {% if recording.recording_kind %}<dt>Type</dt><dd>{{ recording.get_recording_kind_display }}</dd>{% endif %}
+          {% if overview.first_release_year %}<dt>Første kjente år</dt><dd>{{ overview.first_release_year }}</dd>{% endif %}
+        </dl>
+      </section>
+
+      <section class="recording-card compact-card">
+        <h2>Katalogtilhørighet</h2>
+        <div class="state-line"><span class="state-icon {% if overview.entry %}ok{% else %}neutral{% endif %}">{% if overview.entry %}✓{% else %}–{% endif %}</span><div><strong>Musikkarkiv</strong><small>{% if overview.entry %}Registrert{% else %}Ikke registrert{% endif %}</small></div></div>
+        <div class="state-line"><span class="state-icon {% if overview.managed %}ok{% else %}neutral{% endif %}">{% if overview.managed %}✓{% else %}–{% endif %}</span><div><strong>Forvaltet musikk</strong><small>{% if overview.managed %}{{ overview.managed.get_status_display }}{% else %}Ikke registrert{% endif %}</small></div></div>
+        {% if overview.managed %}<p class="managed-note">Forvaltet betyr ikke at lokal organisasjon eier masteren.</p>{% endif %}
+      </section>
+
+      {% if overview.single_radio_file or overview.known_isrc_collision or overview.follow_up %}<section class="recording-card compact-card">
+        <h2>Status</h2>
+        {% if overview.single_radio_file %}<div class="state-line"><span class="state-icon {% if overview.single_radio_file.available %}ok{% else %}error{% endif %}">{% if overview.single_radio_file.available %}✓{% else %}!{% endif %}</span><span>{% if overview.single_radio_file.available %}Aktiv radiofil{% else %}Radiofil ikke tilgjengelig{% endif %}</span></div>{% endif %}
+        {% if overview.known_isrc_collision %}<div class="state-line"><span class="state-icon ok">✓</span><span>Kjent ISRC-kollisjon · avklart</span></div>{% endif %}
+        {% if overview.follow_up %}<div class="state-line"><span class="state-icon warning">!</span><span>Krever oppfølging</span></div>{% endif %}
+      </section>{% endif %}
+    </aside>
+
+    <div class="recording-main" id="recording-overview-main">
+      <div class="recording-main-top">
+        <section class="recording-card recording-section">
+          <header><h2>Grunnopplysninger</h2><span class="source-chip">{% if overview.managed %}Katalog fra databasen{% elif overview.entry %}Fra FLAC{% else %}Katalogdata{% endif %}</span></header>
+          <dl class="recording-facts">
+            <dt>Tittel</dt><dd>{{ recording.title }}</dd>
+            <dt>Artistkreditering</dt><dd>{{ overview.artist_text }}{% for credit in overview.artist_credits %}{% if credit.unresolved %}<small class="identity-unresolved">Identitet ikke avklart</small>{% endif %}{% endfor %}</dd>
+            {% if overview.credits.composers %}<dt>Komponist(er)</dt><dd>{% for credit in overview.credits.composers %}{{ credit.name }}{% if credit.unresolved %}<small class="identity-unresolved">Identitet ikke avklart</small>{% endif %}{% if not forloop.last %}, {% endif %}{% endfor %}</dd>{% endif %}
+            {% if overview.credits.lyricists %}<dt>Tekstforfatter(e)</dt><dd>{% for credit in overview.credits.lyricists %}{{ credit.name }}{% if credit.unresolved %}<small class="identity-unresolved">Identitet ikke avklart</small>{% endif %}{% if not forloop.last %}, {% endif %}{% endfor %}</dd>{% endif %}
+            {% if overview.credits.arrangers %}<dt>Arrangør(er)</dt><dd>{% for credit in overview.credits.arrangers %}{{ credit.name }}{% if credit.unresolved %}<small class="identity-unresolved">Identitet ikke avklart</small>{% endif %}{% if not forloop.last %}, {% endif %}{% endfor %}</dd>{% endif %}
+            {% if overview.duration %}<dt>Varighet</dt><dd>{{ overview.duration }}</dd>{% endif %}
+            {% if overview.isrc %}<dt>Kanonisk ISRC</dt><dd>{{ overview.isrc }}</dd>{% endif %}
+            {% if recording.version_designation %}<dt>Versjon</dt><dd>{{ recording.version_designation }}</dd>{% endif %}
+            {% if recording.recording_kind %}<dt>Innspillingstype</dt><dd>{{ recording.get_recording_kind_display }}</dd>{% endif %}
+            {% if overview.first_release_year %}<dt>Første kjente utgivelsesår</dt><dd>{{ overview.first_release_year }}</dd>{% endif %}
+          </dl>
+        </section>
+
+        <section class="recording-card recording-section">
+          <header><h2>Radiometadata</h2>{% if overview.entry %}<span class="source-chip">Fra Radio-FLAC</span>{% endif %}</header>
+          {% if overview.entry %}<dl class="recording-facts">
+            {% if overview.entry.genre %}<dt>Radiosjanger</dt><dd>{{ overview.entry.genre }}</dd>{% endif %}
+            {% if overview.language %}<dt>Radiospråk</dt><dd>{{ overview.language }}</dd>{% endif %}
+            {% if overview.entry.energy %}<dt>Energy</dt><dd><span class="energy-value">{{ overview.entry.energy }} av 5</span></dd>{% endif %}
+            <dt>Rotasjonsvurdering</dt><dd>{{ overview.entry.get_rotation_suitability_display|default:"Ikke vurdert" }}</dd>
+            {% if overview.channels %}<dt>Kanaler</dt><dd><span class="recording-chip-row">{% for channel in overview.channels %}<span class="recording-chip">{{ channel.name }}</span>{% endfor %}</span></dd>{% endif %}
+            {% if overview.targets %}<dt>Målgrupper</dt><dd><span class="recording-chip-row">{% for target in overview.targets %}<span class="recording-chip">{{ target.name }}</span>{% endfor %}</span></dd>{% endif %}
+            {% if overview.entry.gender %}<dt>Vokalklassifisering</dt><dd>{{ overview.entry.get_gender_display }}</dd>{% endif %}
+          </dl>{% else %}<p class="recording-empty">Ingen radiometadata er registrert.</p>{% endif %}
+          <a class="section-link" href="{{ tab_urls.radio }}">Åpne Radio →</a>
+        </section>
+      </div>
+
+      <section class="recording-card recording-section release-occurrences">
+        <header><h2>Utgivelsesforekomster{% if overview.release_count %} ({{ overview.release_count }}){% endif %}</h2>{% if overview.release_count > 5 %}<a href="{{ tab_urls.releases }}">Vis alle →</a>{% endif %}</header>
+        {% if overview.releases %}<div class="recording-table-wrap"><table><thead><tr><th>Utgivelse</th><th>Type / format</th><th>År</th><th>Label / katalognr.</th><th>Spor</th></tr></thead><tbody>
+          {% for track in overview.releases|slice:":5" %}<tr data-row-href="{{ track.gui_v2_url }}"><td><a href="{{ track.gui_v2_url }}">{% if track.cover_asset %}<img class="release-thumb" src="{% url 'workbench:cover_image' track.cover_asset.pk %}" alt="">{% endif %}<span><strong>{{ track.release.title }}</strong>{% if track.title_override %}<small>{{ track.title_override }}</small>{% endif %}</span></a></td><td>{{ track.release.get_release_type_display|default:"—" }}</td><td>{{ track.release.release_date.year|default:track.release.release_year|default:"—" }}</td><td>{{ track.release.label|default:"—" }}{% if track.release.catalogue_number %}<small>{{ track.release.catalogue_number }}</small>{% endif %}</td><td>{% if track.disc_number %}{{ track.disc_number }}.{% endif %}{% if track.side %}{{ track.side }}{% endif %}{{ track.track_number|default:track.sequence_number }}</td></tr>{% endfor %}
+        </tbody></table></div>{% else %}<p class="recording-empty">Ingen utgivelsesforekomster er registrert.</p>{% endif %}
+      </section>
+
+      <section class="recording-card recording-section radio-file-summary">
+        <header><h2>Radiofil</h2>{% if overview.radio_files %}<a href="{{ tab_urls.files }}">{{ overview.radio_files|length }} radiofil{{ overview.radio_files|length|pluralize:"er" }} registrert</a>{% endif %}</header>
+        {% if overview.single_radio_file %}<div class="radio-file-row"><span class="file-symbol">♫</span><div class="file-identity"><strong>{{ overview.single_radio_file.filename }}</strong>{% for location in overview.single_radio_file.locations %}<small>{{ location.relative_path }}</small>{% empty %}<small>Ingen aktiv plassering</small>{% endfor %}</div><dl><div><dt>Format</dt><dd>{{ overview.single_radio_file.format|default:"—" }}</dd></div><div><dt>Samplingsfrekvens</dt><dd>{{ overview.single_radio_file.sample_rate|default:"—" }}</dd></div><div><dt>Bitdybde</dt><dd>{{ overview.single_radio_file.bit_depth|default:"—" }}</dd></div><div><dt>Kanaler</dt><dd>{{ overview.single_radio_file.channels|default:"—" }}</dd></div><div><dt>Varighet</dt><dd>{{ overview.single_radio_file.duration|default:overview.duration|default:"—" }}</dd></div></dl><span class="file-state {% if overview.single_radio_file.available %}ok{% else %}error{% endif %}">{% if overview.single_radio_file.available %}✓{% else %}!{% endif %} {{ overview.single_radio_file.status }}</span></div>
+        {% elif overview.radio_files %}<div class="multiple-files"><span class="state-icon warning">!</span><div><strong>{{ overview.radio_files|length }} radiofiler registrert</strong><p>Ingen fil velges automatisk. Kontroller filkoblingene i Filer.</p></div><a class="button" href="{{ tab_urls.files }}">Se filer</a></div>
+        {% elif can_view_files %}<p class="recording-empty">Ingen radiofil er registrert.</p>{% else %}<p class="recording-empty">Du har ikke tilgang til filopplysninger.</p>{% endif %}
+      </section>
+    </div>
+
+    <aside class="recording-follow-up" aria-label="Oppfølging og hurtighandlinger">
+      <section class="recording-card follow-up-card">
+        <h2>Oppfølging</h2>
+        {% if overview.follow_up %}{% for item in overview.follow_up %}<article class="follow-up-item {{ item.kind }}"><span>{% if item.kind == 'error' %}×{% elif item.kind == 'warning' %}!{% else %}i{% endif %}</span><div><strong>{{ item.title }}</strong><p>{{ item.text }}</p></div></article>{% endfor %}{% else %}<div class="all-clear"><span>✓</span><div><strong>Ingen åpne oppgaver</strong><p>Det er ikke registrert avvik som krever oppfølging.</p></div></div>{% endif %}
+        {% if overview.known_isrc_collision %}<div class="resolved-note"><span>✓</span><div><strong>Kjent ISRC-kollisjon · avklart</strong><p>Innspillingene skal holdes adskilt.</p></div></div>{% endif %}
+      </section>
+
+      <section class="recording-card quick-actions">
+        <h2>Hurtighandlinger</h2>
+        {% if can_view_files %}<a href="{{ tab_urls.files }}">Gå til Filer</a>{% endif %}
+        {% if perms.provenance.view_metadataassertion %}<a href="{{ tab_urls.sources }}">Vis kilder og historikk</a>{% endif %}
+        {% if overview.isrc %}<button type="button" data-copy="{{ overview.isrc }}">Kopier ISRC</button>{% endif %}
+        <a href="{{ return_url }}">{{ return_label }}</a>
+      </section>
+
+      {% if overview.releases or overview.credits.composers or overview.credits.lyricists %}<section class="recording-card related-card"><h2>Relaterte elementer</h2>{% if overview.releases %}<a href="{{ tab_urls.releases }}"><span>Utgivelser</span><strong>{{ overview.release_count }} →</strong></a>{% endif %}{% if overview.credits.composers %}<div><span>Komponister</span><strong>{{ overview.credits.composers|length }}</strong></div>{% endif %}{% if overview.credits.lyricists %}<div><span>Tekstforfattere</span><strong>{{ overview.credits.lyricists|length }}</strong></div>{% endif %}</section>{% endif %}
+
+      <section class="recording-card changed-card"><h2>Sist endret</h2><dl><dt>Katalogpost</dt><dd>{{ recording.updated_at|date:"d.m.Y H:i" }}</dd>{% if overview.entry %}<dt>Radiometadata</dt><dd>{{ overview.entry.updated_at|date:"d.m.Y H:i" }}</dd>{% endif %}{% if overview.last_read %}<dt>Filmetadata lest</dt><dd>{{ overview.last_read|date:"d.m.Y H:i" }}</dd>{% endif %}</dl></section>
+    </aside>
+  </div>
+</div>
+{% endblock %}

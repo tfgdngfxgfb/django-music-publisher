@@ -30,6 +30,7 @@ from rights.summaries import OwnershipCategory, local_confirmed_right_recording_
 
 from .forms import MusicLibraryFilterForm, ReleaseMetadataForm, TrackRowFormSet
 from .presentation import compact_names, radio_language_name
+from .recording_overview import build_recording_overview, recording_overview_queryset
 from .services import save_release_track_rows
 
 
@@ -342,7 +343,7 @@ def music_library(request):
             entry.rotation_display = "Ikke vurdert"
             entry.rotation_kind = "muted"
         entry.preview_url = _entry_url(request, entry.pk)
-        entry.detail_url = f"{reverse('workbench:recording', args=[entry.recording_id])}?{urlencode({'return': entry.preview_url})}"
+        entry.detail_url = f"{reverse('gui_v2:recording_detail', args=[entry.recording_id])}?{urlencode({'return': entry.preview_url})}"
         entry.follow_up_reasons = []
         if not entry.has_radio_file:
             entry.follow_up_reasons.append("Ingen radio-FLAC")
@@ -468,6 +469,63 @@ def channel_logo(request, channel_id):
     )
     response["Cache-Control"] = "private, max-age=300"
     return response
+
+
+@require_GET
+@login_required
+@permission_required("catalogue.view_recording", raise_exception=True)
+def recording_detail(request, recording_id):
+    """Render the read-only GUI v2 overview for one canonical Recording."""
+    recording = get_object_or_404(recording_overview_queryset(), pk=recording_id)
+    return_url = _safe_return(request, reverse("gui_v2:music_library"))
+    current_url = request.get_full_path()
+    can_view_releases = request.user.has_perm("catalogue.view_release")
+    can_view_files = request.user.has_perms(
+        ("media_assets.view_fileasset", "media_assets.view_filelocation")
+    )
+    can_serve_cover = (
+        can_view_files
+        and request.user.is_staff
+        and request.user.has_perm("music_library.view_musiclibraryentry")
+    )
+    overview = build_recording_overview(
+        recording,
+        can_view_files=can_view_files,
+        can_view_releases=can_view_releases,
+    )
+    if overview["cover"] and not can_serve_cover:
+        overview["cover"] = None
+    for track in overview["releases"]:
+        track.gui_v2_url = (
+            f"{reverse('gui_v2:release_detail', args=[track.release_id])}?"
+            f"{urlencode({'tab': 'tracks', 'track': track.pk, 'return': current_url})}"
+        )
+    workbench_url = reverse("workbench:recording", args=[recording.pk])
+    tab_urls = {
+        name: f"{workbench_url}?{urlencode({'fane': name, 'return': current_url})}"
+        for name in ("radio", "releases", "contributors", "files", "rights", "sources")
+    }
+    return_label = (
+        "Tilbake til Musikkarkiv"
+        if "/musikkarkiv/" in return_url
+        else "Tilbake til utgivelsen"
+        if "/utgivelser/" in return_url
+        else "Tilbake"
+    )
+    return render(
+        request,
+        "gui_v2/recording_detail.html",
+        {
+            "section": "music_library",
+            "recording": recording,
+            "overview": overview,
+            "return_url": return_url,
+            "return_label": return_label,
+            "tab_urls": tab_urls,
+            "can_view_files": can_view_files,
+            "can_view_releases": can_view_releases,
+        },
+    )
 
 
 @require_POST
