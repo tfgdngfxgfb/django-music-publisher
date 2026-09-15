@@ -84,7 +84,9 @@ body.music-library-page .archive-layout>.inspector{align-self:start;margin-top:v
 
 /* The compact player belongs to the top navigation and no longer reserves page space below. */
 :root{--player:0px}
-.header-player.player{position:static;right:auto;bottom:auto;z-index:auto;flex:0 1 320px;width:320px;min-width:230px;height:38px;box-shadow:none;background:var(--surface2)}
+.header-player.player{position:relative;right:auto;bottom:auto;z-index:auto;flex:0 1 320px;width:320px;min-width:230px;height:38px;box-shadow:none;background:var(--surface2)}
+.header-player audio{display:none}.header-player .player-progress{display:block;position:absolute;left:38px;right:98px;bottom:1px;width:auto;height:3px;margin:0;accent-color:var(--accent);cursor:pointer}.header-player .player-progress:disabled{opacity:.25;cursor:default}
+.playback-button{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:28px;padding:4px 8px;border:1px solid var(--line2);border-radius:5px;background:var(--surface2);color:var(--text);cursor:pointer}.playback-button:hover,.playback-button.playing{border-color:var(--accent);color:var(--accent)}.playback-button.compact{width:27px;height:27px;min-height:0;padding:0;border-radius:50%}.playback-button:disabled{cursor:not-allowed;opacity:.45}.playback-cell{width:36px;padding-inline:4px}.radio-file-actions{display:flex;align-items:center;gap:8px;margin-top:10px}.playback-unavailable{color:var(--muted);font-size:10px}
 .header-actions>.player-show{position:static;right:auto;bottom:auto;z-index:auto;flex:0 0 34px;width:34px;height:34px;box-shadow:none}
 @media(max-width:1350px){.header-player.player{width:260px;min-width:210px}.header-player .player-title span{display:none}.header-actions .prototype-mark{display:none}}
 @media(max-width:900px){.header-player.player{min-width:142px;width:142px;grid-template-columns:24px 26px 28px 26px 24px}.header-player .player-title{display:none}.header-player .player-cover{width:24px;height:24px}.header-actions{gap:6px;padding-inline:8px}}

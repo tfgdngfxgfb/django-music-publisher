@@ -1,6 +1,9 @@
+import logging
 import mimetypes
+import os
+import re
 from pathlib import PurePosixPath
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 
 from django.conf import settings
 from django.contrib import messages
@@ -10,7 +13,7 @@ from django.core.exceptions import ImproperlyConfigured, PermissionDenied, Valid
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Case, CharField, Count, Exists, F, IntegerField, OuterRef, Prefetch, Q, Subquery, Value, When
-from django.http import FileResponse, Http404, JsonResponse
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -21,6 +24,7 @@ from flac_ingest.models import FlacIngestItem
 from flac_ingest.services import apply_batch, preview_radio_file_split, resolve_music_path, scan_directory, split_radio_file_to_new_recording
 from managed_music.models import ManagedRecording
 from media_assets.models import FileAsset, FileLocation
+from media_assets.playback import RadioPlaybackStatus, iter_file_range, resolve_current_radio_asset
 from music_library.models import Channel, MusicLibraryChannel, MusicLibraryEntry, MusicLibraryTargetAudience, TargetAudience
 from provenance.models import MetadataAssertion
 from rights.forms import ReleaseRightsClaimForm
@@ -32,6 +36,14 @@ from .forms import MusicLibraryFilterForm, ReleaseMetadataForm, TrackRowFormSet
 from .presentation import compact_names, radio_language_name
 from .recording_overview import build_recording_overview, recording_overview_queryset
 from .services import save_release_track_rows
+
+
+logger = logging.getLogger(__name__)
+PLAYBACK_PERMISSIONS = (
+    "catalogue.view_recording",
+    "media_assets.view_fileasset",
+    "media_assets.view_filelocation",
+)
 
 
 def _artist_text(recording):
@@ -48,6 +60,46 @@ def _duration(value):
         return ""
     seconds = round(value / 1000)
     return f"{seconds // 60:02d}:{seconds % 60:02d}"
+
+
+def _playback_context(recording, user):
+    if not user.has_perms(PLAYBACK_PERMISSIONS):
+        return {"status": "forbidden", "message": "Du har ikke tilgang til denne lydfilen."}
+    resolution = resolve_current_radio_asset(recording)
+    return {
+        "status": resolution.status.value,
+        "message": resolution.message,
+        "url": (
+            reverse("gui_v2:recording_audio", args=[recording.pk])
+            if resolution.status == RadioPlaybackStatus.AVAILABLE
+            else ""
+        ),
+        "recording_id": str(recording.pk),
+        "title": recording.title,
+        "artist": _artist_text(recording),
+    }
+
+
+def _parse_byte_range(value, size):
+    match = re.fullmatch(r"bytes=(\d*)-(\d*)", value or "")
+    if not match or size <= 0:
+        raise ValueError("invalid range")
+    start_text, end_text = match.groups()
+    if not start_text and not end_text:
+        raise ValueError("invalid range")
+    if not start_text:
+        suffix = int(end_text)
+        if suffix <= 0:
+            raise ValueError("invalid range")
+        start = max(0, size - suffix)
+        end = size - 1
+    else:
+        start = int(start_text)
+        end = int(end_text) if end_text else size - 1
+        if start >= size or end < start:
+            raise ValueError("invalid range")
+        end = min(end, size - 1)
+    return start, end
 
 
 def _query_without(request, *names):
@@ -319,6 +371,7 @@ def music_library(request):
     page = Paginator(queryset, paginator_size).get_page(request.GET.get("page"))
     for entry in page.object_list:
         entry.artist_text = _artist_text(entry.recording)
+        entry.playback = _playback_context(entry.recording, request.user)
         entry.isrc = next((item.normalized_value for item in entry.recording.identifiers.all() if item.scheme == ExternalIdentifier.Scheme.ISRC), "")
         entry.duration_text = _duration(entry.recording.duration_ms)
         entry.radio_files = [item for item in entry.recording.file_assets.all() if item.role == FileAsset.Role.RADIO_FLAC]
@@ -493,6 +546,7 @@ def recording_detail(request, recording_id):
         can_view_files=can_view_files,
         can_view_releases=can_view_releases,
     )
+    overview["playback"] = _playback_context(recording, request.user)
     if overview["cover"] and not can_serve_cover:
         overview["cover"] = None
     for track in overview["releases"]:
@@ -526,6 +580,83 @@ def recording_detail(request, recording_id):
             "can_view_releases": can_view_releases,
         },
     )
+
+
+@require_http_methods(["GET", "HEAD"])
+@login_required
+@permission_required(PLAYBACK_PERMISSIONS, raise_exception=True)
+def recording_audio(request, recording_id):
+    """Stream the one unambiguous current radio-FLAC for a Recording."""
+    recording = get_object_or_404(
+        Recording.objects.prefetch_related("file_assets__locations"), pk=recording_id
+    )
+    resolution = resolve_current_radio_asset(recording, verify_file=True)
+    if resolution.status != RadioPlaybackStatus.AVAILABLE:
+        status_code = 409 if resolution.status == RadioPlaybackStatus.AMBIGUOUS else 404
+        logger.warning(
+            "Radio playback unavailable",
+            extra={
+                "recording_uuid": str(recording.pk),
+                "file_asset_id": str(resolution.asset.pk) if resolution.asset else "",
+                "file_location_id": str(resolution.location.pk) if resolution.location else "",
+                "playback_error": resolution.status.value,
+            },
+        )
+        return HttpResponse(resolution.message, status=status_code, content_type="text/plain; charset=utf-8")
+
+    try:
+        handle = resolution.path.open("rb")
+        size = os.fstat(handle.fileno()).st_size
+    except OSError:
+        logger.warning(
+            "Radio playback file could not be opened",
+            extra={
+                "recording_uuid": str(recording.pk),
+                "file_asset_id": str(resolution.asset.pk),
+                "file_location_id": str(resolution.location.pk),
+                "playback_error": "open_failed",
+            },
+        )
+        return HttpResponse(
+            "Radiofilen er ikke tilgjengelig fra registrert plassering.",
+            status=404,
+            content_type="text/plain; charset=utf-8",
+        )
+
+    range_header = request.headers.get("Range")
+    status_code = 200
+    start, end = 0, max(0, size - 1)
+    if range_header:
+        try:
+            start, end = _parse_byte_range(range_header, size)
+        except (TypeError, ValueError):
+            handle.close()
+            response = HttpResponse(status=416)
+            response["Content-Range"] = f"bytes */{size}"
+            response["Accept-Ranges"] = "bytes"
+            return response
+        status_code = 206
+    length = max(0, end - start + 1) if size else 0
+    handle.seek(start)
+    if request.method == "HEAD":
+        handle.close()
+        response = HttpResponse(status=status_code, content_type="audio/flac")
+    else:
+        response = StreamingHttpResponse(
+            iter_file_range(handle, length=length),
+            status=status_code,
+            content_type="audio/flac",
+        )
+    response["Accept-Ranges"] = "bytes"
+    response["Content-Length"] = str(length)
+    response["Content-Disposition"] = (
+        "inline; filename*=UTF-8''" + quote(resolution.asset.filename, safe="")
+    )
+    response["Cache-Control"] = "private, no-store"
+    response["X-Content-Type-Options"] = "nosniff"
+    if status_code == 206:
+        response["Content-Range"] = f"bytes {start}-{end}/{size}"
+    return response
 
 
 @require_POST
@@ -739,9 +870,18 @@ def release_detail(request, release_id):
     return_url = _safe_return(request, reverse("gui_v2:release_list"))
     tracks = list(
         release.tracks.select_related("recording")
-        .prefetch_related("recording__contributions__artist_identity", "recording__contributions__party", "recording__identifiers", "file_assets")
+        .prefetch_related(
+            "recording__contributions__artist_identity",
+            "recording__contributions__party",
+            "recording__identifiers",
+            "recording__file_assets__locations",
+            "file_assets",
+        )
         .order_by("sequence_number")
     )
+    recordings_by_id = {str(track.recording_id): track.recording for track in tracks}
+    for track in tracks:
+        track.playback = _playback_context(track.recording, request.user)
     initial = [_track_initial(track) for track in tracks]
     formset = TrackRowFormSet(
         request.POST if action == "tracks" else None,
@@ -751,6 +891,11 @@ def release_detail(request, release_id):
     track_has_files = {str(track.pk): bool(track.file_assets.all()) for track in tracks}
     for row_form in formset.forms:
         row_form.has_files = track_has_files.get(str(row_form["track_id"].value() or ""), False)
+        recording = recordings_by_id.get(str(row_form["recording_id"].value() or ""))
+        row_form.playback = _playback_context(recording, request.user) if recording else {
+            "status": RadioPlaybackStatus.NO_RADIO_FILE.value,
+            "message": "Sporet er ikke koblet til en innspilling med radiofil.",
+        }
     release_form = ReleaseMetadataForm(
         request.POST if action == "release" else None, instance=release, prefix="release"
     )

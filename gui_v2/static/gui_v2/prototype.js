@@ -27,6 +27,93 @@
   playerShow?.addEventListener("click", () => setPlayerHidden(false));
   if (localStorage.getItem(playerHiddenKey) === "true") setPlayerHidden(true);
 
+  const audio = document.querySelector("#v2-audio");
+  const playerToggle = document.querySelector("[data-player-toggle]");
+  const playerTitle = document.querySelector("[data-player-title]");
+  const playerSubtitle = document.querySelector("[data-player-subtitle]");
+  const playerProgress = document.querySelector("[data-player-progress]");
+  let playingRecording = "";
+  let playingArtist = "";
+  const timeText = value => {
+    if (!Number.isFinite(value)) return "0:00";
+    const seconds = Math.max(0, Math.floor(value));
+    return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+  };
+  const updatePlaybackButtons = () => {
+    document.querySelectorAll("[data-play-recording]").forEach(button => {
+      const active = button.dataset.playRecordingId === playingRecording && audio && !audio.paused;
+      button.classList.toggle("playing", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
+  };
+  const updatePlayerTime = () => {
+    if (!audio || !playerSubtitle || !playingRecording) return;
+    const duration = Number.isFinite(audio.duration) ? audio.duration : 0;
+    playerSubtitle.textContent = `${playingArtist || "Uavklart artist"} · ${timeText(audio.currentTime)} / ${timeText(duration)}`;
+    if (playerProgress) {
+      playerProgress.max = String(duration || 0);
+      playerProgress.value = String(audio.currentTime || 0);
+      playerProgress.disabled = !duration;
+    }
+  };
+  const startPlayback = async trigger => {
+    if (!audio || !trigger.dataset.playUrl) return;
+    setPlayerHidden(false);
+    const recordingId = trigger.dataset.playRecordingId || "";
+    if (playingRecording !== recordingId || audio.dataset.playUrl !== trigger.dataset.playUrl) {
+      audio.pause();
+      playingRecording = recordingId;
+      playingArtist = trigger.dataset.playArtist || "";
+      audio.dataset.playUrl = trigger.dataset.playUrl;
+      audio.src = trigger.dataset.playUrl;
+      playerTitle.textContent = trigger.dataset.playTitle || "Innspilling";
+      playerSubtitle.textContent = `${playingArtist || "Uavklart artist"} · åpner radiofil …`;
+      playerToggle.disabled = false;
+      playerProgress.disabled = true;
+      audio.load();
+    }
+    try {
+      await audio.play();
+    } catch {
+      playerSubtitle.textContent = "Radiofilen kunne ikke leses eller spilles.";
+    }
+    updatePlaybackButtons();
+  };
+  document.addEventListener("click", event => {
+    const trigger = event.target.closest("[data-play-recording]");
+    if (!trigger || trigger.disabled) return;
+    event.preventDefault();
+    event.stopPropagation();
+    startPlayback(trigger);
+  });
+  playerToggle?.addEventListener("click", async () => {
+    if (!audio?.src) return;
+    if (audio.paused) {
+      try { await audio.play(); } catch { playerSubtitle.textContent = "Radiofilen kunne ikke leses eller spilles."; }
+    } else audio.pause();
+  });
+  playerProgress?.addEventListener("input", () => {
+    if (audio && Number.isFinite(audio.duration)) audio.currentTime = Number(playerProgress.value);
+  });
+  audio?.addEventListener("play", () => {
+    playerToggle.textContent = "Ⅱ";
+    playerToggle.setAttribute("aria-label", "Pause");
+    updatePlaybackButtons();
+  });
+  audio?.addEventListener("pause", () => {
+    playerToggle.textContent = "▶";
+    playerToggle.setAttribute("aria-label", "Spill av");
+    updatePlaybackButtons();
+  });
+  audio?.addEventListener("loadedmetadata", updatePlayerTime);
+  audio?.addEventListener("timeupdate", updatePlayerTime);
+  audio?.addEventListener("ended", updatePlaybackButtons);
+  audio?.addEventListener("error", () => {
+    playerToggle.textContent = "▶";
+    playerSubtitle.textContent = "Radiofilen kunne ikke leses eller spilles.";
+    updatePlaybackButtons();
+  });
+
   const autoSubmitFilters = document.querySelector("[data-auto-submit-filters]");
   autoSubmitFilters?.addEventListener("change", event => {
     if (!event.target.matches("select, input[type='checkbox'], input[type='radio']")) return;

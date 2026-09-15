@@ -128,6 +128,17 @@
       recordingLink.hidden = !recordingId;
       if (recordingId) recordingLink.href = `${recordingLink.dataset.urlTemplate.replace("00000000-0000-0000-0000-000000000000", recordingId)}?return=${encodeURIComponent(window.location.pathname + window.location.search)}`;
     }
+    const play = document.querySelector("#inspector-play");
+    const playbackStatus = document.querySelector("#inspector-playback-status");
+    if (play) {
+      play.dataset.playUrl = row.dataset.playbackUrl || "";
+      play.dataset.playRecordingId = row.dataset.playbackRecordingId || "";
+      play.dataset.playTitle = row.dataset.playbackTitle || value(row, "recording_title") || "";
+      play.dataset.playArtist = row.dataset.playbackArtist || value(row, "artists") || "";
+      play.disabled = !play.dataset.playUrl;
+      play.setAttribute("aria-label", play.dataset.playUrl ? `Spill ${play.dataset.playTitle}` : (row.dataset.playbackMessage || "Ingen spillbar radiofil"));
+    }
+    if (playbackStatus) playbackStatus.textContent = row.dataset.playbackUrl ? "" : (row.dataset.playbackMessage || "Sporet er ikke koblet til en spillbar radiofil.");
   };
   function focusCell(cell, keepRange = false) {
     if (!cell || cell.closest("tr")?.hidden) return;

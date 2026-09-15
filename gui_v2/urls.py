@@ -12,6 +12,11 @@ urlpatterns = [
         views.recording_detail,
         name="recording_detail",
     ),
+    path(
+        "avspilling/innspillinger/<uuid:recording_id>/radio.flac",
+        views.recording_audio,
+        name="recording_audio",
+    ),
     path("kanaler/<uuid:channel_id>/logo/", views.channel_logo, name="channel_logo"),
     path(
         "musikkarkiv/<uuid:entry_id>/filer/<uuid:asset_id>/les-pa-nytt/",
