@@ -34,6 +34,8 @@
   const playerTitle = document.querySelector("[data-player-title]");
   const playerSubtitle = document.querySelector("[data-player-subtitle]");
   const playerProgress = document.querySelector("[data-player-progress]");
+  const playerCover = document.querySelector("[data-player-cover]");
+  const libraryRows = [...document.querySelectorAll("[data-library-row]")];
   let playingRecording = "";
   let playingArtist = "";
   const primaryPlaybackTrigger = () => {
@@ -71,6 +73,21 @@
       playerProgress.disabled = !duration;
     }
   };
+  const updatePlayerCover = trigger => {
+    if (!playerCover) return;
+    playerCover.replaceChildren();
+    if (trigger.dataset.playCoverUrl) {
+      const cover = document.createElement("img");
+      cover.src = trigger.dataset.playCoverUrl;
+      cover.alt = trigger.dataset.playCoverAlt || "";
+      playerCover.append(cover);
+      return;
+    }
+    const placeholder = document.createElement("span");
+    placeholder.textContent = "♫";
+    placeholder.setAttribute("aria-hidden", "true");
+    playerCover.append(placeholder);
+  };
   const startPlayback = async trigger => {
     if (!audio || !trigger.dataset.playUrl) return;
     setPlayerHidden(false);
@@ -83,6 +100,7 @@
       audio.src = trigger.dataset.playUrl;
       playerTitle.textContent = trigger.dataset.playTitle || "Innspilling";
       playerSubtitle.textContent = `${playingArtist || "Uavklart artist"} · åpner radiofil …`;
+      updatePlayerCover(trigger);
       playerToggle.disabled = false;
       playerProgress.disabled = true;
       audio.load();
@@ -128,7 +146,25 @@
   });
   audio?.addEventListener("loadedmetadata", updatePlayerTime);
   audio?.addEventListener("timeupdate", updatePlayerTime);
-  audio?.addEventListener("ended", updatePlaybackButtons);
+  const playableTriggerForRow = row =>
+    row?.querySelector("[data-play-recording][data-play-url]:not(:disabled)");
+  const advanceLibraryPlayback = async () => {
+    if (!libraryRows.length || !playingRecording) return;
+    const currentIndex = libraryRows.findIndex(
+      row => playableTriggerForRow(row)?.dataset.playRecordingId === playingRecording
+    );
+    if (currentIndex < 0) return;
+    const nextRow = libraryRows
+      .slice(currentIndex + 1)
+      .find(row => !row.hidden && playableTriggerForRow(row));
+    if (!nextRow) return;
+    await startPlayback(playableTriggerForRow(nextRow));
+    await followLibraryRow(nextRow);
+  };
+  audio?.addEventListener("ended", () => {
+    updatePlaybackButtons();
+    void advanceLibraryPlayback();
+  });
   audio?.addEventListener("error", () => {
     playerToggle.textContent = "▶";
     playerSubtitle.textContent = "Radiofilen kunne ikke leses eller spilles.";
@@ -143,7 +179,6 @@
     autoSubmitFilters.requestSubmit();
   });
 
-  const libraryRows = [...document.querySelectorAll("[data-library-row]")];
   const keyboardFocusKey = `p7-v2-library-keyboard:${location.pathname}`;
   document.querySelectorAll("[data-row-href]").forEach(row => row.addEventListener("click", event => {
     if (event.target.closest("a, button, input, select, textarea, label")) return;

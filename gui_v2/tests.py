@@ -194,6 +194,18 @@ class GuiV2WorkspaceTests(TestCase):
                 relative_path=path,
                 status=FileLocation.Status.ACTIVE,
             )
+        radio = FileAsset.objects.create(
+            recording=self.recording,
+            filename="recording.flac",
+            role=FileAsset.Role.RADIO_FLAC,
+        )
+        FileLocation.objects.create(
+            asset=radio,
+            storage_type=FileLocation.StorageType.NAS,
+            relative_path="radio/recording.flac",
+            status=FileLocation.Status.ACTIVE,
+            is_current=True,
+        )
 
         response = self.client.get(
             reverse("gui_v2:music_library"), {"selected": self.entry.pk}
@@ -214,6 +226,16 @@ class GuiV2WorkspaceTests(TestCase):
         self.assertContains(response, "data-toggle-library-inspector")
         self.assertContains(response, "Skjul detaljer")
         self.assertNotContains(response, 'class="inspector-hide"')
+        player_cover_url = (
+            reverse("workbench:cover_image", args=[older_cover.pk])
+            + "?size=128"
+        )
+        self.assertContains(
+            response,
+            f'data-play-cover-url="{player_cover_url}"',
+            count=2,
+        )
+        self.assertContains(response, "data-player-cover")
 
         fragment = self.client.get(
             reverse("gui_v2:music_library"),
