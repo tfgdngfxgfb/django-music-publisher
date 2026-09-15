@@ -146,6 +146,17 @@ class GuiV2WorkspaceTests(TestCase):
             response, reverse("workbench:cover_image", args=[newer_cover.pk])
         )
         self.assertContains(response, "Omslag fra Eldre utgivelse")
+        self.assertContains(response, 'class="library-cover-thumb"')
+
+        fragment = self.client.get(
+            reverse("gui_v2:music_library"),
+            {"selected": self.entry.pk},
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(fragment.status_code, 200)
+        self.assertContains(fragment, 'id="v2-inspector"')
+        self.assertContains(fragment, self.recording.title)
+        self.assertNotContains(fragment, 'class="library-table"')
 
     def test_library_opens_gui_v2_recording_overview_with_return_context(self):
         self._superuser()

@@ -2119,6 +2119,8 @@ def cover_image(request, pk):
         return HttpResponseForbidden()
     if not settings.P7_NAS_ROOT:
         raise Http404
+    thumbnail_size = 64 if request.GET.get("size") == "64" else 640
+    quality = 78 if thumbnail_size == 64 else 85
     root = Path(settings.P7_NAS_ROOT).resolve()
     for location in asset.locations.filter(
         storage_type="nas", is_current=True, status="active"
@@ -2133,9 +2135,9 @@ def cover_image(request, pk):
                     or source.width * source.height > 25000000
                 ):
                     continue
-                source.thumbnail((640, 640))
+                source.thumbnail((thumbnail_size, thumbnail_size))
                 output = BytesIO()
-                source.convert("RGB").save(output, format="JPEG", quality=85)
+                source.convert("RGB").save(output, format="JPEG", quality=quality)
             response = HttpResponse(output.getvalue(), content_type="image/jpeg")
             response["Cache-Control"] = "private, no-store"
             response["X-Content-Type-Options"] = "nosniff"

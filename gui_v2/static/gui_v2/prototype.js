@@ -6,12 +6,14 @@
     localStorage.setItem("p7-v2-theme", root.dataset.v2Theme);
   });
 
-  document.querySelectorAll("[data-copy]").forEach(button => button.addEventListener("click", async () => {
+  document.addEventListener("click", async event => {
+    const button = event.target.closest("[data-copy]");
+    if (!button) return;
     if (!button.dataset.copy) return;
     await navigator.clipboard.writeText(button.dataset.copy);
     const old = button.textContent; button.textContent = "Kopiert";
     setTimeout(() => { button.textContent = old; }, 1100);
-  }));
+  });
 
   const player = document.querySelector("#v2-player");
   const playerShow = document.querySelector("[data-player-show]");
@@ -98,6 +100,8 @@
     event.preventDefault();
     event.stopPropagation();
     startPlayback(trigger);
+    const libraryRow = trigger.closest("[data-library-row]");
+    if (libraryRow) void followLibraryRow(libraryRow);
   });
   playerToggle?.addEventListener("click", async () => {
     if (!audio?.src) {
@@ -146,7 +150,11 @@
     const scroller = row.closest(".table-scroll");
     const key = `p7-v2-scroll:${location.pathname}${location.search.replace(/([?&])selected=[^&]*/, "$1")}`;
     sessionStorage.setItem(key, scroller?.scrollTop || 0);
-    if (row.matches("[data-library-row]")) sessionStorage.setItem(keyboardFocusKey, "true");
+    if (row.matches("[data-library-row]")) {
+      sessionStorage.setItem(keyboardFocusKey, "true");
+      void followLibraryRow(row);
+      return;
+    }
     location.href = row.dataset.rowHref;
   }));
 
@@ -169,10 +177,36 @@
     layout?.classList.toggle("inspector-closed", !open);
     inspectorOpeners.forEach(button => { button.hidden = open; });
   };
-  document.querySelector("[data-close-inspector]")?.addEventListener("click", () => {
-    setInspector(false);
+  document.addEventListener("click", event => {
+    if (event.target.closest("[data-close-inspector]")) setInspector(false);
   });
   inspectorOpeners.forEach(button => button.addEventListener("click", () => setInspector(true)));
+  let libraryDetailRequest = 0;
+  const followLibraryRow = async row => {
+    const requestId = ++libraryDetailRequest;
+    libraryRows.forEach(item => {
+      const selected = item === row;
+      item.classList.toggle("selected", selected);
+      item.setAttribute("aria-selected", String(selected));
+      item.tabIndex = selected ? 0 : -1;
+    });
+    if (!inspector || !row.dataset.rowHref) return;
+    try {
+      const response = await fetch(row.dataset.rowHref, {
+        headers: {"X-Requested-With": "XMLHttpRequest"},
+      });
+      if (!response.ok || requestId !== libraryDetailRequest) return;
+      const page = new DOMParser().parseFromString(await response.text(), "text/html");
+      const nextInspector = page.querySelector("#v2-inspector");
+      if (!nextInspector || requestId !== libraryDetailRequest) return;
+      inspector.innerHTML = nextInspector.innerHTML;
+      history.replaceState({}, "", row.dataset.rowHref);
+      setInspector(true);
+      alignInspectorWithTable();
+    } catch {
+      // Playback remains usable if the detail refresh is temporarily unavailable.
+    }
+  };
   document.addEventListener("keydown", event => {
     const editing = event.target.closest("input, select, textarea, [contenteditable='true']");
     if (editing) return;
@@ -189,21 +223,27 @@
     const next = libraryRows[Math.max(0, Math.min(libraryRows.length - 1, index + (event.key === "ArrowDown" ? 1 : -1)))];
     event.preventDefault();
     sessionStorage.setItem(keyboardFocusKey, "true");
-    location.href = next.dataset.rowHref;
+    next.focus({preventScroll: true});
+    next.scrollIntoView({block: "nearest", inline: "nearest"});
+    void followLibraryRow(next);
   });
-  document.querySelectorAll("[data-tab]").forEach(button => button.addEventListener("click", () => {
+  document.addEventListener("click", event => {
+    const button = event.target.closest("[data-tab]");
+    if (!button || !inspector?.contains(button)) return;
     document.querySelectorAll("[data-tab]").forEach(item => item.setAttribute("aria-selected", String(item === button)));
     document.querySelectorAll("[data-panel]").forEach(panel => { panel.hidden = panel.dataset.panel !== button.dataset.tab; });
-  }));
-  document.querySelector(".tabs")?.addEventListener("keydown", event => {
+  });
+  document.addEventListener("keydown", event => {
+    if (!event.target.closest("#v2-inspector .tabs")) return;
     if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
-    const tabs = [...event.currentTarget.querySelectorAll("[data-tab]")];
+    const tabs = [...inspector.querySelectorAll("[data-tab]")];
     const current = tabs.indexOf(document.activeElement);
     const next = (current + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
     event.preventDefault(); tabs[next].focus(); tabs[next].click();
   });
-  const handle = inspector?.querySelector(".resize-handle");
-  handle?.addEventListener("pointerdown", event => {
+  document.addEventListener("pointerdown", event => {
+    const handle = event.target.closest("#v2-inspector .resize-handle");
+    if (!handle) return;
     event.preventDefault(); handle.setPointerCapture(event.pointerId);
     const move = current => {
       const width = Math.max(300, Math.min(560, innerWidth - current.clientX));
@@ -212,7 +252,8 @@
     handle.addEventListener("pointermove", move);
     handle.addEventListener("pointerup", () => handle.removeEventListener("pointermove", move), {once:true});
   });
-  handle?.addEventListener("keydown", event => {
+  document.addEventListener("keydown", event => {
+    if (!event.target.closest("#v2-inspector .resize-handle")) return;
     if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
     const current = parseInt(getComputedStyle(root).getPropertyValue("--inspector"), 10) || 360;
     const width = Math.max(300, Math.min(560, current + (event.key === "ArrowLeft" ? 16 : -16)));

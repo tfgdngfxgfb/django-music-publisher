@@ -2,6 +2,7 @@ import logging
 import mimetypes
 import os
 import re
+from collections import defaultdict
 from pathlib import PurePosixPath
 from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 
@@ -147,6 +148,10 @@ def home(request):
 @permission_required("music_library.view_musiclibraryentry", raise_exception=True)
 def music_library(request):
     form = MusicLibraryFilterForm(request.GET or None)
+    selected_id = request.GET.get("selected")
+    fragment_mode = (
+        request.headers.get("X-Requested-With") == "XMLHttpRequest" and selected_id
+    )
     active_filters = []
     page_size = "40"
     artist_prefetch = Prefetch(
@@ -371,10 +376,34 @@ def music_library(request):
     else:
         current_ordering = "title"
         queryset = queryset.order_by("recording__title", "id")
+    if fragment_mode:
+        queryset = queryset.filter(pk=selected_id)
     queryset = queryset.distinct()
     paginator_size = max(queryset.count(), 1) if page_size == "all" else int(page_size)
     page = Paginator(queryset, paginator_size).get_page(request.GET.get("page"))
+    can_serve_cover = (
+        request.user.is_staff
+        and request.user.has_perms(
+            (
+                "media_assets.view_fileasset",
+                "media_assets.view_filelocation",
+            )
+        )
+    )
+    covers_by_recording = {}
+    if can_serve_cover:
+        tracks_by_recording = defaultdict(list)
+        cover_tracks = recording_release_tracks_with_covers_queryset().filter(
+            recording_id__in=[entry.recording_id for entry in page.object_list]
+        )
+        for track in cover_tracks:
+            tracks_by_recording[track.recording_id].append(track)
+        covers_by_recording = {
+            recording_id: select_recording_cover(tracks)
+            for recording_id, tracks in tracks_by_recording.items()
+        }
     for entry in page.object_list:
+        entry.cover = covers_by_recording.get(entry.recording_id)
         entry.artist_text = _artist_text(entry.recording)
         entry.playback = _playback_context(entry.recording, request.user)
         entry.isrc = next((item.normalized_value for item in entry.recording.identifiers.all() if item.scheme == ExternalIdentifier.Scheme.ISRC), "")
@@ -431,29 +460,11 @@ def music_library(request):
             entry.file_status_text = "Ikke kontrollert"
             entry.file_status_kind = "muted"
 
-    selected_id = request.GET.get("selected")
     selected = next((item for item in page.object_list if str(item.pk) == selected_id), None)
     if selected is None and page.object_list:
         selected = page.object_list[0]
     if selected:
         selected.releases = list({track.release_id: track.release for track in selected.recording.release_tracks.all()}.values())
-        can_serve_cover = (
-            request.user.is_staff
-            and request.user.has_perms(
-                (
-                    "media_assets.view_fileasset",
-                    "media_assets.view_filelocation",
-                )
-            )
-        )
-        selected.cover = None
-        if can_serve_cover:
-            cover_tracks = list(
-                recording_release_tracks_with_covers_queryset().filter(
-                    recording_id=selected.recording_id
-                )
-            )
-            selected.cover = select_recording_cover(cover_tracks)
         selected.source_assertions = MetadataAssertion.objects.filter(
             entity_type=MetadataAssertion.EntityType.MUSIC_LIBRARY_ENTRY, entity_uuid=selected.pk
         ).select_related("source_record__source_system")[:10]
@@ -480,6 +491,14 @@ def music_library(request):
                         location.onetagger_path = ""
                 except (ImproperlyConfigured, ValidationError, OSError):
                     location.onetagger_path = ""
+    if fragment_mode:
+        if selected is None:
+            raise Http404
+        return render(
+            request,
+            "gui_v2/includes/music_library_inspector.html",
+            {"selected": selected, "writes_enabled": settings.GUI_V2_WRITES_ENABLED},
+        )
     selected_channel_ids = set(request.GET.getlist("channels"))
     channel_filter_options = list(
         Channel.objects.filter(is_active=True)

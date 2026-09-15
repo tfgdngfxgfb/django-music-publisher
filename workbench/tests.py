@@ -1039,6 +1039,7 @@ class CatalogueInspectorTests(WorkbenchTestCase):
 
     def test_cover_permissions_and_confined_raster_preview(self):
         import tempfile
+        from io import BytesIO
         from pathlib import Path
         from PIL import Image
 
@@ -1052,10 +1053,13 @@ class CatalogueInspectorTests(WorkbenchTestCase):
         self.assertEqual(self.client.get(url).status_code, 403)
         self.login(self.create_user(username="cover-admin", superuser=True))
         with tempfile.TemporaryDirectory() as folder, self.settings(P7_NAS_ROOT=folder):
-            Image.new("RGB", (20, 20)).save(Path(folder) / "cover.png")
+            Image.new("RGB", (200, 100)).save(Path(folder) / "cover.png")
             response = self.client.get(url)
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response["Content-Type"], "image/jpeg")
+            compact_response = self.client.get(url, {"size": "64"})
+            self.assertEqual(compact_response.status_code, 200)
+            self.assertEqual(Image.open(BytesIO(compact_response.content)).size, (64, 32))
             with connection.cursor() as cursor:
                 cursor.execute(
                     "UPDATE media_assets_filelocation SET relative_path = %s WHERE id = %s",
