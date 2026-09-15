@@ -12,7 +12,7 @@ from collections import OrderedDict
 dir_path = os.path.dirname(os.path.realpath(__file__))
 path = os.path.join(dir_path, "societies.csv")
 
-with open(path, "r") as f:
+with open(path, "r", encoding="utf-8", newline="") as f:
     reader = csv.reader(f)
     SOCIETIES = sorted(
         ((str(row[0]), "{} ({})".format(row[1], row[2])) for row in reader),
