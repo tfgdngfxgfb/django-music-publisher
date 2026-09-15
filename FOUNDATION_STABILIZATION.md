@@ -19,7 +19,7 @@ Oppgradert og testet: Django REST Framework 3.18.1, Pillow 12.3.0, psycopg2-bina
 
 Black 26.5.1 er prosjektets pinnede formatter. Dette er samme versjon som den siste dokumenterte grønne upstream-kjøringen 28.07.2026, og CI og lokal utvikling bruker samme versjon. Bare de historiske upstream-migrasjonene under `music_publisher/migrations` er unntatt; nye P7-migrasjoner kontrolleres som annen ny kode. En eventuell full reformatering av eldre eller senere tilkommet kode skal gjøres separat fra funksjons- og runtime-endringer.
 
-Mot `backup/master-pre-p7-core-4.5a-20260915` (`45e41c4`) består den nåværende formatteringsgjelden av 88 filer opprettet i P7-utviklingen og én eksisterende fil endret av P7-utviklingen (`music_publisher/royalty_calculation.py`). Ingen av de 89 filene er innholdsmessig uendret fra siste grønne upstream-baseline `4fdec3d`. Black-kontrollen kjøres derfor fortsatt over hele koden og rapporteres som en separat, ikke-blokkerende CI-status frem til en egen formatteringsendring utføres.
+Mot `backup/master-pre-p7-core-4.5a-20260915` (`45e41c4`) består den nåværende formatteringsgjelden av 88 filer opprettet i P7-utviklingen og én eksisterende fil endret av P7-utviklingen (`music_publisher/royalty_calculation.py`). Ingen av de 89 filene er innholdsmessig uendret fra siste grønne upstream-baseline `4fdec3d`. Gjelden normaliseres i én separat, mekanisk formatteringscommit etter runtime- og PostgreSQL-verifikasjonen; Black forblir en ordinær CI-kvalitetsport.
 
 ## Migrations og verifikasjon
 
