@@ -171,12 +171,18 @@
   alignInspectorWithTable();
   window.addEventListener("resize", alignInspectorWithTable);
   const inspectorOpeners = document.querySelectorAll("[data-open-inspector]");
+  const libraryInspectorToggles = document.querySelectorAll("[data-toggle-library-inspector]");
   const animateLibraryInspector = layout?.matches(".archive-layout");
   const inspectorMotionMs = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 170;
   let inspectorMotionTimer = 0;
   const setInspector = open => {
     if (!inspector) return;
     inspectorOpeners.forEach(button => { button.hidden = open; });
+    libraryInspectorToggles.forEach(button => {
+      button.setAttribute("aria-expanded", String(open));
+      const label = button.querySelector("[data-inspector-toggle-label]");
+      if (label) label.textContent = open ? "Skjul detaljer" : "Vis detaljer";
+    });
     if (!animateLibraryInspector) {
       inspector.hidden = !open;
       layout?.classList.toggle("inspector-closed", !open);
@@ -210,6 +216,10 @@
     if (event.target.closest("[data-close-inspector]")) setInspector(false);
   });
   inspectorOpeners.forEach(button => button.addEventListener("click", () => setInspector(true)));
+  libraryInspectorToggles.forEach(button => button.addEventListener("click", () => {
+    const isOpen = !inspector?.hidden && !inspector?.classList.contains("inspector-leaving");
+    setInspector(!isOpen);
+  }));
   let libraryDetailRequest = 0;
   const followLibraryRow = async row => {
     const requestId = ++libraryDetailRequest;

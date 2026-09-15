@@ -115,17 +115,14 @@ body.music-library-page .archive-layout>.inspector{align-self:start;margin-top:v
 .archive-layout.filters-closed .archive-list>.list-heading{padding-left:16px}
 
 /* Music Library inspector: stronger cover identity and an integrated collapse action. */
-body.music-library-page .archive-layout>.inspector>.library-inspector-header{position:sticky;top:0;z-index:4;display:grid;grid-template-columns:82px minmax(0,1fr);gap:11px;min-height:130px;padding:36px 12px 12px;align-items:center;background:linear-gradient(145deg,var(--surface2),var(--surface));border-bottom:1px solid var(--line)}
+body.music-library-page .archive-layout>.inspector>.library-inspector-header{position:sticky;top:0;z-index:4;display:grid;grid-template-columns:82px minmax(0,1fr);gap:11px;min-height:111px;padding:12px;align-items:center;background:linear-gradient(145deg,var(--surface2),var(--surface));border-bottom:1px solid var(--line)}
 body.music-library-page .library-inspector-header .cover{width:82px;height:82px;border-radius:7px;box-shadow:0 6px 16px #0005;font-size:28px}
 body.music-library-page .library-inspector-identity{min-width:0}
 body.music-library-page .library-inspector-identity h2{margin:3px 0 2px;font-size:17px;line-height:1.2}
 body.music-library-page .library-inspector-identity p,body.music-library-page .library-inspector-identity small{display:block;margin:0;color:var(--muted)}
 body.music-library-page .library-inspector-identity p{line-height:1.25}
 body.music-library-page .library-inspector-identity small{margin-top:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:8px}
-body.music-library-page .inspector-hide{position:absolute;top:6px;right:9px;display:flex;align-items:center;gap:4px;width:auto;height:27px;padding:3px 7px;border:1px solid transparent;border-radius:999px;background:transparent;color:var(--muted);cursor:pointer;font-size:9px}
-body.music-library-page .inspector-hide b{font-size:16px;line-height:1}
-body.music-library-page .inspector-hide:hover,body.music-library-page .inspector-hide:focus-visible{border-color:var(--line2);background:var(--surface3);color:var(--text)}
-body.music-library-page .archive-layout>.inspector>.tabs{top:130px}
+body.music-library-page .archive-layout>.inspector>.tabs{top:111px}
 body.music-library-page .archive-layout>.inspector.inspector-transitioning{transition:opacity .17s ease,transform .17s ease;will-change:opacity,transform}
 body.music-library-page .archive-layout>.inspector.inspector-leaving{opacity:0;transform:translateX(14px);pointer-events:none}
 @media(prefers-reduced-motion:reduce){body.music-library-page .archive-layout>.inspector.inspector-transitioning{transition:none}}
