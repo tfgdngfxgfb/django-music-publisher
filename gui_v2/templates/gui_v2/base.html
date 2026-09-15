@@ -14,6 +14,7 @@
       <a {% if section == 'home' %}aria-current="page"{% endif %} href="{% url 'gui_v2:home' %}">Start</a>
       {% if perms.music_library.view_musiclibraryentry %}<a {% if section == 'music_library' %}aria-current="page"{% endif %} href="{% url 'gui_v2:music_library' %}">Musikkarkiv</a>{% endif %}
       {% if perms.catalogue.view_release %}<a {% if section == 'releases' %}aria-current="page"{% endif %} href="{% url 'gui_v2:release_list' %}">Utgivelser</a>{% endif %}
+      {% if perms.media_assets.view_digitizationbatch %}<a {% if section == 'digitization' %}aria-current="page"{% endif %} href="{% url 'gui_v2:digitization_index' %}">Digitalisering</a>{% endif %}
       {% if perms.managed_music.view_managedrecording %}<a href="{% url 'workbench:managed' %}">Forvaltet musikk</a>{% endif %}
       {% if perms.parties.view_party %}<a href="{% url 'workbench:parties' %}">Artister/personer</a>{% endif %}
       {% if perms.media_assets.view_fileasset %}<a href="{% url 'workbench:files' %}">Filer</a>{% endif %}

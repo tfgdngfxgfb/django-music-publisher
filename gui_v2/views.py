@@ -1162,6 +1162,11 @@ def recording_generation_preview(request, recording_id):
                 recording=recording,
                 user=request.user,
                 target_relative_path=request.POST.get("target_relative_path"),
+                database_metadata_confirmed=request.POST.get(
+                    "database_metadata_confirmed"
+                )
+                == "yes",
+                expected_metadata_digest=request.POST.get("metadata_digest"),
             )
         except (ImproperlyConfigured, OSError, ValidationError) as error:
             error_message = "; ".join(getattr(error, "messages", [str(error)]))
@@ -1169,6 +1174,7 @@ def recording_generation_preview(request, recording_id):
             return redirect(
                 f"{reverse('gui_v2:recording_generation_preview', args=[recording.pk])}"
                 f"?generation={generation.pk}"
+                f"&return={quote(_safe_return(request, reverse('gui_v2:recording_files', args=[recording.pk])), safe='')}"
             )
     return render(
         request,
@@ -1181,8 +1187,9 @@ def recording_generation_preview(request, recording_id):
             "error_message": error_message,
             "writes_enabled": settings.GUI_V2_WRITES_ENABLED,
             "file_writes_enabled": settings.P7_ALLOW_FILE_WRITES,
-            "return_url": reverse(
-                "gui_v2:recording_files", args=[recording.pk]
+            "return_url": _safe_return(
+                request,
+                reverse("gui_v2:recording_files", args=[recording.pk]),
             ),
         },
     )
@@ -1214,6 +1221,7 @@ def recording_generate_candidate(request, recording_id, generation_id):
     return redirect(
         f"{reverse('gui_v2:recording_generation_preview', args=[recording_id])}"
         f"?generation={generation.pk}"
+        f"&return={quote(_safe_return(request, reverse('gui_v2:recording_files', args=[recording_id])), safe='')}"
     )
 
 
@@ -1236,12 +1244,16 @@ def recording_activate_candidate(request, recording_id, generation_id):
             request, "Kandidaten er aktivert som gjeldende radiofil."
         )
         return redirect(
-            f"{reverse('gui_v2:recording_files', args=[recording_id])}"
-            f"?selected_file={candidate.pk}"
+            _safe_return(
+                request,
+                f"{reverse('gui_v2:recording_files', args=[recording_id])}"
+                f"?selected_file={candidate.pk}",
+            )
         )
     return redirect(
         f"{reverse('gui_v2:recording_generation_preview', args=[recording_id])}"
         f"?generation={generation.pk}"
+        f"&return={quote(_safe_return(request, reverse('gui_v2:recording_files', args=[recording_id])), safe='')}"
     )
 
 

@@ -1,10 +1,16 @@
 from django.urls import path
 
-from . import views
+from . import views, digitization
 
 app_name = "gui_v2"
 
 urlpatterns = [
+    path("digitalisering/", digitization.index, name="digitization_index"),
+    path(
+        "digitalisering/<uuid:batch_id>/",
+        digitization.detail,
+        name="digitization_detail",
+    ),
     path("", views.home, name="home"),
     path("musikkarkiv/", views.music_library, name="music_library"),
     path(

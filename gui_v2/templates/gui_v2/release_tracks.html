@@ -15,6 +15,8 @@
     <button class="button subtle release-uuid-copy" type="button" data-copy="{{ release.pk }}" title="Kopier utgivelsens UUID">Kopier UUID</button>
   </header>
 
+  {% if perms.media_assets.view_digitizationbatch %}<div class="track-toolbar"><span>Digitaliseringer:</span>{% for batch in release.digitization_batches.all %}<a href="{% url 'gui_v2:digitization_detail' batch.pk %}">{{ batch.title }} · {{ batch.get_status_display }}</a>{% empty %}<a href="{% url 'gui_v2:digitization_index' %}?release={{ release.pk }}">Opprett digitaliseringsbatch →</a>{% endfor %}</div>{% endif %}
+
   {% if active_tab == "tracks" %}<div class="release-layout">
   <section class="track-workspace" id="tracks">
     <header class="release-header track-context-bar">

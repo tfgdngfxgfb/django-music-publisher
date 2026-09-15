@@ -72,6 +72,7 @@
             <dt>Synkronisering</dt><dd>{{ file.object.get_sync_status_display }}</dd>
           </dl>
           <div class="file-integrity"><h3>Integritet</h3><dl><dt>SHA-256</dt><dd><code>{{ file.object.sha256|default:"Ikke registrert" }}</code></dd>{% if file.technical.audio_md5 %}<dt>PCM-MD5</dt><dd><code>{{ file.technical.audio_md5 }}</code></dd>{% endif %}<dt>Fil-ID</dt><dd><code>{{ file.object.pk }}</code></dd></dl></div>
+          {% if file.digitization_lineage %}<div class="file-integrity"><h3>Digitaliseringsopprinnelse</h3>{% for relation in file.digitization_lineage %}<p>{% if not relation.is_active %}Tidligere råkobling · {% endif %}<a href="{% url 'gui_v2:digitization_detail' relation.derived_asset.digitization_file.batch_id %}">{{ relation.derived_asset.digitization_file.batch.release.title }} · {{ relation.derived_asset.digitization_file.batch.title }}</a></p><p>{{ relation.source_asset.filename }} → {{ relation.derived_asset.filename }}{% if file.generation %} → {{ file.object.filename }}{% endif %}</p>{% endfor %}</div>{% endif %}
         </section>
         <section class="recording-card file-actions-card"><h2>Handlinger</h2><div class="file-action-list">
           {% if file.is_current_radio and overview.playback.url %}<button type="button" data-play-recording data-play-url="{{ overview.playback.url }}" data-play-recording-id="{{ overview.playback.recording_id }}" data-play-title="{{ overview.playback.title }}" data-play-artist="{{ overview.playback.artist }}">▶ Spill radiofil</button>{% endif %}

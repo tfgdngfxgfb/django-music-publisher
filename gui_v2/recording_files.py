@@ -16,7 +16,11 @@ from media_assets.storage import (
 )
 
 from django.core.exceptions import ObjectDoesNotExist
-from media_assets.models import MediaAssetEvent, RadioFlacGeneration
+from media_assets.models import (
+    MediaAssetEvent,
+    RadioFlacGeneration,
+    DigitizationDerivation,
+)
 
 
 def _duration(value):
@@ -271,6 +275,24 @@ def build_recording_files(recording, *, selected_asset_id=None):
     for item in files:
         item["generation"] = generations.get(item["object"].pk)
         item["history"] = _history(item, events.get(item["object"].pk, ()))
+    lineage = {}
+    master_ids = {file["object"].pk for file in files}
+    master_ids.update(
+        generation.master_asset_id for generation in generations.values()
+    )
+    for relation in (
+        DigitizationDerivation.objects.filter(derived_asset_id__in=master_ids)
+        .select_related(
+            "source_asset", "derived_asset__digitization_file__batch__release"
+        )
+        .order_by("-created_at")
+    ):
+        lineage.setdefault(relation.derived_asset_id, []).append(relation)
+    for item in files:
+        generation = item["generation"]
+        item["digitization_lineage"] = lineage.get(
+            generation.master_asset_id if generation else item["object"].pk, []
+        )
     selected = next(
         (
             item
