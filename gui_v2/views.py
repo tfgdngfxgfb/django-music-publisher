@@ -34,7 +34,12 @@ from rights.summaries import OwnershipCategory, local_confirmed_right_recording_
 
 from .forms import MusicLibraryFilterForm, ReleaseMetadataForm, TrackRowFormSet
 from .presentation import compact_names, radio_language_name
-from .recording_overview import build_recording_overview, recording_overview_queryset
+from .recording_overview import (
+    build_recording_overview,
+    recording_overview_queryset,
+    recording_release_tracks_with_covers_queryset,
+    select_recording_cover,
+)
 from .services import save_release_track_rows
 
 
@@ -432,6 +437,23 @@ def music_library(request):
         selected = page.object_list[0]
     if selected:
         selected.releases = list({track.release_id: track.release for track in selected.recording.release_tracks.all()}.values())
+        can_serve_cover = (
+            request.user.is_staff
+            and request.user.has_perms(
+                (
+                    "media_assets.view_fileasset",
+                    "media_assets.view_filelocation",
+                )
+            )
+        )
+        selected.cover = None
+        if can_serve_cover:
+            cover_tracks = list(
+                recording_release_tracks_with_covers_queryset().filter(
+                    recording_id=selected.recording_id
+                )
+            )
+            selected.cover = select_recording_cover(cover_tracks)
         selected.source_assertions = MetadataAssertion.objects.filter(
             entity_type=MetadataAssertion.EntityType.MUSIC_LIBRARY_ENTRY, entity_uuid=selected.pk
         ).select_related("source_record__source_system")[:10]

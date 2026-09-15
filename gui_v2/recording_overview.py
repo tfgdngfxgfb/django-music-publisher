@@ -16,11 +16,9 @@ def _duration(value):
     return f"{seconds // 60:02d}:{seconds % 60:02d}"
 
 
-def recording_overview_queryset():
-    contributions = RecordingContribution.objects.select_related(
-        "party", "artist_identity", "source_record__source_system"
-    ).order_by("display_order", "id")
-    tracks = (
+def recording_release_tracks_with_covers_queryset():
+    """Return release occurrences in the shared deterministic cover order."""
+    return (
         ReleaseTrack.objects.select_related("release__label")
         .prefetch_related(
             Prefetch(
@@ -32,6 +30,32 @@ def recording_overview_queryset():
         )
         .order_by("release__release_year", "release__title", "sequence_number")
     )
+
+
+def select_recording_cover(releases):
+    """Select the first usable release cover without relying on database order."""
+    cover = None
+    for track in releases:
+        track.cover_asset = None
+        for asset in track.release.file_assets.all():
+            if any(
+                location.is_current
+                and location.status == FileLocation.Status.ACTIVE
+                and location.storage_type == FileLocation.StorageType.NAS
+                for location in asset.locations.all()
+            ):
+                track.cover_asset = asset
+                if cover is None:
+                    cover = {"asset": asset, "release": track.release}
+                break
+    return cover
+
+
+def recording_overview_queryset():
+    contributions = RecordingContribution.objects.select_related(
+        "party", "artist_identity", "source_record__source_system"
+    ).order_by("display_order", "id")
+    tracks = recording_release_tracks_with_covers_queryset()
     files = FileAsset.objects.prefetch_related("locations").order_by("role", "filename", "id")
     duplicate_cases = DuplicateCandidate.objects.select_related("recording_a", "recording_b")
     return (
@@ -129,21 +153,7 @@ def build_recording_overview(recording, *, can_view_files, can_view_releases):
     managed = getattr(entry, "managed_recording", None) if entry else None
     releases = list(recording.release_tracks.all()) if can_view_releases else []
 
-    cover = None
-    if can_view_files:
-        for track in releases:
-            track.cover_asset = None
-            for asset in track.release.file_assets.all():
-                if any(
-                    location.is_current
-                    and location.status == FileLocation.Status.ACTIVE
-                    and location.storage_type == FileLocation.StorageType.NAS
-                    for location in asset.locations.all()
-                ):
-                    track.cover_asset = asset
-                    if cover is None:
-                        cover = {"asset": asset, "release": track.release}
-                    break
+    cover = select_recording_cover(releases) if can_view_files else None
 
     radio_assets = []
     if can_view_files:

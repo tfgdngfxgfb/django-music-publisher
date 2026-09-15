@@ -90,6 +90,7 @@ body.music-library-page .archive-layout>.inspector{align-self:start;margin-top:v
 .header-actions>.player-show{position:static;right:auto;bottom:auto;z-index:auto;flex:0 0 34px;width:34px;height:34px;box-shadow:none}
 @media(max-width:1350px){.header-player.player{width:260px;min-width:210px}.header-player .player-title span{display:none}.header-actions .prototype-mark{display:none}}
 @media(max-width:900px){.header-player.player{min-width:142px;width:142px;grid-template-columns:24px 26px 28px 26px 24px}.header-player .player-title{display:none}.header-player .player-cover{width:24px;height:24px}.header-actions{gap:6px;padding-inline:8px}}
+.inspector .cover{overflow:hidden}.inspector .cover img{display:block;width:100%;height:100%;object-fit:cover}
 
 /* Read-only preview for repairing a radio file attached to the wrong Recording. */
 .file-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:5px}.file-actions form{margin:0}.warning-action{border-color:color-mix(in srgb,var(--warn) 60%,var(--line));color:var(--warn)}

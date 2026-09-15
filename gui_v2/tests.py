@@ -107,6 +107,46 @@ class GuiV2WorkspaceTests(TestCase):
         self.assertNotContains(response, 'class="row-link"')
         self.assertContains(response, 'id="v2-inspector"')
 
+    def test_library_inspector_uses_deterministic_cover_for_selected_recording(self):
+        self._superuser()
+        newer = Release.objects.create(title="Nyere utgivelse", release_year=2020)
+        older = Release.objects.create(title="Eldre utgivelse", release_year=1990)
+        ReleaseTrack.objects.create(
+            release=newer, recording=self.recording, sequence_number=1
+        )
+        ReleaseTrack.objects.create(
+            release=older, recording=self.recording, sequence_number=1
+        )
+        newer_cover = FileAsset.objects.create(
+            release=newer, filename="cover.png", role=FileAsset.Role.COVER_IMAGE
+        )
+        older_cover = FileAsset.objects.create(
+            release=older, filename="cover.png", role=FileAsset.Role.COVER_IMAGE
+        )
+        for cover, path in (
+            (newer_cover, "covers/newer.png"),
+            (older_cover, "covers/older.png"),
+        ):
+            FileLocation.objects.create(
+                asset=cover,
+                storage_type=FileLocation.StorageType.NAS,
+                relative_path=path,
+                status=FileLocation.Status.ACTIVE,
+            )
+
+        response = self.client.get(
+            reverse("gui_v2:music_library"), {"selected": self.entry.pk}
+        )
+
+        self.assertEqual(response.context["selected"].cover["asset"], older_cover)
+        self.assertContains(
+            response, reverse("workbench:cover_image", args=[older_cover.pk])
+        )
+        self.assertNotContains(
+            response, reverse("workbench:cover_image", args=[newer_cover.pk])
+        )
+        self.assertContains(response, "Omslag fra Eldre utgivelse")
+
     def test_library_opens_gui_v2_recording_overview_with_return_context(self):
         self._superuser()
         response = self.client.get(
