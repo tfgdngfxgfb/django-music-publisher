@@ -1,4 +1,4 @@
-{% extends "gui_v2/base.html" %}{% load static %}{% block title %}Musikkarkiv{% endblock %}{% block body_class %}music-library-page{% endblock %}{% block content %}
+{% extends "gui_v2/base.html" %}{% load static %}{% block title %}Musikkarkiv{% endblock %}{% block body_class %}music-library-page{% endblock %}{% block header_player %}{% endblock %}{% block content %}
 <div class="archive-layout{% if not selected %} no-inspector{% endif %}">
   <aside class="filter-panel">
     <form method="get" class="filter-form" id="library-filters" data-auto-submit-filters>
@@ -46,6 +46,7 @@
       <td><span class="compact-values" title="{{ entry.channel_names }}">{{ entry.channel_summary|default:"—" }}</span></td><td><span class="compact-values" title="{{ entry.target_names }}">{{ entry.target_summary|default:"—" }}</span></td><td><span class="status {{ entry.file_status_kind }}">{{ entry.file_status_text }}</span></td><td>{% if entry.is_managed %}<span class="status cyan">Forvaltet</span>{% else %}<span class="status muted">Kun musikkarkiv</span>{% endif %}</td><td><div class="follow-up-reasons">{% for reason in entry.follow_up_reasons %}<span class="status warning">{{ reason }}</span>{% empty %}<span class="status muted">Ingen kjente avvik</span>{% endfor %}</div></td><td><time>{{ entry.last_read_at|default:entry.updated_at|date:"d.m.Y H:i" }}</time></td>
     </tr>{% empty %}<tr><td colspan="16" class="empty-state">Ingen innspillinger passer til filtrene.</td></tr>{% endfor %}
     </tbody></table></div>
+    <div class="library-player-dock">{% include "gui_v2/includes/player.html" with player_class="library-player" %}</div>
   </section>
 
   {% if selected %}{% include "gui_v2/includes/music_library_inspector.html" %}{% endif %}

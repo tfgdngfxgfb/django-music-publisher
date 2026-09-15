@@ -414,13 +414,19 @@ class GuiV2WorkspaceTests(TestCase):
             response.content.index(b'class="filter-toggle"'),
             response.content.index(b'class="list-heading"'),
         )
-        self.assertContains(response, 'class="player header-player"')
+        self.assertContains(response, 'class="player library-player"')
+        self.assertNotContains(response, 'class="player header-player"')
+        self.assertContains(response, 'class="library-player-dock"')
         self.assertNotContains(response, '<footer class="player"')
         self.assertNotContains(response, "Bruk filtre")
         self.assertNotContains(response, "Radiomusikk")
         self.assertEqual(response.content.count(b'aria-label="Nullstill alle filtre"'), 1)
         self.assertNotContains(response, ">Nullstill</a>")
         self.assertContains(response, '<option value="all" selected>Alle</option>', html=True)
+
+        home_response = self.client.get(reverse("gui_v2:home"))
+        self.assertContains(home_response, 'class="player header-player"')
+        self.assertNotContains(home_response, 'class="player library-player"')
 
     def test_library_uses_table_headers_for_sorting_and_keeps_filters(self):
         self._superuser()
