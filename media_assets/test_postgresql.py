@@ -380,6 +380,7 @@ class PostgreSQLMasteringConcurrencyTests(TransactionTestCase):
             return original_encode(*args, **kwargs)
 
         def run_generation(wait_for_encoder=False):
+            close_old_connections()
             if wait_for_encoder:
                 self.assertTrue(encode_started.wait(timeout=10))
             try:
@@ -393,6 +394,7 @@ class PostgreSQLMasteringConcurrencyTests(TransactionTestCase):
             finally:
                 if wait_for_encoder:
                     losing_call_finished.set()
+                close_old_connections()
 
         close_old_connections()
         with patch("media_assets.mastering._encode_lossless", controlled_encode):

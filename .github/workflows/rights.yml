@@ -51,5 +51,15 @@ jobs:
         run: python manage.py migrate media_assets 0003 --noinput
       - run: python manage.py migrate --noinput
       - run: python manage.py makemigrations --check --dry-run
-      - run: python manage.py test
+      - name: Full test suite
+        if: ${{ !matrix.experimental }}
+        run: python manage.py test
+      - name: Python prerelease compatibility
+        if: ${{ matrix.experimental }}
+        run: >-
+          python manage.py test
+          media_assets.test_mastering
+          media_assets.test_postgresql
+          media_assets.tests
+          flac_ingest.tests
       - run: python scripts/smoke_admin.py
