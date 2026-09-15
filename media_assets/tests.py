@@ -48,21 +48,24 @@ class FileAssetTests(TestCase):
         self.assertFalse(first.is_current)
         self.assertTrue(current.is_current)
 
-    @override_settings(P7_NAS_ROOT="D:/P7-Musikk", P7_MUSIC_ROOT="D:/P7-Musikk")
     def test_nas_root_is_configuration_not_persisted_identity(self):
-        asset = FileAsset.objects.create(
-            filename="track.wav", role=FileAsset.Role.EDITED_WAV_MASTER
-        )
-        location = FileLocation.objects.create(
-            asset=asset,
-            storage_type=FileLocation.StorageType.NAS,
-            relative_path="Lynor/track.wav",
-        )
-        self.assertEqual(location.relative_path, "Lynor/track.wav")
-        self.assertEqual(
-            str(location.resolved_nas_path()).replace("\\", "/"),
-            "D:/P7-Musikk/Lynor/track.wav",
-        )
+        with tempfile.TemporaryDirectory() as root, override_settings(
+            P7_NAS_ROOT=root,
+            P7_MUSIC_ROOT=root,
+        ):
+            asset = FileAsset.objects.create(
+                filename="track.wav", role=FileAsset.Role.EDITED_WAV_MASTER
+            )
+            location = FileLocation.objects.create(
+                asset=asset,
+                storage_type=FileLocation.StorageType.NAS,
+                relative_path="Lynor/track.wav",
+            )
+            self.assertEqual(location.relative_path, "Lynor/track.wav")
+            self.assertEqual(
+                location.resolved_nas_path(),
+                Path(root).resolve() / "Lynor" / "track.wav",
+            )
 
     def test_absolute_or_parent_path_is_rejected(self):
         asset = FileAsset.objects.create(
