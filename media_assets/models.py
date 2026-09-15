@@ -1,8 +1,7 @@
 import re
-from pathlib import Path, PurePosixPath, PureWindowsPath
+from pathlib import PurePosixPath, PureWindowsPath
 
-from django.conf import settings
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.db import models
 
 from catalogue.models import Recording, Release, ReleaseTrack
@@ -250,12 +249,15 @@ class FileLocation(CanonicalModel):
             )
 
     def resolved_nas_path(self):
-        if self.storage_type != self.StorageType.NAS or not settings.P7_NAS_ROOT:
+        """Compatibility wrapper for callers not yet migrated to storage.py."""
+        if self.storage_type != self.StorageType.NAS:
             return None
-        return Path(
-            settings.P7_NAS_ROOT,
-            *PurePosixPath(self.relative_path.replace("\\", "/")).parts,
-        )
+        from .storage import resolve_location
+
+        try:
+            return resolve_location(self).server_path
+        except (ImproperlyConfigured, ValidationError, OSError):
+            return None
 
     def __str__(self):
         return f"{self.get_storage_type_display()}: {self.relative_path}"

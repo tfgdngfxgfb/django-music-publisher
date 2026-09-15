@@ -1052,7 +1052,9 @@ class CatalogueInspectorTests(WorkbenchTestCase):
         self.login(self.create_user())
         self.assertEqual(self.client.get(url).status_code, 403)
         self.login(self.create_user(username="cover-admin", superuser=True))
-        with tempfile.TemporaryDirectory() as folder, self.settings(P7_NAS_ROOT=folder):
+        with tempfile.TemporaryDirectory() as folder, self.settings(
+            P7_NAS_ROOT=folder, P7_MUSIC_ROOT=folder
+        ):
             Image.new("RGB", (200, 100)).save(Path(folder) / "cover.png")
             response = self.client.get(url)
             self.assertEqual(response.status_code, 200)

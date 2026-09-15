@@ -8,7 +8,7 @@ from hashlib import sha256
 from pathlib import Path, PurePosixPath
 
 from django.conf import settings
-from django.core.exceptions import ImproperlyConfigured, ValidationError
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.utils import timezone
@@ -29,6 +29,7 @@ from catalogue.validators import (
 )
 from managed_music.models import ManagedRecording
 from media_assets.models import FileAsset, FileChecksum, FileLocation
+from media_assets.storage import get_storage_root, resolve_storage_path
 from music_library.models import (
     Channel,
     MusicLibraryChannel,
@@ -79,27 +80,13 @@ class SourceFileUnavailable(ValidationError):
 
 
 def music_root():
-    configured = str(getattr(settings, "P7_MUSIC_ROOT", "") or "").strip()
-    if not configured:
-        raise ImproperlyConfigured("P7_MUSIC_ROOT må konfigureres før FLAC-innlesing.")
-    root = Path(configured).expanduser().resolve()
-    if not root.is_dir():
-        raise ImproperlyConfigured("Den konfigurerte musikkroten finnes ikke.")
-    return root
+    return get_storage_root(require_directory=True).server_root
 
 
 def resolve_music_path(relative_path="."):
-    root = music_root()
-    value = str(relative_path or ".").strip().replace("\\", "/")
-    logical = PurePosixPath(value)
-    if logical.is_absolute() or ".." in logical.parts:
-        raise ValidationError("Velg en mappe innenfor den konfigurerte musikkroten.")
-    resolved = root.joinpath(*logical.parts).resolve()
-    if not resolved.is_relative_to(root):
-        raise ValidationError(
-            "Valgt mappe ligger utenfor den konfigurerte musikkroten."
-        )
-    return root, resolved
+    """Compatibility wrapper; path policy is owned by media_assets.storage."""
+    resolved = resolve_storage_path(relative_path, require_root=True)
+    return resolved.root.server_root, resolved.server_path
 
 
 def _source_system():

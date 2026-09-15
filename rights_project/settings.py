@@ -78,6 +78,9 @@ if S3_ENABLED:  # noqa: F405
 # logical relative paths.
 P7_NAS_ROOT = os.getenv("P7_NAS_ROOT") or os.getenv("P7_MUSIC_ROOT", "")
 P7_MUSIC_ROOT = os.getenv("P7_MUSIC_ROOT", P7_NAS_ROOT)
+# Optional path presented to an internal Windows client. It may differ from the
+# server mount used by Django and is never used for server-side file access.
+P7_MUSIC_CLIENT_ROOT = os.getenv("P7_MUSIC_CLIENT_ROOT", "")
 
 # Existing archive files are read-only by default. Explicit tag-writing tools must
 # pass through this installation-level gate; ingest and maintenance never enable it.

@@ -1,7 +1,5 @@
-from pathlib import Path
-
 from django import forms
-from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 from django.forms import formset_factory
 
 from catalogue.forms import TrackCreationForm
@@ -14,6 +12,7 @@ from catalogue.models import (
 from catalogue.validators import normalize_isrc
 from flac_ingest.adapter import normalize_energy
 from media_assets.models import FileAsset, FileLocation
+from media_assets.storage import get_storage_root
 from music_library.models import (
     Channel,
     MusicLibraryChannel,
@@ -215,19 +214,17 @@ class FlacScanForm(forms.Form):
         super().__init__(*args, **kwargs)
         if not user or not user.is_superuser:
             self.fields.pop("allow_uuid_recovery")
-        configured = str(getattr(settings, "P7_MUSIC_ROOT", "") or "").strip()
         choices = []
-        if configured:
-            root = Path(configured).expanduser()
-            if root.is_dir():
-                choices.append((".", "Hele musikkarkivet"))
-                choices.extend(
-                    (path.name, path.name)
-                    for path in sorted(
-                        root.iterdir(), key=lambda item: item.name.casefold()
-                    )
-                    if path.is_dir()
-                )
+        try:
+            root = get_storage_root(require_directory=True).server_root
+            choices.append((".", "Hele musikkarkivet"))
+            choices.extend(
+                (path.name, path.name)
+                for path in sorted(root.iterdir(), key=lambda item: item.name.casefold())
+                if path.is_dir()
+            )
+        except (ImproperlyConfigured, OSError):
+            pass
         self.fields["relative_root"].choices = choices
         if not choices:
             self.fields["relative_root"].help_text = (
@@ -246,19 +243,17 @@ class LibraryMaintenanceScopeForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        configured = str(getattr(settings, "P7_MUSIC_ROOT", "") or "").strip()
         choices = []
-        if configured:
-            root = Path(configured).expanduser()
-            if root.is_dir():
-                choices.append((".", "Hele musikkarkivet"))
-                choices.extend(
-                    (path.name, path.name)
-                    for path in sorted(
-                        root.iterdir(), key=lambda item: item.name.casefold()
-                    )
-                    if path.is_dir()
-                )
+        try:
+            root = get_storage_root(require_directory=True).server_root
+            choices.append((".", "Hele musikkarkivet"))
+            choices.extend(
+                (path.name, path.name)
+                for path in sorted(root.iterdir(), key=lambda item: item.name.casefold())
+                if path.is_dir()
+            )
+        except (ImproperlyConfigured, OSError):
+            pass
         self.fields["relative_root"].choices = choices
         if not choices:
             self.fields["relative_root"].help_text = (

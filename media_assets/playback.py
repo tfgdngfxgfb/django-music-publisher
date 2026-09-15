@@ -7,6 +7,12 @@ from pathlib import Path
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 
 from .models import FileAsset, FileLocation
+from .storage import (
+    ResolvedLocation,
+    StorageFileUnavailable,
+    resolve_location,
+    validate_readable_location,
+)
 
 
 class RadioPlaybackStatus(StrEnum):
@@ -22,6 +28,7 @@ class RadioPlaybackResolution:
     asset: FileAsset | None = None
     location: FileLocation | None = None
     path: Path | None = None
+    resolved_location: ResolvedLocation | None = None
 
     @property
     def message(self):
@@ -35,14 +42,6 @@ class RadioPlaybackResolution:
                 "Radiofilen er ikke tilgjengelig fra registrert plassering."
             ),
         }[self.status]
-
-
-def _resolved_path(location):
-    # Ingest owns the configured-root policy. Importing here avoids duplicating it
-    # while keeping media_assets.models independent of the ingest application.
-    from flac_ingest.services import resolve_music_path
-
-    return resolve_music_path(location.relative_path)[1]
 
 
 def resolve_current_radio_asset(recording, *, verify_file=False):
@@ -87,25 +86,28 @@ def resolve_current_radio_asset(recording, *, verify_file=False):
 
     asset, location = candidates[0]
     path = None
+    resolved_location = None
     if verify_file:
         try:
-            path = _resolved_path(location)
-        except (ImproperlyConfigured, ValidationError, OSError):
+            resolved_location = validate_readable_location(
+                resolve_location(location, require_root=True)
+            )
+            path = resolved_location.server_path
+        except (
+            ImproperlyConfigured,
+            ValidationError,
+            StorageFileUnavailable,
+            OSError,
+        ):
             return RadioPlaybackResolution(
                 RadioPlaybackStatus.FILE_UNAVAILABLE, asset=asset, location=location
-            )
-        if not path.is_file():
-            return RadioPlaybackResolution(
-                RadioPlaybackStatus.FILE_UNAVAILABLE,
-                asset=asset,
-                location=location,
-                path=path,
             )
     return RadioPlaybackResolution(
         RadioPlaybackStatus.AVAILABLE,
         asset=asset,
         location=location,
         path=path,
+        resolved_location=resolved_location,
     )
 
 

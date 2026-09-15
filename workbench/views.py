@@ -48,6 +48,7 @@ from managed_music.forms import ManagedRecordingCreationForm
 from managed_music.models import ManagedRecording
 from managed_music.services import create_managed_recording
 from media_assets.models import FileAsset, FileLocation
+from media_assets.storage import open_for_read, resolve_location
 from music_library.models import MusicLibraryEntry
 from parties.models import ArtistIdentity, Party
 from provenance.models import AppliedMetadataChange, MetadataAssertion, SourceSystem
@@ -2113,37 +2114,37 @@ def help_page(request):
     raise_exception=True,
 )
 def cover_image(request, pk):
-    """Read a bounded raster preview inside the configured NAS root only."""
+    """Read a bounded raster preview through the shared confined storage layer."""
     asset = get_object_or_404(FileAsset, pk=pk, role="cover_image")
     if not request.user.has_perm("music_library.view_musiclibraryentry"):
         return HttpResponseForbidden()
-    if not settings.P7_NAS_ROOT:
-        raise Http404
     thumbnail_size = 64 if request.GET.get("size") == "64" else 640
     quality = 78 if thumbnail_size == 64 else 85
-    root = Path(settings.P7_NAS_ROOT).resolve()
     for location in asset.locations.filter(
         storage_type="nas", is_current=True, status="active"
     )[:5]:
         try:
-            path = location.resolved_nas_path().resolve()
-            if not path.is_relative_to(root) or path.stat().st_size > 20 * 1024 * 1024:
+            resolved = resolve_location(location, require_root=True)
+            if resolved.server_path.stat().st_size > 20 * 1024 * 1024:
                 continue
-            with Image.open(path) as source:
-                if (
-                    source.format not in {"JPEG", "PNG", "WEBP"}
-                    or source.width * source.height > 25000000
-                ):
-                    continue
-                source.thumbnail((thumbnail_size, thumbnail_size))
-                output = BytesIO()
-                source.convert("RGB").save(output, format="JPEG", quality=quality)
+            with open_for_read(resolved) as input_file:
+                with Image.open(input_file) as source:
+                    if (
+                        source.format not in {"JPEG", "PNG", "WEBP"}
+                        or source.width * source.height > 25000000
+                    ):
+                        continue
+                    source.thumbnail((thumbnail_size, thumbnail_size))
+                    output = BytesIO()
+                    source.convert("RGB").save(output, format="JPEG", quality=quality)
             response = HttpResponse(output.getvalue(), content_type="image/jpeg")
             response["Cache-Control"] = "private, no-store"
             response["X-Content-Type-Options"] = "nosniff"
             return response
         except (
+            ImproperlyConfigured,
             OSError,
+            ValidationError,
             ValueError,
             UnidentifiedImageError,
             Image.DecompressionBombError,

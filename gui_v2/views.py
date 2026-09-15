@@ -22,10 +22,11 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 
 from catalogue.models import DuplicateCandidate, ExternalIdentifier, Recording, RecordingContribution, Release, ReleaseTrack
 from flac_ingest.models import FlacIngestItem
-from flac_ingest.services import apply_batch, preview_radio_file_split, resolve_music_path, scan_directory, split_radio_file_to_new_recording
+from flac_ingest.services import apply_batch, preview_radio_file_split, scan_directory, split_radio_file_to_new_recording
 from managed_music.models import ManagedRecording
 from media_assets.models import FileAsset, FileLocation
 from media_assets.playback import RadioPlaybackStatus, iter_file_range, resolve_current_radio_asset
+from media_assets.storage import get_client_folder, open_for_read, resolve_location
 from music_library.models import Channel, MusicLibraryChannel, MusicLibraryEntry, MusicLibraryTargetAudience, TargetAudience
 from provenance.models import MetadataAssertion
 from rights.forms import ReleaseRightsClaimForm
@@ -485,8 +486,9 @@ def music_library(request):
             for location in asset.current_locations:
                 try:
                     if location.storage_type == FileLocation.StorageType.NAS:
-                        _, file_path = resolve_music_path(location.relative_path)
-                        location.onetagger_path = str(file_path.parent)
+                        location.onetagger_path = get_client_folder(location) or str(
+                            resolve_location(location).server_path.parent
+                        )
                     else:
                         location.onetagger_path = ""
                 except (ImproperlyConfigured, ValidationError, OSError):
@@ -646,7 +648,7 @@ def recording_audio(request, recording_id):
         return HttpResponse(resolution.message, status=status_code, content_type="text/plain; charset=utf-8")
 
     try:
-        handle = resolution.path.open("rb")
+        handle = open_for_read(resolution.resolved_location)
         size = os.fstat(handle.fileno()).st_size
     except OSError:
         logger.warning(
