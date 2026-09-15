@@ -183,11 +183,17 @@ def stat_location(location):
 
 def validate_readable_location(location_or_resolution):
     """Return a canonical location only when it currently names a readable file."""
-    resolved = (
-        location_or_resolution
-        if isinstance(location_or_resolution, ResolvedLocation)
-        else resolve_location(location_or_resolution, require_root=True)
-    )
+    if isinstance(location_or_resolution, ResolvedLocation):
+        # Treat ResolvedLocation as a description, not as proof that a path is
+        # still confined. Re-resolve immediately before access so a stale or
+        # manually constructed object cannot bypass the configured root.
+        resolved = resolve_storage_path(
+            location_or_resolution.logical_path,
+            root_key=location_or_resolution.root.key,
+            require_root=True,
+        )
+    else:
+        resolved = resolve_location(location_or_resolution, require_root=True)
     if not resolved.server_path.is_file() or not os.access(
         resolved.server_path, os.R_OK
     ):

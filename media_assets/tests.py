@@ -1,5 +1,5 @@
 import tempfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from unittest.mock import patch
 
 from django.core.exceptions import ImproperlyConfigured, ValidationError
@@ -9,8 +9,10 @@ from catalogue.models import Recording
 
 from media_assets.models import FileAsset, FileLocation
 from media_assets.storage import (
+    ResolvedLocation,
     StorageFileUnavailable,
     StoragePathError,
+    StorageRoot,
     get_client_folder,
     get_client_path,
     get_storage_root,
@@ -187,6 +189,28 @@ class ReadOnlyStorageTests(TestCase):
         after = self.path.stat()
         self.assertEqual(self.path.read_bytes(), self.payload)
         self.assertEqual(after.st_mtime_ns, before.st_mtime_ns)
+
+    def test_open_revalidates_a_supplied_resolved_location(self):
+        outside = self.root.parent / f"{self.root.name}-outside.flac"
+        outside.write_bytes(b"outside-root")
+        self.addCleanup(lambda: outside.unlink(missing_ok=True))
+        supplied = ResolvedLocation(
+            root=StorageRoot(key="music_library", server_root=self.root),
+            logical_path=PurePosixPath("Artist/Album/track.flac"),
+            server_path=outside,
+            client_path=None,
+        )
+        with self._settings(), open_for_read(supplied) as handle:
+            self.assertEqual(handle.read(), self.payload)
+
+        unsafe = ResolvedLocation(
+            root=StorageRoot(key="music_library", server_root=self.root),
+            logical_path=PurePosixPath("../outside.flac"),
+            server_path=outside,
+            client_path=None,
+        )
+        with self._settings(), self.assertRaises(StoragePathError):
+            open_for_read(unsafe)
 
     def test_explicit_approved_root_configuration_is_supported(self):
         configured = {

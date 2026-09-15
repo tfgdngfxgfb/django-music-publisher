@@ -855,9 +855,12 @@ class GuiV2WorkspaceTests(TestCase):
         )
         return asset
 
-    def test_onetagger_copy_value_is_plain_containing_folder_path(self):
+    def test_onetagger_uses_configured_client_folder(self):
         self._superuser()
-        with tempfile.TemporaryDirectory() as root, override_settings(P7_MUSIC_ROOT=root):
+        with tempfile.TemporaryDirectory() as root, override_settings(
+            P7_MUSIC_ROOT=root,
+            P7_MUSIC_CLIENT_ROOT=r"\\P7-CLIENT\Music",
+        ):
             self._radio_file(
                 root, self.recording, title=self.recording.title, genre="Pop", energy=3
             )
@@ -866,10 +869,33 @@ class GuiV2WorkspaceTests(TestCase):
             )
             selected = response.context["selected"]
             copied_path = selected.radio_files[0].current_locations[0].onetagger_path
-            self.assertEqual(copied_path, str((Path(root) / "radio").resolve()))
+            self.assertEqual(copied_path, r"\\P7-CLIENT\Music\radio")
             self.assertNotIn("WindowsPath(", copied_path)
             self.assertNotIn("(", copied_path)
             self.assertContains(response, "Kopier mappe til OneTagger")
+
+    def test_onetagger_does_not_fall_back_to_server_path(self):
+        self._superuser()
+        with tempfile.TemporaryDirectory() as root, override_settings(
+            P7_MUSIC_ROOT=root,
+            P7_MUSIC_CLIENT_ROOT="",
+        ):
+            self._radio_file(
+                root, self.recording, title=self.recording.title, genre="Pop", energy=3
+            )
+            response = self.client.get(
+                reverse("gui_v2:music_library"), {"selected": self.entry.pk}
+            )
+            selected = response.context["selected"]
+            self.assertEqual(
+                selected.radio_files[0].current_locations[0].onetagger_path, ""
+            )
+            self.assertContains(
+                response,
+                "Windows-/klientsti er ikke konfigurert for denne lagringsroten.",
+            )
+            self.assertNotContains(response, "Kopier relativ filsti")
+            self.assertNotContains(response, str(Path(root).resolve()))
 
     @override_settings(GUI_V2_WRITES_ENABLED=True)
     def test_split_file_has_preview_and_keeps_flac_read_only(self):

@@ -211,6 +211,24 @@ class RecordingFilesPageTests(TestCase):
         self.assertTrue(current.is_current)
         self.assertContains(response, str(radio.pk))
 
+    def test_general_copy_action_requires_one_current_client_location(self):
+        asset, _, _ = self._radio_file()
+        FileLocation.objects.create(
+            asset=asset,
+            storage_type=FileLocation.StorageType.LOCAL,
+            relative_path="Alternativ/Nordlys.flac",
+            status=FileLocation.Status.ACTIVE,
+            is_current=True,
+        )
+        with self._settings():
+            response = self.client.get(self._url(selected_file=asset.pk))
+        selected = response.context["file_view"]["selected"]
+        self.assertIsNone(selected["primary_client_location"])
+        self.assertTrue(selected["client_location_ambiguous"])
+        self.assertContains(
+            response, "Velg plassering nedenfor for å kopiere riktig sti."
+        )
+
     @override_settings(GUI_V2_WRITES_ENABLED=True)
     def test_current_radio_exposes_existing_rescan_action(self):
         asset, _, _ = self._radio_file()

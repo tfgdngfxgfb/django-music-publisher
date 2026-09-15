@@ -26,7 +26,7 @@ from flac_ingest.services import apply_batch, preview_radio_file_split, scan_dir
 from managed_music.models import ManagedRecording
 from media_assets.models import FileAsset, FileLocation
 from media_assets.playback import RadioPlaybackStatus, iter_file_range, resolve_current_radio_asset
-from media_assets.storage import get_client_folder, open_for_read, resolve_location
+from media_assets.storage import get_client_folder, open_for_read
 from music_library.models import Channel, MusicLibraryChannel, MusicLibraryEntry, MusicLibraryTargetAudience, TargetAudience
 from provenance.models import MetadataAssertion
 from rights.forms import ReleaseRightsClaimForm
@@ -487,9 +487,7 @@ def music_library(request):
             for location in asset.current_locations:
                 try:
                     if location.storage_type == FileLocation.StorageType.NAS:
-                        location.onetagger_path = get_client_folder(location) or str(
-                            resolve_location(location).server_path.parent
-                        )
+                        location.onetagger_path = get_client_folder(location) or ""
                     else:
                         location.onetagger_path = ""
                 except (ImproperlyConfigured, ValidationError, OSError):

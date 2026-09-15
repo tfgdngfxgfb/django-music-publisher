@@ -102,6 +102,7 @@ def _asset_data(asset, current_asset_id):
         for item in current_locations
         if item["object"].status == FileLocation.Status.ACTIVE
     ]
+    active_client_locations = [item for item in active_locations if item["client_path"]]
     technical = _technical(asset)
     is_current_radio = asset.pk == current_asset_id
     if is_current_radio:
@@ -156,9 +157,10 @@ def _asset_data(asset, current_asset_id):
         "current_locations": current_locations,
         "last_seen": last_seen,
         "has_client_path": any(item["client_path"] for item in locations),
-        "primary_client_location": next(
-            (item for item in current_locations if item["client_path"]), None
+        "primary_client_location": (
+            active_client_locations[0] if len(active_client_locations) == 1 else None
         ),
+        "client_location_ambiguous": len(active_client_locations) > 1,
         "can_rescan": any(
             item["object"].is_current
             and item["object"].storage_type == FileLocation.StorageType.NAS
