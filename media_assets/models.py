@@ -188,6 +188,43 @@ class FileAsset(CanonicalModel):
                     )
                 }
             )
+        membership = (
+            DigitizationFile.objects.filter(asset_id=self.pk)
+            .select_related("batch")
+            .first()
+            if not self._state.adding
+            else None
+        )
+        if membership:
+            if self.role not in {
+                self.Role.RAW_DIGITIZATION,
+                self.Role.EDITED_WAV_MASTER,
+            }:
+                raise ValidationError(
+                    "Digitaliseringsfilens rolle kan ikke endres til denne filtypen."
+                )
+            if self.role == self.Role.RAW_DIGITIZATION and (
+                self.recording_id
+                or self.release_id != membership.batch.release_id
+            ):
+                raise ValidationError(
+                    "Råfilen må beholde utgivelsestilhørigheten uten Recording."
+                )
+            if (
+                self.release_id
+                and self.release_id != membership.batch.release_id
+            ):
+                raise ValidationError(
+                    "Digitaliseringsfilen tilhører en annen utgivelse."
+                )
+            if (
+                self.release_track_id
+                and self.release_track.release_id
+                != membership.batch.release_id
+            ):
+                raise ValidationError(
+                    "Sporet tilhører en annen digitaliseringsutgivelse."
+                )
 
     def __str__(self):
         return self.filename
@@ -370,6 +407,7 @@ class RadioFlacGeneration(CanonicalModel):
     technical_plan = models.JSONField(default=dict)
     expected_tags = models.JSONField(default=dict)
     metadata_diff = models.JSONField(default=list)
+    database_metadata_confirmed = models.BooleanField(default=False)
     verification = models.JSONField(default=dict, blank=True)
     status = models.CharField(max_length=20, choices=Status.choices)
     failure_message = models.TextField(blank=True)
@@ -436,9 +474,26 @@ class MediaAssetEvent(CanonicalModel):
         METADATA_VERIFIED = "metadata_verified", "Metadata verifisert"
         RADIO_ACTIVATED = "radio_activated", "Radiofil aktivert"
         RADIO_SUPERSEDED = "radio_superseded", "Radiofil avløst"
+        DIGITIZATION_REGISTERED = (
+            "digitization_registered",
+            "Digitaliseringsfil registrert",
+        )
+        RAW_LINKED = "raw_linked", "Råkilde koblet"
+        RECORDING_LINKED = "recording_linked", "Master koblet til innspilling"
 
     recording = models.ForeignKey(
-        Recording, on_delete=models.PROTECT, related_name="media_events"
+        Recording,
+        on_delete=models.PROTECT,
+        related_name="media_events",
+        null=True,
+        blank=True,
+    )
+    digitization_batch = models.ForeignKey(
+        "DigitizationBatch",
+        on_delete=models.PROTECT,
+        related_name="events",
+        null=True,
+        blank=True,
     )
     asset = models.ForeignKey(
         FileAsset,
@@ -469,9 +524,33 @@ class MediaAssetEvent(CanonicalModel):
 
     def clean(self):
         super().clean()
+        digitization_event = self.event_type in {
+            self.EventType.DIGITIZATION_REGISTERED,
+            self.EventType.RAW_LINKED,
+            self.EventType.RECORDING_LINKED,
+        }
+        if digitization_event:
+            if not self.digitization_batch_id:
+                raise ValidationError(
+                    "Digitaliseringshendelsen må ha en batch."
+                )
+            for value in (self.asset, self.related_asset):
+                if (
+                    value
+                    and not DigitizationFile.objects.filter(
+                        batch_id=self.digitization_batch_id, asset=value
+                    ).exists()
+                ):
+                    raise ValidationError("Filressursen må høre til batchen.")
+        elif not self.recording_id:
+            raise ValidationError("Mediehendelsen må ha en innspilling.")
         for field in ("asset", "related_asset"):
             value = getattr(self, field)
-            if value and value.recording_id != self.recording_id:
+            if (
+                value
+                and not digitization_event
+                and value.recording_id != self.recording_id
+            ):
                 raise ValidationError(
                     {field: "Filressursen må tilhøre innspillingen."}
                 )
@@ -479,6 +558,179 @@ class MediaAssetEvent(CanonicalModel):
             raise ValidationError(
                 "Mediefilhendelser er historikk og kan ikke endres."
             )
+
+
+class DigitizationBatch(CanonicalModel):
+    """One capture attempt; release is the music-specific work context."""
+
+    class Status(models.TextChoices):
+        OPEN = "open", "Under arbeid"
+        COMPLETE = "complete", "Avsluttet"
+
+    release = models.ForeignKey(
+        Release, on_delete=models.PROTECT, related_name="digitization_batches"
+    )
+    title = models.CharField(
+        "navn på digitalisering",
+        max_length=255,
+        validators=[validate_not_blank],
+    )
+    captured_on = models.DateField(
+        "digitaliseringsdato", null=True, blank=True
+    )
+    source_description = models.TextField("kildebeskrivelse", blank=True)
+    notes = models.TextField("merknad", blank=True)
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.OPEN
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT
+    )
+
+    class Meta:
+        ordering = ("-created_at", "id")
+        permissions = [
+            (
+                "operate_digitization",
+                "Utføre kontrollerte digitaliseringsoperasjoner",
+            )
+        ]
+
+    def __str__(self):
+        return self.title
+
+
+class DigitizationFile(CanonicalModel):
+    """Membership independent of whether an edited asset has a Recording yet."""
+
+    batch = models.ForeignKey(
+        DigitizationBatch, on_delete=models.PROTECT, related_name="files"
+    )
+    asset = models.OneToOneField(
+        FileAsset, on_delete=models.PROTECT, related_name="digitization_file"
+    )
+    registration_key = models.CharField(
+        max_length=64, unique=True, null=True, blank=True, editable=False
+    )
+
+    def clean(self):
+        super().clean()
+        if not self._state.adding:
+            original = type(self).objects.get(pk=self.pk)
+            if (
+                original.asset_id != self.asset_id
+                or original.batch_id != self.batch_id
+            ):
+                raise ValidationError(
+                    "Batchtilhørighet er bevart proveniens og kan ikke flyttes."
+                )
+        asset = self.asset
+        if asset.role not in {
+            FileAsset.Role.RAW_DIGITIZATION,
+            FileAsset.Role.EDITED_WAV_MASTER,
+        }:
+            raise ValidationError(
+                "Bare råfiler og redigerte mastere inngår i en digitalisering."
+            )
+        if asset.role == FileAsset.Role.RAW_DIGITIZATION and (
+            asset.recording_id or asset.release_id != self.batch.release_id
+        ):
+            raise ValidationError(
+                "Råfilen må tilhøre batchens utgivelse uten innspilling."
+            )
+        if asset.release_id and asset.release_id != self.batch.release_id:
+            raise ValidationError("Filen tilhører en annen utgivelse.")
+        if (
+            asset.release_track_id
+            and asset.release_track.release_id != self.batch.release_id
+        ):
+            raise ValidationError(
+                "Sporforekomsten tilhører en annen utgivelse."
+            )
+
+
+class DigitizationDerivation(CanonicalModel):
+    """Human-declared external editing, distinct from 4.5A generated-from."""
+
+    source_asset = models.ForeignKey(
+        FileAsset,
+        on_delete=models.PROTECT,
+        related_name="digitization_outputs",
+    )
+    derived_asset = models.ForeignKey(
+        FileAsset,
+        on_delete=models.PROTECT,
+        related_name="digitization_sources",
+    )
+    is_active = models.BooleanField(default=True)
+    note = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT
+    )
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=~models.Q(source_asset=models.F("derived_asset")),
+                name="digitization_not_self",
+            ),
+            models.UniqueConstraint(
+                fields=("derived_asset",),
+                condition=models.Q(is_active=True),
+                name="digitization_one_active_source",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        if not self._state.adding:
+            original = type(self).objects.get(pk=self.pk)
+            if any(
+                getattr(original, field) != getattr(self, field)
+                for field in (
+                    "source_asset_id",
+                    "derived_asset_id",
+                    "created_by_id",
+                    "note",
+                )
+            ) or (not original.is_active and self.is_active):
+                raise ValidationError(
+                    "Historiske råkoblinger bevares. Opprett en ny korrigert kobling."
+                )
+        if self.source_asset_id == self.derived_asset_id:
+            raise ValidationError("En fil kan ikke være sin egen råkilde.")
+        if (
+            self.source_asset.role != FileAsset.Role.RAW_DIGITIZATION
+            or self.derived_asset.role != FileAsset.Role.EDITED_WAV_MASTER
+        ):
+            raise ValidationError(
+                "Koblingen må gå fra rå digitalisering til redigert WAV-master."
+            )
+        memberships = dict(
+            DigitizationFile.objects.filter(
+                asset_id__in=[self.source_asset_id, self.derived_asset_id]
+            ).values_list("asset_id", "batch_id")
+        )
+        if len(memberships) != 2 or len(set(memberships.values())) != 1:
+            raise ValidationError(
+                "Råkilde og master må tilhøre samme digitaliseringsbatch."
+            )
+
+
+class DigitizationPlan(CanonicalModel):
+    """Persisted preview; apply revalidates dependencies before any mutation."""
+
+    batch = models.ForeignKey(
+        DigitizationBatch, on_delete=models.PROTECT, related_name="plans"
+    )
+    operation = models.CharField(max_length=30)
+    payload = models.JSONField(default=dict)
+    expected_state = models.CharField(max_length=64)
+    consequences = models.JSONField(default=list)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT
+    )
+    applied_at = models.DateTimeField(null=True, blank=True)
 
 
 class FileLocation(CanonicalModel):

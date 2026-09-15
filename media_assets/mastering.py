@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import json
 import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone as datetime_timezone
@@ -350,6 +351,8 @@ def _read_radio_source(recording):
     from flac_ingest.adapter import read_flac
 
     resolution = resolve_current_radio_asset(recording, verify_file=True)
+    if resolution.status == RadioPlaybackStatus.NO_RADIO_FILE:
+        return None, None
     if resolution.status == RadioPlaybackStatus.AMBIGUOUS:
         raise ValidationError(
             "Ingen entydig gjeldende radiofil. Kontroller filene før generering."
@@ -361,10 +364,72 @@ def _read_radio_source(recording):
     return resolution.asset, read_flac(resolution.path)
 
 
+def _first_radio_db_tags(recording):
+    """Only values actually registered in Music Library, with no inferred defaults."""
+    from types import SimpleNamespace
+    from music_library.models import MusicLibraryEntry
+
+    entry = MusicLibraryEntry.objects.filter(recording=recording).first()
+    if not entry:
+        return {}
+    return _radio_tags(
+        SimpleNamespace(
+            parsed={
+                "genre": entry.genre,
+                "language": entry.language,
+                "energy": entry.energy,
+                "gender": entry.gender,
+                "rotation_suitability": entry.rotation_suitability,
+                "channels": [item.name for item in entry.channels.all()],
+                "target_audiences": [
+                    item.name for item in entry.target_audiences.all()
+                ],
+            }
+        )
+    )
+
+
+def _first_radio_release_tags(recording, master):
+    # Prefer an explicit, human-reviewed occurrence. Multiple occurrences are
+    # not interchangeable album metadata and must never be chosen arbitrarily.
+    track = master.release_track
+    if track is None:
+        tracks = list(
+            recording.release_tracks.select_related(
+                "release", "release__label"
+            )[:2]
+        )
+        track = tracks[0] if len(tracks) == 1 else None
+    if track is None:
+        return {}
+    release = track.release
+    barcodes = list(
+        release.identifiers.filter(
+            scheme__in=(
+                ExternalIdentifier.Scheme.UPC,
+                ExternalIdentifier.Scheme.EAN,
+                ExternalIdentifier.Scheme.GTIN,
+            )
+        )
+    )
+    return _clean_tags(
+        {
+            "ALBUM": release.title,
+            "TRACKNUMBER": track.track_number or track.sequence_number,
+            "DISCNUMBER": track.disc_number,
+            "DATE": release.release_date or release.release_year,
+            "CATALOGNUMBER": release.catalogue_number,
+            "BARCODE": (
+                barcodes[0].normalized_value if len(barcodes) == 1 else None
+            ),
+        }
+    )
+
+
 def _metadata_diff(snapshot, expected):
     existing = {
         str(key).upper(): [str(item) for item in values]
-        for key, values in snapshot.raw_tags.items()
+        for key, values in (snapshot.raw_tags.items() if snapshot else [])
     }
     return [
         {"tag": key, "old": existing.get(key, []), "new": value}
@@ -444,12 +509,18 @@ def build_generation_preview(
     ).exists()
     catalogue = (
         _db_catalogue_tags(recording)
-        if is_managed
+        if is_managed or snapshot is None
         else _snapshot_catalogue_tags(snapshot, recording)
     )
+    if snapshot is None:
+        catalogue.update(_first_radio_release_tags(recording, master))
     expected = {
         **catalogue,
-        **_radio_tags(snapshot),
+        **(
+            _radio_tags(snapshot)
+            if snapshot
+            else _first_radio_db_tags(recording)
+        ),
         "P7UUID": [str(recording.pk)],
     }
     target_root_key = getattr(
@@ -483,15 +554,37 @@ def build_generation_preview(
         "target_root_read_only": target.root.read_only,
         "target_exists": target_exists,
         "is_managed": is_managed,
+        "first_radio": snapshot is None,
+        "metadata_digest": sha256(
+            json.dumps(expected, sort_keys=True).encode()
+        ).hexdigest(),
     }
 
 
-def create_generation_plan(*, recording, user, target_relative_path=None):
+def create_generation_plan(
+    *,
+    recording,
+    user,
+    target_relative_path=None,
+    database_metadata_confirmed=False,
+    expected_metadata_digest=None,
+):
     preview = build_generation_preview(
         recording=recording,
         target_relative_path=target_relative_path,
         allow_existing_target=True,
     )
+    if preview["first_radio"] and not database_metadata_confirmed:
+        raise ValidationError(
+            "Bekreft at databaseopplysningene er kontrollert mot det fysiske mediet før første radiofil opprettes."
+        )
+    if (
+        expected_metadata_digest
+        and expected_metadata_digest != preview["metadata_digest"]
+    ):
+        raise ValidationError(
+            "Metadata er endret siden forhåndsvisningen. Kontroller opplysningene på nytt."
+        )
     lookup = {
         "target_root_key": preview["target_root_key"],
         "target_relative_path": preview["target_relative_path"],
@@ -508,6 +601,8 @@ def create_generation_plan(*, recording, user, target_relative_path=None):
                 "metadata_diff": preview["metadata_diff"],
                 "status": RadioFlacGeneration.Status.PLANNED,
                 "created_by": user,
+                "database_metadata_confirmed": preview["first_radio"]
+                and database_metadata_confirmed,
             },
         )
     except ValidationError:
@@ -523,7 +618,10 @@ def create_generation_plan(*, recording, user, target_relative_path=None):
         matches = (
             plan.recording_id == recording.pk
             and plan.master_asset_id == preview["master"].pk
-            and plan.radio_metadata_source_id == preview["radio_source"].pk
+            and plan.radio_metadata_source_id
+            == (
+                preview["radio_source"].pk if preview["radio_source"] else None
+            )
             and plan.technical_plan == preview["inspection"].technical_metadata
             and plan.expected_tags == preview["expected_tags"]
         )
@@ -618,6 +716,13 @@ def generate_candidate(*, generation, user):
         return generation
     if generation.status != RadioFlacGeneration.Status.PLANNED:
         raise ValidationError("Bare en planlagt generering kan kjøres.")
+    if (
+        not generation.radio_metadata_source_id
+        and not generation.database_metadata_confirmed
+    ):
+        raise ValidationError(
+            "Første radiofil krever uttrykkelig bekreftet databasegrunnlag."
+        )
     selection = RecordingMediaSelection.objects.filter(
         recording=generation.recording
     ).first()
