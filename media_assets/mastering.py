@@ -469,20 +469,33 @@ def create_generation_plan(*, recording, user, target_relative_path=None):
         target_relative_path=target_relative_path,
         allow_existing_target=True,
     )
-    plan, created = RadioFlacGeneration.objects.get_or_create(
-        target_root_key=preview["target_root_key"],
-        target_relative_path=preview["target_relative_path"],
-        defaults={
-            "recording": recording,
-            "master_asset": preview["master"],
-            "radio_metadata_source": preview["radio_source"],
-            "technical_plan": preview["inspection"].technical_metadata,
-            "expected_tags": preview["expected_tags"],
-            "metadata_diff": preview["metadata_diff"],
-            "status": RadioFlacGeneration.Status.PLANNED,
-            "created_by": user,
-        },
-    )
+    lookup = {
+        "target_root_key": preview["target_root_key"],
+        "target_relative_path": preview["target_relative_path"],
+    }
+    try:
+        plan, created = RadioFlacGeneration.objects.get_or_create(
+            **lookup,
+            defaults={
+                "recording": recording,
+                "master_asset": preview["master"],
+                "radio_metadata_source": preview["radio_source"],
+                "technical_plan": preview["inspection"].technical_metadata,
+                "expected_tags": preview["expected_tags"],
+                "metadata_diff": preview["metadata_diff"],
+                "status": RadioFlacGeneration.Status.PLANNED,
+                "created_by": user,
+            },
+        )
+    except ValidationError:
+        # CanonicalModel validates uniqueness before INSERT. A concurrent
+        # transaction may therefore surface model validation rather than the
+        # IntegrityError that get_or_create normally retries. Re-read the
+        # deterministic target and apply the same semantic equality check.
+        plan = RadioFlacGeneration.objects.filter(**lookup).first()
+        if plan is None:
+            raise
+        created = False
     if not created:
         matches = (
             plan.recording_id == recording.pk
