@@ -32,8 +32,8 @@ jobs:
       DEBUG: "true"
       DATABASE_URL: ${{ matrix.database == 'postgres' && 'postgresql://rights:local-test-only@127.0.0.1:5432/rights' || 'sqlite:///ci.sqlite3' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
           cache: pip
@@ -46,14 +46,5 @@ jobs:
       - run: python manage.py migrate --noinput
       - run: python manage.py makemigrations --check --dry-run
       - name: Full test suite
-        if: ${{ !matrix.experimental }}
         run: python manage.py test
-      - name: Python prerelease compatibility
-        if: ${{ matrix.experimental }}
-        run: >-
-          python manage.py test
-          media_assets.test_mastering
-          media_assets.test_postgresql
-          media_assets.tests
-          flac_ingest.tests
       - run: python scripts/smoke_admin.py

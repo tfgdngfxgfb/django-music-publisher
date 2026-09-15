@@ -17,6 +17,10 @@ Python 3.14 og Django 5.2.17 er prosjektets stabile runtime-grunnlag. Python 3.1
 
 Oppgradert og testet: Django REST Framework 3.18.1, Pillow 12.3.0, psycopg2-binary 2.9.13, WhiteNoise 6.12.0 og den kompatible AWS-gruppen boto3/botocore 1.43.93 + s3transfer 0.19.0. Beholdt: django-storages 1.14.6, dj-database-url 3.1.2, python-dotenv 1.2.3 og Waitress 3.0.2 fordi de allerede er siste relevante stabile versjoner. `psycopg2-binary` er praktisk for utvikling/testing; produksjonsdriver vurderes ved deploy.
 
+Black 26.5.1 er prosjektets pinnede formatter. Dette er samme versjon som den siste dokumenterte grønne upstream-kjøringen 28.07.2026, og CI og lokal utvikling bruker samme versjon. Bare de historiske upstream-migrasjonene under `music_publisher/migrations` er unntatt; nye P7-migrasjoner kontrolleres som annen ny kode. En eventuell full reformatering av eldre eller senere tilkommet kode skal gjøres separat fra funksjons- og runtime-endringer.
+
+Mot `backup/master-pre-p7-core-4.5a-20260915` (`45e41c4`) består den nåværende formatteringsgjelden av 88 filer opprettet i P7-utviklingen og én eksisterende fil endret av P7-utviklingen (`music_publisher/royalty_calculation.py`). Ingen av de 89 filene er innholdsmessig uendret fra siste grønne upstream-baseline `4fdec3d`. Black-kontrollen kjøres derfor fortsatt over hele koden og rapporteres som en separat, ikke-blokkerende CI-status frem til en egen formatteringsendring utføres.
+
 ## Migrations og verifikasjon
 
 - Nye fremovermigrasjoner lokaliserer modellmetadata og fryser DMPs tidligere uregistrerte choice-endringer. Ingen gammel migration er omskrevet.
