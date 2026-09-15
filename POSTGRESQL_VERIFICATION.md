@@ -4,12 +4,12 @@ P7 Core through phase 4.5A is tested with PostgreSQL 17.11, matching
 `compose.yaml` and the GitHub Actions service container.
 
 The authoritative CI matrix uses Python 3.14 as P7's only stable runtime for
-the full SQLite and PostgreSQL suites. Python 3.15.0rc2 is an experimental compatibility job that
-runs migrations and the targeted media, mastering, PostgreSQL-concurrency, and
-FLAC-ingest suites. It is not the sole production runtime. The declared audio
-runtime dependencies are NumPy 2.5.3 and SoundFile 0.13.1; psycopg2-binary
-2.9.13 provides the PostgreSQL driver. All three install and run on the 3.15 RC
-Linux runner without additional system packages.
+the full SQLite and PostgreSQL suites. Python 3.15.0rc2 is an experimental
+compatibility job that runs the same full PostgreSQL suite. It is not the sole
+production runtime. The declared audio runtime dependencies are NumPy 2.5.3
+and SoundFile 0.14.0; psycopg2-binary 2.9.13 provides the PostgreSQL driver.
+All three install and run on the 3.14 and 3.15 RC Linux runners without
+additional system packages. SoundFile uses the wheel's bundled libsndfile.
 
 Run locally:
 
@@ -33,10 +33,10 @@ Verified in GitHub Actions on 15 September 2026:
 
 - Python 3.14 / PostgreSQL 17.11: 354 tests passed.
 - Python 3.14 / SQLite: 348 tests passed, one PostgreSQL-only test class skipped.
-- Python 3.15.0rc2 / PostgreSQL 17.11: 95 targeted compatibility tests passed.
+- Python 3.15.0rc2 / PostgreSQL 17.11: 354 tests passed.
 - Fresh migrations, the pre-4.5A `media_assets.0003` upgrade path,
-  `manage.py check`, migration-drift checks, and the operational smoke test
-  passed in every matrix job.
+  dependency integrity, `manage.py check`, migration-drift checks, and the
+  operational smoke test passed in every matrix job.
 
 The PostgreSQL run verifies the partial current-radio unique constraint with a
 direct violating update, real separate-connection activation and generation

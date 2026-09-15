@@ -15,11 +15,11 @@ Dato: 13. september 2026. Prosjektet heter **P7 Archive & Rights / P7 Arkiv og r
 
 Python 3.14 og Django 5.2.17 er prosjektets stabile runtime-grunnlag. Python 3.15 testes separat som en pre-release kompatibilitetsjobb og er ikke produksjonskrav.
 
-Oppgradert og testet: Django REST Framework 3.18.1, Pillow 12.3.0, psycopg2-binary 2.9.13, WhiteNoise 6.12.0 og den kompatible AWS-gruppen boto3/botocore 1.43.93 + s3transfer 0.19.0. Beholdt: django-storages 1.14.6, dj-database-url 3.1.2, python-dotenv 1.2.3 og Waitress 3.0.2 fordi de allerede er siste relevante stabile versjoner. `psycopg2-binary` er praktisk for utvikling/testing; produksjonsdriver vurderes ved deploy.
+Oppgradert og testet: Django REST Framework 3.18.1, Markdown 3.10.3, NumPy 2.5.3, SoundFile 0.14.0, Pillow 12.3.0, psycopg2-binary 2.9.13, WhiteNoise 6.12.0 og den kompatible AWS-gruppen boto3/botocore 1.43.93 + s3transfer 0.19.0. Beholdt: django-storages 1.14.6, dj-database-url 3.1.2, python-dotenv 1.2.3 og Waitress 3.0.2 fordi de allerede er siste relevante stabile versjoner. `psycopg2-binary` er praktisk for utvikling/testing; produksjonsdriver vurderes ved deploy.
 
 Black 26.5.1 er prosjektets pinnede formatter. Dette er samme versjon som den siste dokumenterte grønne upstream-kjøringen 28.07.2026, og CI og lokal utvikling bruker samme versjon. Bare de historiske upstream-migrasjonene under `music_publisher/migrations` er unntatt; nye P7-migrasjoner kontrolleres som annen ny kode. En eventuell full reformatering av eldre eller senere tilkommet kode skal gjøres separat fra funksjons- og runtime-endringer.
 
-Mot `backup/master-pre-p7-core-4.5a-20260915` (`45e41c4`) består den nåværende formatteringsgjelden av 88 filer opprettet i P7-utviklingen og én eksisterende fil endret av P7-utviklingen (`music_publisher/royalty_calculation.py`). Ingen av de 89 filene er innholdsmessig uendret fra siste grønne upstream-baseline `4fdec3d`. Gjelden normaliseres i én separat, mekanisk formatteringscommit etter runtime- og PostgreSQL-verifikasjonen; Black forblir en ordinær CI-kvalitetsport.
+Mot `backup/master-pre-p7-core-4.5a-20260915` (`45e41c4`) bestod formatteringsgjelden av 88 filer opprettet i P7-utviklingen og én eksisterende fil endret av P7-utviklingen (`music_publisher/royalty_calculation.py`). Ingen av de 89 filene var innholdsmessig uendret fra siste grønne upstream-baseline `4fdec3d`. De ble normalisert i den separate mekaniske committen `0e68fce`; Black forblir en ordinær CI-kvalitetsport og rapporterer nå null avvik.
 
 ## Migrations og verifikasjon
 
