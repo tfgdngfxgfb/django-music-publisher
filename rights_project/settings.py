@@ -84,6 +84,27 @@ P7_MUSIC_CLIENT_ROOT = os.getenv("P7_MUSIC_CLIENT_ROOT", "")
 
 # Existing archive files are read-only by default. Explicit tag-writing tools must
 # pass through this installation-level gate; ingest and maintenance never enable it.
+P7_GENERATED_MEDIA_ROOT = os.getenv("P7_GENERATED_MEDIA_ROOT", "")
+
+P7_GENERATED_MEDIA_CLIENT_ROOT = os.getenv(
+    "P7_GENERATED_MEDIA_CLIENT_ROOT", ""
+)
+
+P7_GENERATED_MEDIA_ROOT_KEY = "generated_media"
+
+P7_GENERATED_MEDIA_RELATIVE_ROOT = os.getenv(
+    "P7_GENERATED_MEDIA_RELATIVE_ROOT", "P7-generert"
+)
+
+P7_STORAGE_ROOTS = {}
+if P7_GENERATED_MEDIA_ROOT:
+    P7_STORAGE_ROOTS[P7_GENERATED_MEDIA_ROOT_KEY] = {
+        "server_root": P7_GENERATED_MEDIA_ROOT,
+        "client_root": P7_GENERATED_MEDIA_CLIENT_ROOT,
+        "backend": "filesystem",
+        "read_only": False,
+    }
+
 P7_ALLOW_FILE_WRITES = env_bool("P7_ALLOW_FILE_WRITES", False)
 
 # GUI v2 remains read-only unless an isolated test process explicitly enables

@@ -45,6 +45,9 @@ from .recording_overview import (
 from .recording_files import build_recording_files
 from .services import save_release_track_rows
 
+from media_assets.mastering import activate_candidate, build_generation_preview, create_generation_plan, generate_candidate, inspect_master, register_master, select_master
+from media_assets.models import RadioFlacGeneration
+from .forms import MasterRegistrationForm
 
 logger = logging.getLogger(__name__)
 PLAYBACK_PERMISSIONS = (
@@ -683,6 +686,215 @@ def recording_files(request, recording_id):
             "writes_enabled": settings.GUI_V2_WRITES_ENABLED,
         },
     )
+MASTER_VIEW_PERMISSIONS = (
+    "catalogue.view_recording",
+    "media_assets.view_fileasset",
+    "media_assets.view_filelocation",
+)
+
+MASTER_CHANGE_PERMISSIONS = (
+    *MASTER_VIEW_PERMISSIONS,
+    "media_assets.add_fileasset",
+    "media_assets.add_filelocation",
+    "media_assets.change_fileasset",
+    "media_assets.add_recordingmediaselection",
+    "media_assets.change_recordingmediaselection",
+    "media_assets.add_mediaassetevent",
+)
+
+GENERATION_CHANGE_PERMISSIONS = (
+    *MASTER_CHANGE_PERMISSIONS,
+    "media_assets.add_filechecksum",
+    "media_assets.add_filederivation",
+    "media_assets.add_radioflacgeneration",
+    "media_assets.change_radioflacgeneration",
+)
+
+def _require_gui_media_writes():
+    if not settings.GUI_V2_WRITES_ENABLED:
+        raise PermissionDenied(
+            "Medieendringer er deaktivert i dette GUI-v2-oppsettet."
+        )
+
+@login_required
+@permission_required(MASTER_VIEW_PERMISSIONS, raise_exception=True)
+@require_http_methods(["GET", "POST"])
+def recording_master_register(request, recording_id):
+    recording = get_object_or_404(
+        recording_overview_queryset(), pk=recording_id
+    )
+    form = MasterRegistrationForm(request.POST or None)
+    inspection = None
+    if request.method == "POST" and form.is_valid():
+        try:
+            inspection = inspect_master(**form.cleaned_data)
+            if request.POST.get("action") == "confirm":
+                _require_gui_media_writes()
+                if not request.user.has_perms(MASTER_CHANGE_PERMISSIONS):
+                    raise PermissionDenied
+                asset = register_master(
+                    recording=recording,
+                    user=request.user,
+                    **form.cleaned_data,
+                )
+                messages.success(
+                    request,
+                    "Masterfilen er registrert uten å endre kildefilen.",
+                )
+                return redirect(
+                    f"{reverse('gui_v2:recording_files', args=[recording.pk])}"
+                    f"?selected_file={asset.pk}"
+                )
+        except (ImproperlyConfigured, OSError, ValidationError) as error:
+            form.add_error(None, error)
+    return render(
+        request,
+        "gui_v2/recording_master_register.html",
+        {
+            "section": "music_library",
+            "recording": recording,
+            "form": form,
+            "inspection": inspection,
+            "writes_enabled": settings.GUI_V2_WRITES_ENABLED,
+            "return_url": reverse(
+                "gui_v2:recording_files", args=[recording.pk]
+            ),
+        },
+    )
+
+@require_POST
+@login_required
+@permission_required(MASTER_CHANGE_PERMISSIONS, raise_exception=True)
+def recording_master_select(request, recording_id, asset_id):
+    _require_gui_media_writes()
+    recording = get_object_or_404(Recording, pk=recording_id)
+    asset = get_object_or_404(FileAsset, pk=asset_id, recording=recording)
+    try:
+        select_master(recording=recording, asset=asset, user=request.user)
+    except ValidationError as error:
+        messages.error(request, "; ".join(error.messages))
+    else:
+        messages.success(
+            request, f"{asset.filename} er valgt som autoritativ master."
+        )
+    return redirect(
+        f"{reverse('gui_v2:recording_files', args=[recording.pk])}"
+        f"?selected_file={asset.pk}"
+    )
+
+@login_required
+@permission_required(MASTER_VIEW_PERMISSIONS, raise_exception=True)
+@require_http_methods(["GET", "POST"])
+def recording_generation_preview(request, recording_id):
+    recording = get_object_or_404(
+        recording_overview_queryset(), pk=recording_id
+    )
+    generation = None
+    preview = None
+    error_message = ""
+    generation_id = request.GET.get("generation")
+    if generation_id:
+        generation = get_object_or_404(
+            RadioFlacGeneration.objects.select_related(
+                "master_asset", "radio_metadata_source", "candidate_asset"
+            ),
+            pk=generation_id,
+            recording=recording,
+        )
+    else:
+        try:
+            preview = build_generation_preview(recording=recording)
+        except (ImproperlyConfigured, OSError, ValidationError) as error:
+            error_message = "; ".join(getattr(error, "messages", [str(error)]))
+    if request.method == "POST":
+        _require_gui_media_writes()
+        if not request.user.has_perms(GENERATION_CHANGE_PERMISSIONS):
+            raise PermissionDenied
+        try:
+            generation = create_generation_plan(
+                recording=recording,
+                user=request.user,
+                target_relative_path=request.POST.get("target_relative_path"),
+            )
+        except (ImproperlyConfigured, OSError, ValidationError) as error:
+            error_message = "; ".join(getattr(error, "messages", [str(error)]))
+        else:
+            return redirect(
+                f"{reverse('gui_v2:recording_generation_preview', args=[recording.pk])}"
+                f"?generation={generation.pk}"
+            )
+    return render(
+        request,
+        "gui_v2/recording_generation_preview.html",
+        {
+            "section": "music_library",
+            "recording": recording,
+            "preview": preview,
+            "generation": generation,
+            "error_message": error_message,
+            "writes_enabled": settings.GUI_V2_WRITES_ENABLED,
+            "file_writes_enabled": settings.P7_ALLOW_FILE_WRITES,
+            "return_url": reverse(
+                "gui_v2:recording_files", args=[recording.pk]
+            ),
+        },
+    )
+
+@require_POST
+@login_required
+@permission_required(GENERATION_CHANGE_PERMISSIONS, raise_exception=True)
+def recording_generate_candidate(request, recording_id, generation_id):
+    _require_gui_media_writes()
+    generation = get_object_or_404(
+        RadioFlacGeneration, pk=generation_id, recording_id=recording_id
+    )
+    try:
+        generate_candidate(generation=generation, user=request.user)
+    except (
+        ImproperlyConfigured,
+        OSError,
+        PermissionDenied,
+        ValidationError,
+    ) as error:
+        messages.error(
+            request, "; ".join(getattr(error, "messages", [str(error)]))
+        )
+    else:
+        messages.success(
+            request, "Radio-FLAC-kandidaten er generert og verifisert."
+        )
+    return redirect(
+        f"{reverse('gui_v2:recording_generation_preview', args=[recording_id])}"
+        f"?generation={generation.pk}"
+    )
+
+@require_POST
+@login_required
+@permission_required(GENERATION_CHANGE_PERMISSIONS, raise_exception=True)
+def recording_activate_candidate(request, recording_id, generation_id):
+    _require_gui_media_writes()
+    generation = get_object_or_404(
+        RadioFlacGeneration, pk=generation_id, recording_id=recording_id
+    )
+    try:
+        candidate = activate_candidate(
+            generation=generation, user=request.user
+        )
+    except ValidationError as error:
+        messages.error(request, "; ".join(error.messages))
+    else:
+        messages.success(
+            request, "Kandidaten er aktivert som gjeldende radiofil."
+        )
+        return redirect(
+            f"{reverse('gui_v2:recording_files', args=[recording_id])}"
+            f"?selected_file={candidate.pk}"
+        )
+    return redirect(
+        f"{reverse('gui_v2:recording_generation_preview', args=[recording_id])}"
+        f"?generation={generation.pk}"
+    )
+
 @require_http_methods(["GET", "HEAD"])
 @login_required
 @permission_required(PLAYBACK_PERMISSIONS, raise_exception=True)

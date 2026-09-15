@@ -8,6 +8,26 @@ from music_library.models import Channel, MusicLibraryEntry, TargetAudience
 
 from .presentation import observed_genres, radio_language_name
 
+from django.conf import settings
+from media_assets.storage import MUSIC_LIBRARY_ROOT
+
+class MasterRegistrationForm(forms.Form):
+    root_key = forms.ChoiceField(label="Lagringsrot", choices=())
+    relative_path = forms.CharField(
+        label="Relativ filsti",
+        max_length=1000,
+        help_text="Stien må ligge innenfor valgt og konfigurert storage-root.",
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        choices = []
+        if str(getattr(settings, "P7_MUSIC_ROOT", "") or "").strip():
+            choices.append((MUSIC_LIBRARY_ROOT, "Musikkarkiv"))
+        for key in getattr(settings, "P7_STORAGE_ROOTS", {}) or {}:
+            if key != MUSIC_LIBRARY_ROOT:
+                choices.append((key, key.replace("_", " ").title()))
+        self.fields["root_key"].choices = choices
 
 class MusicLibraryFilterForm(forms.Form):
     MATCH_CHOICES = (("any", "Minst én valgt"), ("all", "Alle valgte"))

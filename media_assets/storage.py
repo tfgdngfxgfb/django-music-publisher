@@ -141,6 +141,9 @@ def resolve_storage_path(
 
 
 def root_key_for_location(location):
+    explicit = str(getattr(location, "storage_root_key", "") or "").strip()
+    if explicit:
+        return explicit
     mapping = getattr(settings, "P7_STORAGE_TYPE_ROOTS", {}) or {}
     root_key = mapping.get(str(location.storage_type))
     if root_key:

@@ -1,6 +1,7 @@
 import re
 from pathlib import PurePosixPath, PureWindowsPath
 
+from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.db import models
 
@@ -41,6 +42,12 @@ class FileAsset(CanonicalModel):
         CONFLICT = "conflict", "Konflikt"
         FAILED = "failed", "Synkronisering feilet"
 
+    class LifecycleStatus(models.TextChoices):
+        UNCLASSIFIED = "unclassified", "Ikke klassifisert"
+        CANDIDATE = "candidate", "Kandidat"
+        CURRENT = "current", "Gjeldende"
+        HISTORICAL = "historical", "Historisk"
+
     recording = models.ForeignKey(
         Recording,
         verbose_name="innspilling",
@@ -69,7 +76,9 @@ class FileAsset(CanonicalModel):
     filename = models.CharField(
         "filnavn", max_length=500, validators=[validate_not_blank]
     )
-    mime_type = models.CharField("MIME-type/format", max_length=255, blank=True)
+    mime_type = models.CharField(
+        "MIME-type/format", max_length=255, blank=True
+    )
     size_bytes = models.PositiveBigIntegerField(
         "størrelse i byte", null=True, blank=True
     )
@@ -80,7 +89,15 @@ class FileAsset(CanonicalModel):
         help_text="64 heksadesimale tegn når kjent.",
     )
     role = models.CharField("filrolle", max_length=30, choices=Role.choices)
-    technical_metadata = models.JSONField("tekniske metadata", default=dict, blank=True)
+    lifecycle_status = models.CharField(
+        "livssyklusstatus",
+        max_length=20,
+        choices=LifecycleStatus.choices,
+        default=LifecycleStatus.UNCLASSIFIED,
+    )
+    technical_metadata = models.JSONField(
+        "tekniske metadata", default=dict, blank=True
+    )
     metadata_read_at = models.DateTimeField(
         "filmetadata sist lest", null=True, blank=True
     )
@@ -125,6 +142,26 @@ class FileAsset(CanonicalModel):
                 | models.Q(release__isnull=True),
                 name="file_asset_no_recording_release_pair",
             ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        lifecycle_status__in=(
+                            "unclassified",
+                            "historical",
+                        )
+                    )
+                    | models.Q(
+                        role="radio_flac",
+                        recording__isnull=False,
+                    )
+                ),
+                name="file_asset_active_lifecycle_is_radio",
+            ),
+            models.UniqueConstraint(
+                fields=("recording",),
+                condition=models.Q(lifecycle_status="current"),
+                name="file_asset_one_current_radio",
+            ),
         ]
 
     def clean_fields(self, exclude=None):
@@ -156,6 +193,270 @@ class FileAsset(CanonicalModel):
         return self.filename
 
 
+class RecordingMediaSelection(CanonicalModel):
+    """Protected choices for one Recording's master and operative radio file."""
+
+    recording = models.OneToOneField(
+        Recording,
+        on_delete=models.PROTECT,
+        related_name="media_selection",
+        verbose_name="innspilling",
+    )
+    selected_master = models.ForeignKey(
+        FileAsset,
+        on_delete=models.PROTECT,
+        related_name="selected_for_recordings",
+        null=True,
+        blank=True,
+        verbose_name="valgt master",
+    )
+    current_radio = models.ForeignKey(
+        FileAsset,
+        on_delete=models.PROTECT,
+        related_name="current_for_recordings",
+        null=True,
+        blank=True,
+        verbose_name="gjeldende radiofil",
+    )
+    selected_master_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="selected_media_masters",
+        null=True,
+        blank=True,
+    )
+    current_radio_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="selected_current_radio_files",
+        null=True,
+        blank=True,
+    )
+    selected_master_at = models.DateTimeField(null=True, blank=True)
+    current_radio_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "medievalg for innspilling"
+        verbose_name_plural = "medievalg for innspillinger"
+
+    def clean(self):
+        super().clean()
+        if self.selected_master_id:
+            if (
+                self.selected_master.recording_id != self.recording_id
+                or self.selected_master.role
+                != FileAsset.Role.EDITED_WAV_MASTER
+            ):
+                raise ValidationError(
+                    {
+                        "selected_master": "Valgt master må være en master for samme innspilling."
+                    }
+                )
+        if self.current_radio_id:
+            if (
+                self.current_radio.recording_id != self.recording_id
+                or self.current_radio.role != FileAsset.Role.RADIO_FLAC
+                or self.current_radio.lifecycle_status
+                != FileAsset.LifecycleStatus.CURRENT
+            ):
+                raise ValidationError(
+                    {
+                        "current_radio": (
+                            "Gjeldende radiofil må være en aktivert radio-FLAC "
+                            "for samme innspilling."
+                        )
+                    }
+                )
+
+
+class FileDerivation(CanonicalModel):
+    class RelationType(models.TextChoices):
+        GENERATED_FROM = "generated_from", "Generert fra"
+
+    source_asset = models.ForeignKey(
+        FileAsset, on_delete=models.PROTECT, related_name="derived_files"
+    )
+    derived_asset = models.ForeignKey(
+        FileAsset, on_delete=models.PROTECT, related_name="source_files"
+    )
+    relation_type = models.CharField(
+        max_length=30,
+        choices=RelationType.choices,
+        default=RelationType.GENERATED_FROM,
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="file_derivations",
+        null=True,
+        blank=True,
+    )
+    tool_name = models.CharField(max_length=100)
+    tool_version = models.CharField(max_length=100, blank=True)
+    parameters = models.JSONField(default=dict, blank=True)
+    verification = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        verbose_name = "filavledning"
+        verbose_name_plural = "filavledninger"
+        constraints = [
+            models.UniqueConstraint(
+                fields=("source_asset", "derived_asset", "relation_type"),
+                name="file_derivation_unique_relation",
+            )
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.source_asset_id == self.derived_asset_id:
+            raise ValidationError("En fil kan ikke være avledet fra seg selv.")
+        if (
+            self.source_asset.recording_id is None
+            or self.source_asset.recording_id
+            != self.derived_asset.recording_id
+        ):
+            raise ValidationError(
+                "Kilde og avledet fil må tilhøre samme innspilling."
+            )
+
+
+class RadioFlacGeneration(CanonicalModel):
+    class Status(models.TextChoices):
+        PLANNED = "planned", "Planlagt"
+        VERIFIED = "verified", "Generert og verifisert"
+        ACTIVATED = "activated", "Aktivert"
+        FAILED = "failed", "Feilet"
+
+    recording = models.ForeignKey(
+        Recording,
+        on_delete=models.PROTECT,
+        related_name="radio_flac_generations",
+    )
+    master_asset = models.ForeignKey(
+        FileAsset, on_delete=models.PROTECT, related_name="master_generations"
+    )
+    radio_metadata_source = models.ForeignKey(
+        FileAsset,
+        on_delete=models.PROTECT,
+        related_name="metadata_source_generations",
+        null=True,
+        blank=True,
+    )
+    candidate_asset = models.OneToOneField(
+        FileAsset,
+        on_delete=models.PROTECT,
+        related_name="generation",
+        null=True,
+        blank=True,
+    )
+    target_root_key = models.CharField(max_length=100)
+    target_relative_path = models.CharField(
+        max_length=1000, validators=[validate_logical_path]
+    )
+    technical_plan = models.JSONField(default=dict)
+    expected_tags = models.JSONField(default=dict)
+    metadata_diff = models.JSONField(default=list)
+    verification = models.JSONField(default=dict, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices)
+    failure_message = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="radio_flac_generations",
+    )
+    activated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="activated_radio_flac_generations",
+        null=True,
+        blank=True,
+    )
+    activated_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "radio-FLAC-generering"
+        verbose_name_plural = "radio-FLAC-genereringer"
+        ordering = ("-created_at", "id")
+
+    def clean(self):
+        super().clean()
+        if (
+            self.master_asset.recording_id != self.recording_id
+            or self.master_asset.role != FileAsset.Role.EDITED_WAV_MASTER
+        ):
+            raise ValidationError(
+                "Genereringsmasteren må tilhøre innspillingen."
+            )
+        if self.radio_metadata_source_id and (
+            self.radio_metadata_source.recording_id != self.recording_id
+            or self.radio_metadata_source.role != FileAsset.Role.RADIO_FLAC
+        ):
+            raise ValidationError(
+                "Radiometadatakilden må tilhøre innspillingen."
+            )
+        if self.candidate_asset_id and (
+            self.candidate_asset.recording_id != self.recording_id
+            or self.candidate_asset.role != FileAsset.Role.RADIO_FLAC
+        ):
+            raise ValidationError(
+                "Kandidaten må være en radio-FLAC for innspillingen."
+            )
+
+
+class MediaAssetEvent(CanonicalModel):
+    class EventType(models.TextChoices):
+        MASTER_REGISTERED = "master_registered", "Master registrert"
+        MASTER_SELECTED = "master_selected", "Master valgt"
+        CANDIDATE_GENERATED = "candidate_generated", "Kandidat generert"
+        AUDIO_VERIFIED = "audio_verified", "Lyd verifisert"
+        METADATA_VERIFIED = "metadata_verified", "Metadata verifisert"
+        RADIO_ACTIVATED = "radio_activated", "Radiofil aktivert"
+        RADIO_SUPERSEDED = "radio_superseded", "Radiofil avløst"
+
+    recording = models.ForeignKey(
+        Recording, on_delete=models.PROTECT, related_name="media_events"
+    )
+    asset = models.ForeignKey(
+        FileAsset,
+        on_delete=models.PROTECT,
+        related_name="media_events",
+        null=True,
+        blank=True,
+    )
+    related_asset = models.ForeignKey(
+        FileAsset,
+        on_delete=models.PROTECT,
+        related_name="related_media_events",
+        null=True,
+        blank=True,
+    )
+    event_type = models.CharField(max_length=30, choices=EventType.choices)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="media_asset_events",
+    )
+    details = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        verbose_name = "mediefilhendelse"
+        verbose_name_plural = "mediefilhendelser"
+        ordering = ("-created_at", "id")
+
+    def clean(self):
+        super().clean()
+        for field in ("asset", "related_asset"):
+            value = getattr(self, field)
+            if value and value.recording_id != self.recording_id:
+                raise ValidationError(
+                    {field: "Filressursen må tilhøre innspillingen."}
+                )
+        if not self._state.adding:
+            raise ValidationError(
+                "Mediefilhendelser er historikk og kan ikke endres."
+            )
+
+
 class FileLocation(CanonicalModel):
     class StorageType(models.TextChoices):
         NAS = "nas", "NAS"
@@ -184,7 +485,15 @@ class FileLocation(CanonicalModel):
         "lagringstype", max_length=30, choices=StorageType.choices
     )
     relative_path = models.CharField(
-        "logisk relativ sti", max_length=1000, validators=[validate_logical_path]
+        "logisk relativ sti",
+        max_length=1000,
+        validators=[validate_logical_path],
+    )
+    storage_root_key = models.CharField(
+        "storage-root",
+        max_length=100,
+        blank=True,
+        help_text="Tom verdi bruker kompatibilitetsmapping fra lagringstype.",
     )
     status = models.CharField(
         "status", max_length=20, choices=Status.choices, default=Status.ACTIVE
@@ -198,8 +507,12 @@ class FileLocation(CanonicalModel):
     )
     observed_at = models.DateTimeField("observert", auto_now_add=True)
     ended_at = models.DateTimeField("avsluttet", null=True, blank=True)
-    google_drive_id = models.CharField("Google Drive-ID", max_length=255, blank=True)
-    google_drive_url = models.URLField("Google Drive-URL", max_length=1000, blank=True)
+    google_drive_id = models.CharField(
+        "Google Drive-ID", max_length=255, blank=True
+    )
+    google_drive_url = models.URLField(
+        "Google Drive-URL", max_length=1000, blank=True
+    )
 
     class Meta:
         verbose_name = "filplassering"
@@ -207,18 +520,20 @@ class FileLocation(CanonicalModel):
         ordering = ("asset", "-is_current", "-observed_at")
         indexes = [
             models.Index(
-                fields=("storage_type", "relative_path"), name="file_location_path_idx"
+                fields=("storage_type", "relative_path"),
+                name="file_location_path_idx",
             ),
             models.Index(
                 fields=("status", "is_current"), name="file_location_state_idx"
             ),
             models.Index(
-                fields=("verification_status",), name="file_location_verify_idx"
+                fields=("verification_status",),
+                name="file_location_verify_idx",
             ),
         ]
         constraints = [
             models.UniqueConstraint(
-                fields=("storage_type", "relative_path"),
+                fields=("storage_root_key", "storage_type", "relative_path"),
                 condition=models.Q(is_current=True),
                 name="file_location_unique_current_path",
             )
@@ -292,7 +607,9 @@ class FileChecksum(CanonicalModel):
     def clean_fields(self, exclude=None):
         self.sha256 = self.sha256.strip().lower()
         if not re.fullmatch(r"[0-9a-f]{64}", self.sha256):
-            raise ValidationError({"sha256": "SHA-256 må ha 64 heksadesimale tegn."})
+            raise ValidationError(
+                {"sha256": "SHA-256 må ha 64 heksadesimale tegn."}
+            )
         super().clean_fields(exclude=exclude)
 
     def __str__(self):

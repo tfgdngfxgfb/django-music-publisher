@@ -69,6 +69,16 @@ CATALOGUE_WRITE_TAGS = {
     "CATALOGNUMBER",
 }
 
+RADIO_WRITE_TAGS = {
+    "GENRE",
+    "LANGUAGE",
+    "RATING",
+    "KANAL",
+    "TARGET",
+    "GENDER",
+    "ROTATION",
+}
+
 COMMENT_TXXX_ALIASES = {
     "sprak": "LANGUAGE",
     "language": "LANGUAGE",

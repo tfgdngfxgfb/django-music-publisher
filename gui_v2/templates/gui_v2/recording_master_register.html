@@ -1,0 +1,24 @@
+{% extends "gui_v2/base.html" %}
+{% block title %}Registrer master · {{ recording.title }}{% endblock %}
+{% block content %}
+<main class="master-process-page">
+  <a class="recording-back" href="{{ return_url }}">← Tilbake til Filer</a>
+  <section class="recording-card master-process-card">
+    <span class="eyebrow">Innspilling · Masterovertakelse</span>
+    <h1>Registrer master for {{ recording.title }}</h1>
+    <p>Registrer en eksisterende fil innenfor en konfigurert storage-root. Filen åpnes bare for inspeksjon og endres ikke.</p>
+    <form method="post">
+      {% csrf_token %}
+      {{ form.as_p }}
+      <div><button type="submit" name="action" value="inspect">Kontroller master</button></div>
+      {% if inspection %}
+        <section class="master-preview-grid">
+          <section><h2>Teknisk inspeksjon</h2><dl><dt>Fil</dt><dd>{{ inspection.filename }}</dd><dt>Format</dt><dd>{{ inspection.format }} · {{ inspection.subtype }}</dd><dt>Kvalitet</dt><dd>{{ inspection.bit_depth|default:"Ukjent" }} bit · {{ inspection.sample_rate }} Hz · {{ inspection.channels }} kanal{{ inspection.channels|pluralize:"er" }}</dd><dt>Frames</dt><dd>{{ inspection.frames }}</dd><dt>Størrelse</dt><dd>{{ inspection.size_bytes }} byte</dd><dt>SHA-256</dt><dd><code>{{ inspection.sha256 }}</code></dd></dl></section>
+          <section><h2>Vurdering</h2><p class="notice">{{ inspection.message }}</p><p>Masterbesittelse endrer ikke eierskap, administrasjon eller distribusjonsrettigheter.</p></section>
+        </section>
+        {% if inspection.supported and writes_enabled %}<button class="primary" type="submit" name="action" value="confirm">Bekreft registrering</button>{% elif not writes_enabled %}<p class="notice">Registrering er deaktivert i dette GUI-v2-oppsettet. Inspeksjonen er fortsatt read-only.</p>{% endif %}
+      {% endif %}
+    </form>
+  </section>
+</main>
+{% endblock %}

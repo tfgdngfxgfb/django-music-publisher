@@ -12,6 +12,8 @@ from media_assets.storage import (
     root_key_for_location,
 )
 
+from django.core.exceptions import ObjectDoesNotExist
+from media_assets.models import MediaAssetEvent, RadioFlacGeneration
 
 def _duration(value):
     if value is None:
@@ -94,19 +96,30 @@ def _location_data(location):
     }
 
 
-def _asset_data(asset, current_asset_id):
+def _asset_data(asset, current_asset_id, selected_master_id):
     locations = [_location_data(item) for item in asset.locations.all()]
-    current_locations = [item for item in locations if item["object"].is_current]
+    current_locations = [
+        item for item in locations if item["object"].is_current
+    ]
     active_locations = [
         item
         for item in current_locations
         if item["object"].status == FileLocation.Status.ACTIVE
     ]
-    active_client_locations = [item for item in active_locations if item["client_path"]]
+    active_client_locations = [
+        item for item in active_locations if item["client_path"]
+    ]
     technical = _technical(asset)
     is_current_radio = asset.pk == current_asset_id
+    is_selected_master = asset.pk == selected_master_id
     if is_current_radio:
         status, status_kind = "Gjeldende", "ok"
+    elif is_selected_master:
+        status, status_kind = "Valgt master", "ok"
+    elif asset.lifecycle_status == FileAsset.LifecycleStatus.CANDIDATE:
+        status, status_kind = "Verifisert kandidat", "warning"
+    elif asset.lifecycle_status == FileAsset.LifecycleStatus.HISTORICAL:
+        status, status_kind = "Historisk", "neutral"
     elif asset.sync_status in {
         FileAsset.SyncStatus.MISSING,
         FileAsset.SyncStatus.FAILED,
@@ -130,7 +143,9 @@ def _asset_data(asset, current_asset_id):
         status, status_kind = asset.get_sync_status_display(), "neutral"
 
     observed = [
-        item["object"].observed_at for item in locations if item["object"].observed_at
+        item["object"].observed_at
+        for item in locations
+        if item["object"].observed_at
     ]
     if asset.metadata_read_at:
         observed.append(asset.metadata_read_at)
@@ -153,12 +168,17 @@ def _asset_data(asset, current_asset_id):
         "status": status,
         "status_kind": status_kind,
         "is_current_radio": is_current_radio,
+        "is_selected_master": is_selected_master,
+        "is_candidate": asset.lifecycle_status
+        == FileAsset.LifecycleStatus.CANDIDATE,
         "locations": locations,
         "current_locations": current_locations,
         "last_seen": last_seen,
         "has_client_path": any(item["client_path"] for item in locations),
         "primary_client_location": (
-            active_client_locations[0] if len(active_client_locations) == 1 else None
+            active_client_locations[0]
+            if len(active_client_locations) == 1
+            else None
         ),
         "client_location_ambiguous": len(active_client_locations) > 1,
         "can_rescan": any(
@@ -170,13 +190,15 @@ def _asset_data(asset, current_asset_id):
     }
 
 
-def _history(file_data):
+def _history(file_data, lifecycle_events=()):
     asset = file_data["object"]
     events = [
         {"when": asset.created_at, "text": "Filressurs registrert"},
     ]
     if asset.metadata_read_at:
-        events.append({"when": asset.metadata_read_at, "text": "Filmetadata lest"})
+        events.append(
+            {"when": asset.metadata_read_at, "text": "Filmetadata lest"}
+        )
     for location in asset.locations.all():
         events.append(
             {
@@ -191,6 +213,10 @@ def _history(file_data):
                 "text": f"Kontrollsum registrert · {checksum.get_reason_display()}",
             }
         )
+    for event in lifecycle_events:
+        events.append(
+            {"when": event.created_at, "text": event.get_event_type_display()}
+        )
     return sorted(events, key=lambda item: item["when"], reverse=True)[:5]
 
 
@@ -198,9 +224,26 @@ def build_recording_files(recording, *, selected_asset_id=None):
     """Build one read-only file inventory using the playback resolver as authority."""
     resolution = resolve_current_radio_asset(recording)
     current_asset_id = resolution.asset.pk if resolution.asset else None
+    try:
+        selection = recording.media_selection
+    except ObjectDoesNotExist:
+        selection = None
+    selected_master_id = selection.selected_master_id if selection else None
     files = [
-        _asset_data(asset, current_asset_id) for asset in recording.file_assets.all()
+        _asset_data(asset, current_asset_id, selected_master_id)
+        for asset in recording.file_assets.all()
     ]
+    generations = {
+        item.candidate_asset_id: item
+        for item in RadioFlacGeneration.objects.filter(
+            candidate_asset_id__in=[file["object"].pk for file in files]
+        )
+    }
+    events = {}
+    for event in MediaAssetEvent.objects.filter(
+        asset_id__in=[file["object"].pk for file in files]
+    ):
+        events.setdefault(event.asset_id, []).append(event)
     role_order = {
         FileAsset.Role.RADIO_FLAC: 0,
         FileAsset.Role.EDITED_WAV_MASTER: 1,
@@ -219,17 +262,21 @@ def build_recording_files(recording, *, selected_asset_id=None):
         )
     )
     for item in files:
-        item["history"] = _history(item)
+        item["generation"] = generations.get(item["object"].pk)
+        item["history"] = _history(item, events.get(item["object"].pk, ()))
     selected = next(
         (
             item
             for item in files
-            if selected_asset_id and str(item["object"].pk) == str(selected_asset_id)
+            if selected_asset_id
+            and str(item["object"].pk) == str(selected_asset_id)
         ),
         None,
     )
     if selected is None:
-        selected = next((item for item in files if item["is_current_radio"]), None)
+        selected = next(
+            (item for item in files if item["is_current_radio"]), None
+        )
     if selected is None and files:
         selected = files[0]
 
@@ -268,4 +315,5 @@ def build_recording_files(recording, *, selected_asset_id=None):
         "current_radio": current,
         "radio_count": radio_count,
         "resolution": resolution,
+        "selection": selection,
     }

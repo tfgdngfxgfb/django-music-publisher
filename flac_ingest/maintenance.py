@@ -31,6 +31,7 @@ from .services import (
     scan_directory,
 )
 
+from media_assets.models import FileDerivation, RadioFlacGeneration, RecordingMediaSelection
 
 def _within_scope(path, relative_root):
     root = PurePosixPath(relative_root or ".")
@@ -87,6 +88,24 @@ def _protection_map(recording_ids):
         .values_list("recording_id", flat=True),
         "Innspillingen har andre filressurser enn radio-FLAC.",
     )
+    add(
+        RecordingMediaSelection.objects.filter(
+            recording_id__in=ids
+        ).values_list("recording_id", flat=True),
+        "Innspillingen har beskyttede valg av master eller radiofil.",
+    )
+    add(
+        FileDerivation.objects.filter(
+            source_asset__recording_id__in=ids
+        ).values_list("source_asset__recording_id", flat=True),
+        "Innspillingen har dokumentert filavledning.",
+    )
+    add(
+        RadioFlacGeneration.objects.filter(recording_id__in=ids).values_list(
+            "recording_id", flat=True
+        ),
+        "Innspillingen har genererings- og verifikasjonshistorikk.",
+    )
     manual_assertion_ids = (
         MetadataAssertion.objects.filter(
             entity_type=MetadataAssertion.EntityType.RECORDING,
@@ -96,7 +115,8 @@ def _protection_map(recording_ids):
         .values_list("entity_uuid", flat=True)
     )
     add(
-        manual_assertion_ids, "Innspillingen har en manuell eller ekstern kildepåstand."
+        manual_assertion_ids,
+        "Innspillingen har en manuell eller ekstern kildepåstand.",
     )
     manual_entry_recordings = MusicLibraryEntry.objects.filter(
         recording_id__in=ids,
@@ -139,7 +159,8 @@ def _protection_map(recording_ids):
     add(
         Recording.objects.filter(id__in=ids)
         .filter(
-            Q(version_designation__gt="") | Q(metadata_status=Recording.Status.REVIEWED)
+            Q(version_designation__gt="")
+            | Q(metadata_status=Recording.Status.REVIEWED)
         )
         .values_list("id", flat=True),
         "Innspillingen har manuelt kataloginnhold eller er kontrollert.",
@@ -173,18 +194,23 @@ def _protection_map(recording_ids):
             and current_isrc.get(recording_id, "").replace("-", "")
             != str(source_isrc).replace("-", "").upper()
         ):
-            add([recording_id], "Et kjent ISRC-avvik må bevares for manuell kontroll.")
+            add(
+                [recording_id],
+                "Et kjent ISRC-avvik må bevares for manuell kontroll.",
+            )
 
     latest_ingest = {}
     for recording_id, applied_at in (
-        FlacIngestItem.objects.filter(recording_id__in=ids, applied_at__isnull=False)
+        FlacIngestItem.objects.filter(
+            recording_id__in=ids, applied_at__isnull=False
+        )
         .order_by("recording_id", "applied_at")
         .values_list("recording_id", "applied_at")
     ):
         latest_ingest[recording_id] = applied_at
-    for recording_id, updated_at in Recording.objects.filter(id__in=ids).values_list(
-        "id", "updated_at"
-    ):
+    for recording_id, updated_at in Recording.objects.filter(
+        id__in=ids
+    ).values_list("id", "updated_at"):
         if (
             not latest_ingest.get(recording_id)
             or updated_at > latest_ingest[recording_id]

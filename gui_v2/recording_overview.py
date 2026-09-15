@@ -56,22 +56,25 @@ def recording_overview_queryset():
         "party", "artist_identity", "source_record__source_system"
     ).order_by("display_order", "id")
     tracks = recording_release_tracks_with_covers_queryset()
-    files = FileAsset.objects.prefetch_related("locations", "checksum_history").order_by(
-        "role", "filename", "id"
+    files = FileAsset.objects.prefetch_related(
+        "locations", "checksum_history"
+    ).order_by("role", "filename", "id")
+    duplicate_cases = DuplicateCandidate.objects.select_related(
+        "recording_a", "recording_b"
     )
-    duplicate_cases = DuplicateCandidate.objects.select_related("recording_a", "recording_b")
-    return (
-        Recording.objects.select_related("music_library_entry__managed_recording")
-        .prefetch_related(
-            Prefetch("contributions", queryset=contributions),
-            "identifiers",
-            "music_library_entry__channels",
-            "music_library_entry__target_audiences",
-            Prefetch("release_tracks", queryset=tracks),
-            Prefetch("file_assets", queryset=files),
-            Prefetch("duplicate_candidates_as_a", queryset=duplicate_cases),
-            Prefetch("duplicate_candidates_as_b", queryset=duplicate_cases),
-        )
+    return Recording.objects.select_related(
+        "music_library_entry__managed_recording",
+        "media_selection__selected_master",
+        "media_selection__current_radio",
+    ).prefetch_related(
+        Prefetch("contributions", queryset=contributions),
+        "identifiers",
+        "music_library_entry__channels",
+        "music_library_entry__target_audiences",
+        Prefetch("release_tracks", queryset=tracks),
+        Prefetch("file_assets", queryset=files),
+        Prefetch("duplicate_candidates_as_a", queryset=duplicate_cases),
+        Prefetch("duplicate_candidates_as_b", queryset=duplicate_cases),
     )
 
 

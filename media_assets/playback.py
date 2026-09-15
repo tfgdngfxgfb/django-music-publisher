@@ -14,6 +14,7 @@ from .storage import (
     validate_readable_location,
 )
 
+from django.core.exceptions import ObjectDoesNotExist
 
 class RadioPlaybackStatus(StrEnum):
     AVAILABLE = "available"
@@ -50,17 +51,35 @@ def resolve_current_radio_asset(recording, *, verify_file=False):
     Historical/inactive locations do not compete with an active location. More
     than one active asset or more than one active location is ambiguous.
     """
+    explicit_asset = None
+    try:
+        selection = recording.media_selection
+    except ObjectDoesNotExist:
+        selection = None
+    if selection and selection.current_radio_id:
+        explicit_asset = selection.current_radio
+
     radio_assets = [
         asset
         for asset in recording.file_assets.all()
         if asset.role == FileAsset.Role.RADIO_FLAC
+        and asset.lifecycle_status
+        not in {
+            FileAsset.LifecycleStatus.CANDIDATE,
+            FileAsset.LifecycleStatus.HISTORICAL,
+        }
     ]
+    if explicit_asset:
+        radio_assets = [explicit_asset]
     if not radio_assets:
         return RadioPlaybackResolution(RadioPlaybackStatus.NO_RADIO_FILE)
 
     candidates = []
     location_ambiguity = False
-    supported_storage = {FileLocation.StorageType.NAS, FileLocation.StorageType.LOCAL}
+    supported_storage = {
+        FileLocation.StorageType.NAS,
+        FileLocation.StorageType.LOCAL,
+    }
     for asset in radio_assets:
         if asset.sync_status in {
             FileAsset.SyncStatus.MISSING,
@@ -100,7 +119,9 @@ def resolve_current_radio_asset(recording, *, verify_file=False):
             OSError,
         ):
             return RadioPlaybackResolution(
-                RadioPlaybackStatus.FILE_UNAVAILABLE, asset=asset, location=location
+                RadioPlaybackStatus.FILE_UNAVAILABLE,
+                asset=asset,
+                location=location,
             )
     return RadioPlaybackResolution(
         RadioPlaybackStatus.AVAILABLE,
