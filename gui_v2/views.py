@@ -42,6 +42,7 @@ from .recording_overview import (
     recording_release_tracks_with_covers_queryset,
     select_recording_cover,
 )
+from .recording_files import build_recording_files
 from .services import save_release_track_rows
 
 
@@ -602,6 +603,10 @@ def recording_detail(request, recording_id):
         name: f"{workbench_url}?{urlencode({'fane': name, 'return': current_url})}"
         for name in ("radio", "releases", "contributors", "files", "rights", "sources")
     }
+    tab_urls["files"] = (
+        f"{reverse('gui_v2:recording_files', args=[recording.pk])}?"
+        f"{urlencode({'return': return_url})}"
+    )
     return_label = (
         "Tilbake til Musikkarkiv"
         if "/musikkarkiv/" in return_url
@@ -625,6 +630,61 @@ def recording_detail(request, recording_id):
     )
 
 
+@require_GET
+@login_required
+@permission_required(
+    (
+        "catalogue.view_recording",
+        "media_assets.view_fileasset",
+        "media_assets.view_filelocation",
+    ),
+    raise_exception=True,
+)
+def recording_files(request, recording_id):
+    """Render the read-only GUI v2 media inventory for one Recording."""
+    recording = get_object_or_404(recording_overview_queryset(), pk=recording_id)
+    return_url = _safe_return(request, reverse("gui_v2:music_library"))
+    current_url = request.get_full_path()
+    overview = build_recording_overview(
+        recording,
+        can_view_files=True,
+        can_view_releases=request.user.has_perm("catalogue.view_release"),
+    )
+    overview["playback"] = _playback_context(recording, request.user)
+    file_view = build_recording_files(
+        recording, selected_asset_id=request.GET.get("selected_file")
+    )
+    workbench_url = reverse("workbench:recording", args=[recording.pk])
+    tab_urls = {
+        name: f"{workbench_url}?{urlencode({'fane': name, 'return': current_url})}"
+        for name in ("radio", "releases", "contributors", "rights", "sources")
+    }
+    tab_urls["overview"] = (
+        f"{reverse('gui_v2:recording_detail', args=[recording.pk])}?"
+        f"{urlencode({'return': return_url})}"
+    )
+    tab_urls["files"] = current_url
+    return_label = (
+        "Tilbake til Musikkarkiv"
+        if "/musikkarkiv/" in return_url
+        else "Tilbake til utgivelsen"
+        if "/utgivelser/" in return_url
+        else "Tilbake"
+    )
+    return render(
+        request,
+        "gui_v2/recording_files.html",
+        {
+            "section": "music_library",
+            "recording": recording,
+            "overview": overview,
+            "file_view": file_view,
+            "return_url": return_url,
+            "return_label": return_label,
+            "tab_urls": tab_urls,
+            "writes_enabled": settings.GUI_V2_WRITES_ENABLED,
+        },
+    )
 @require_http_methods(["GET", "HEAD"])
 @login_required
 @permission_required(PLAYBACK_PERMISSIONS, raise_exception=True)

@@ -334,4 +334,52 @@
     document.querySelector("[data-library-row].selected")?.focus({preventScroll: true});
   }
 
+  const recordingFiles = document.querySelector("[data-recording-files]");
+  if (recordingFiles) {
+    const rows = [...recordingFiles.querySelectorAll("[data-file-row]")];
+    const selectFile = (row, moveFocus = false) => {
+      if (!row) return;
+      const id = row.dataset.fileRow;
+      rows.forEach(item => {
+        const selected = item === row;
+        item.classList.toggle("selected", selected);
+        item.setAttribute("aria-selected", String(selected));
+        item.tabIndex = selected ? 0 : -1;
+      });
+      recordingFiles.querySelectorAll("[data-file-detail]").forEach(panel => {
+        panel.hidden = panel.dataset.fileDetail !== id;
+      });
+      recordingFiles.querySelectorAll("[data-file-locations]").forEach(panel => {
+        panel.hidden = panel.dataset.fileLocations !== id;
+      });
+      recordingFiles.querySelectorAll("[data-file-history]").forEach(panel => {
+        panel.hidden = panel.dataset.fileHistory !== id;
+      });
+      const url = new URL(location.href);
+      url.searchParams.set("selected_file", id);
+      history.replaceState({}, "", url);
+      recordingFiles.querySelectorAll("[data-file-return]").forEach(input => {
+        input.value = `${url.pathname}${url.search}`;
+      });
+      if (moveFocus) row.focus({preventScroll: true});
+    };
+    rows.forEach(row => row.addEventListener("click", event => {
+      if (event.target.closest("a, button, input")) return;
+      selectFile(row);
+    }));
+    recordingFiles.addEventListener("keydown", event => {
+      const row = event.target.closest("[data-file-row]");
+      if (!row || !["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
+      let index = rows.indexOf(row);
+      if (event.key === "ArrowUp") index -= 1;
+      if (event.key === "ArrowDown") index += 1;
+      if (event.key === "Home") index = 0;
+      if (event.key === "End") index = rows.length - 1;
+      event.preventDefault();
+      const next = rows[Math.max(0, Math.min(rows.length - 1, index))];
+      selectFile(next, true);
+      next.scrollIntoView({block: "nearest", inline: "nearest"});
+    });
+  }
+
 })();

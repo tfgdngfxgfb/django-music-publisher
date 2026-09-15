@@ -1,0 +1,82 @@
+{% extends "gui_v2/base.html" %}
+{% block title %}Filer · {{ recording.title }}{% endblock %}
+{% block content %}
+<div class="recording-page recording-files-page" data-recording-files>
+  <header class="recording-object-header">
+    <a class="recording-back" href="{{ return_url }}">← {{ return_label }}</a>
+    <div class="recording-heading">
+      <span class="eyebrow">Innspilling</span>
+      <h1>{{ recording.title }}</h1>
+      <p>{{ overview.artist_text }}</p>
+      <div class="recording-head-facts">
+        {% if overview.isrc %}<span>ISRC {{ overview.isrc }}</span>{% endif %}
+        {% if overview.duration %}<span>{{ overview.duration }}</span>{% endif %}
+        {% if recording.version_designation %}<span>{{ recording.version_designation }}</span>{% endif %}
+      </div>
+    </div>
+    <nav class="recording-tabs" aria-label="Innspillingens arbeidsområder">
+      <a href="{{ tab_urls.overview }}">Oversikt</a>
+      <a href="{{ tab_urls.radio }}">Radio</a>
+      <a href="{{ tab_urls.releases }}">Utgivelser</a>
+      <a href="{{ tab_urls.contributors }}">Medvirkende og opphavere</a>
+      <a aria-current="page" href="{{ tab_urls.files }}">Filer</a>
+      {% if perms.rights.view_rightsclaim %}<a href="{{ tab_urls.rights }}">Rettigheter</a>{% endif %}
+      {% if perms.provenance.view_metadataassertion %}<a href="{{ tab_urls.sources }}">Kilder og historikk</a>{% endif %}
+    </nav>
+  </header>
+
+  <div class="recording-files-layout">
+    <div class="recording-files-main">
+      <section class="recording-card current-radio-card {{ file_view.radio_status.kind }}">
+        <div class="current-radio-status"><span class="state-icon {{ file_view.radio_status.kind }}">{% if file_view.radio_status.kind == 'ok' %}✓{% elif file_view.radio_status.kind == 'error' %}×{% elif file_view.radio_status.kind == 'warning' %}!{% else %}i{% endif %}</span><div><span class="eyebrow">Radiofilstatus</span><h2>{{ file_view.radio_status.title }}</h2><p>{{ file_view.radio_status.text }}</p></div></div>
+        {% if file_view.current_radio %}<div class="current-radio-file"><span class="file-symbol">♫</span><div><strong>{{ file_view.current_radio.object.filename }}</strong><span>{{ file_view.current_radio.object.get_role_display }}{% if file_view.current_radio.technical_summary %} · {{ file_view.current_radio.technical_summary }}{% endif %}{% if file_view.current_radio.size %} · {{ file_view.current_radio.size }}{% endif %}</span></div><div class="current-radio-seen"><small>Sist registrert</small><strong>{{ file_view.current_radio.last_seen|date:"d.m.Y H:i"|default:"Tidspunkt ukjent" }}</strong></div>{% if overview.playback.url %}<button class="playback-button" type="button" data-player-primary data-play-recording data-play-url="{{ overview.playback.url }}" data-play-recording-id="{{ overview.playback.recording_id }}" data-play-title="{{ overview.playback.title }}" data-play-artist="{{ overview.playback.artist }}">▶ Spill</button>{% endif %}</div>{% endif %}
+      </section>
+
+      <section class="recording-card file-inventory">
+        <header><h2>Filer for denne innspillingen</h2><span>{{ file_view.files|length }} fil{{ file_view.files|length|pluralize:"er" }}</span></header>
+        {% if file_view.files %}<div class="recording-file-table-wrap"><table><thead><tr><th>Fil</th><th>Rolle</th><th>Status</th><th>Format</th><th>Teknisk</th><th>Størrelse</th><th>Sist registrert</th></tr></thead><tbody>
+          {% for file in file_view.files %}<tr tabindex="{% if file.object.pk == file_view.selected.object.pk %}0{% else %}-1{% endif %}" data-file-row="{{ file.object.pk }}" aria-selected="{% if file.object.pk == file_view.selected.object.pk %}true{% else %}false{% endif %}" class="{% if file.object.pk == file_view.selected.object.pk %}selected{% endif %}"><td><span class="file-table-name"><span class="file-type-icon">{% if file.object.role == 'cover_image' %}▧{% elif file.object.role == 'document' %}▤{% else %}♫{% endif %}</span><strong>{{ file.object.filename }}</strong></span></td><td>{{ file.object.get_role_display }}</td><td><span class="file-status {{ file.status_kind }}"><i></i>{{ file.status }}</span></td><td>{{ file.technical.format|default:"—" }}</td><td>{{ file.technical_summary|default:"—" }}</td><td>{{ file.size|default:"—" }}</td><td>{{ file.last_seen|date:"d.m.Y H:i"|default:"—" }}</td></tr>{% endfor %}
+        </tbody></table></div>{% else %}<div class="file-empty-state"><span class="file-symbol">♫</span><div><strong>Ingen filer registrert for denne innspillingen</strong><p>Innspillingen beholdes som katalogobjekt selv om den ikke har noen filressurser.</p></div></div>{% endif %}
+      </section>
+
+      {% if file_view.files %}<section class="recording-card selected-file-locations">
+        {% for file in file_view.files %}<div data-file-locations="{{ file.object.pk }}"{% if file.object.pk != file_view.selected.object.pk %} hidden{% endif %}>
+          <header><h2>Plasseringer for valgt fil</h2><span>{{ file.locations|length }} plassering{{ file.locations|length|pluralize:"er" }}</span></header>
+          {% if file.locations %}<div class="file-location-list">{% for location in file.locations %}<article><div class="location-storage"><strong>{{ location.storage }}</strong>{% if location.root_key %}<small>{{ location.root_key }}</small>{% endif %}</div><div class="location-path"><small>{{ location.path_kind }}</small><code>{{ location.display_path }}</code></div><span class="file-status {{ location.status_kind }}"><i></i>{{ location.status }}{% if location.object.is_current %} · nåværende{% endif %}</span><div class="location-seen"><small>Registrert</small><span>{{ location.object.observed_at|date:"d.m.Y H:i" }}</span></div>{% if location.client_path %}<div class="location-copy"><button type="button" data-copy="{{ location.client_path }}">Kopier filsti</button><button type="button" data-copy="{{ location.client_folder }}">Kopier mappesti</button></div>{% endif %}</article>{% endfor %}</div>{% else %}<p class="recording-empty">Ingen plasseringer er registrert for filen.</p>{% endif %}
+        </div>{% endfor %}
+      </section>
+
+      <section class="recording-card file-history">
+        {% for file in file_view.files %}<div data-file-history="{{ file.object.pk }}"{% if file.object.pk != file_view.selected.object.pk %} hidden{% endif %}>
+          <header><h2>Nylig filhistorikk</h2>{% if perms.provenance.view_metadataassertion %}<a href="{{ tab_urls.sources }}">Vis full historikk →</a>{% endif %}</header>
+          {% for event in file.history %}<div class="file-history-row"><time>{{ event.when|date:"d.m.Y H:i" }}</time><span>{{ event.text }}</span></div>{% empty %}<p class="recording-empty">Ingen filhistorikk er registrert.</p>{% endfor %}
+        </div>{% endfor %}
+      </section>{% endif %}
+    </div>
+
+    <aside class="recording-files-inspector" aria-label="Valgt fil">
+      {% if file_view.files %}{% for file in file_view.files %}<div data-file-detail="{{ file.object.pk }}"{% if file.object.pk != file_view.selected.object.pk %} hidden{% endif %}>
+        <section class="recording-card file-detail-card">
+          <header><span class="eyebrow">Valgt fil</span><h2>{{ file.object.filename }}</h2><div class="file-detail-meta"><span>{{ file.object.get_role_display }}</span><span class="file-status {{ file.status_kind }}"><i></i>{{ file.status }}</span></div></header>
+          <dl class="file-detail-list">
+            <dt>Format</dt><dd>{{ file.technical.format|default:"Ikke registrert" }}</dd>
+            <dt>Samplingsfrekvens</dt><dd>{{ file.technical.sample_rate|default:"Ikke registrert" }}</dd>
+            <dt>Bitdybde</dt><dd>{{ file.technical.bit_depth|default:"Ikke registrert" }}</dd>
+            <dt>Kanaler</dt><dd>{{ file.technical.channels|default:"Ikke registrert" }}</dd>
+            <dt>Varighet</dt><dd>{{ file.technical.duration|default:"Ikke registrert" }}</dd>
+            <dt>Filstørrelse</dt><dd>{{ file.size|default:"Ikke registrert" }}</dd>
+            <dt>Synkronisering</dt><dd>{{ file.object.get_sync_status_display }}</dd>
+          </dl>
+          <div class="file-integrity"><h3>Integritet</h3><dl><dt>SHA-256</dt><dd><code>{{ file.object.sha256|default:"Ikke registrert" }}</code></dd>{% if file.technical.audio_md5 %}<dt>PCM-MD5</dt><dd><code>{{ file.technical.audio_md5 }}</code></dd>{% endif %}<dt>Fil-ID</dt><dd><code>{{ file.object.pk }}</code></dd></dl></div>
+        </section>
+        <section class="recording-card file-actions-card"><h2>Handlinger</h2><div class="file-action-list">
+          {% if file.is_current_radio and overview.playback.url %}<button type="button" data-play-recording data-play-url="{{ overview.playback.url }}" data-play-recording-id="{{ overview.playback.recording_id }}" data-play-title="{{ overview.playback.title }}" data-play-artist="{{ overview.playback.artist }}">▶ Spill radiofil</button>{% endif %}
+          {% if file.primary_client_location %}<button type="button" data-copy="{{ file.primary_client_location.client_path }}">Kopier filsti</button><button type="button" data-copy="{{ file.primary_client_location.client_folder }}">Kopier mappesti</button>{% else %}<p>Ingen klient-/Windows-sti er konfigurert for denne filen.</p>{% endif %}
+          {% if writes_enabled and overview.entry and file.object.role == 'radio_flac' and file.can_rescan and perms.flac_ingest.add_flacingestbatch and perms.flac_ingest.apply_flacingestbatch %}<form method="post" action="{% url 'gui_v2:rescan_library_file' overview.entry.pk file.object.pk %}">{% csrf_token %}<input type="hidden" name="return" value="{{ request.get_full_path }}" data-file-return><button type="submit">↻ Les fil på nytt</button></form>{% endif %}
+          {% if perms.provenance.view_metadataassertion %}<a href="{{ tab_urls.sources }}">Kilder og historikk →</a>{% endif %}
+        </div></section>
+      </div>{% endfor %}{% else %}<section class="recording-card file-detail-card"><header><span class="eyebrow">Valgt fil</span><h2>Ingen fil valgt</h2></header><p class="recording-empty">Det finnes ingen filressurser å vise.</p></section>{% endif %}
+    </aside>
+  </div>
+</div>
+{% endblock %}
