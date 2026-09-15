@@ -10,12 +10,14 @@ jmespath==1.1.0
 Markdown==3.7
 music_metadata_territories==24.12
 mutagen==1.48.1
+numpy==2.5.3
 pillow==12.3.0
 psycopg2-binary==2.9.13
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.3
 s3transfer==0.19.0
 six==1.17.0
+soundfile==0.13.1
 sqlparse==0.6.0
 tzdata==2026.4
 urllib3==2.7.0
