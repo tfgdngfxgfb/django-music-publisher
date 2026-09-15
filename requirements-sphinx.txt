@@ -1,15 +1,4 @@
-Django>=5.2,<5.3
-boto3==1.38.0
-dj_database_url==2.3.1
-django-cleanup==9.0.0
-django-storages==1.14.6
-djangorestframework==3.16.0
-music-metadata-territories==24.12
-Markdown==3.7
-Pillow==11.2.1
-psycopg2-binary==2.9.10
-waitress==3.0.2
-whitenoise==6.9.0
+-r requirements.txt
 
 sphinxcontrib-mermaid==1.0.0
 sphinx-rtd-theme==2.0.0

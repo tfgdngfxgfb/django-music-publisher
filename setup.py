@@ -1,7 +1,19 @@
+from pathlib import Path
+
 import setuptools
 
-with open("README.rst", "r") as fh:
+ROOT = Path(__file__).resolve().parent
+
+with (ROOT / "README.rst").open("r", encoding="utf-8") as fh:
     long_description = fh.read()
+
+runtime_requirements = [
+    line
+    for line in (ROOT / "requirements.txt")
+    .read_text(encoding="utf-8")
+    .splitlines()
+    if line and not line.startswith("#")
+]
 
 setuptools.setup(
     name="django-music-publisher",
@@ -25,17 +37,14 @@ setuptools.setup(
         "-music-publisher/",
     },
     packages=setuptools.find_packages(exclude=["dmp_project", "docs"]),
-    install_requires=(
-        "Django>=4.2.13,<5.0",
-        "requests>=2.32.3",
-    ),
+    install_requires=runtime_requirements,
     python_requires=">=3.14",
     include_package_data=True,
     classifiers=[
         "Development Status :: 5 - Production/Stable",
         "Environment :: Web Environment",
         "Framework :: Django",
-        "Framework :: Django :: 4.2",
+        "Framework :: Django :: 5.2",
         "Intended Audience :: Developers",
         "Intended Audience :: Other Audience",
         "License :: OSI Approved :: MIT License",
