@@ -29,6 +29,7 @@ from catalogue.validators import (
 )
 from managed_music.models import ManagedRecording
 from media_assets.models import FileAsset, FileChecksum, FileLocation
+from media_assets.selection import establish_current_radio_if_unambiguous
 from media_assets.storage import get_storage_root, resolve_storage_path
 from music_library.models import (
     Channel,
@@ -1877,10 +1878,11 @@ def apply_item(item, *, user):
 
 def apply_batch(batch, *, user):
     applied = 0
+    recording_ids = set()
     for item in batch.items.order_by("relative_path"):
         if item.can_apply:
             try:
-                apply_item(item, user=user)
+                applied_item = apply_item(item, user=user)
             except SourceFileUnavailable as error:
                 item.refresh_from_db()
                 item.action = FlacIngestItem.Action.RETRY
@@ -1906,6 +1908,10 @@ def apply_batch(batch, *, user):
                 item.save(update_fields=("action", "messages"))
             else:
                 applied += 1
+                if applied_item.recording_id:
+                    recording_ids.add(applied_item.recording_id)
+    for recording_id in recording_ids:
+        establish_current_radio_if_unambiguous(recording_id)
     batch.refresh_from_db()
     remaining = (
         batch.items.filter(applied_at__isnull=True)

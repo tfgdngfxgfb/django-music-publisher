@@ -100,6 +100,12 @@ def _protection_map(recording_ids):
     add(
         RecordingMediaSelection.objects.filter(
             recording_id__in=ids
+        )
+        .filter(
+            Q(selected_master__isnull=False)
+            | Q(selected_master_by__isnull=False)
+            | Q(current_radio_by__isnull=False)
+            | Q(current_radio_at__isnull=False)
         ).values_list("recording_id", flat=True),
         "Innspillingen har beskyttede valg av master eller radiofil.",
     )

@@ -24,7 +24,11 @@ from catalogue.models import (
     ReleaseTrack,
 )
 from managed_music.models import ManagedRecording, ManagedRelease
-from media_assets.models import FileAsset, FileLocation
+from media_assets.models import (
+    FileAsset,
+    FileLocation,
+    RecordingMediaSelection,
+)
 from music_library.models import MusicLibraryEntry
 from parties.models import Party
 from provenance.models import (
@@ -192,6 +196,14 @@ class FlacAdapterTests(FlacTestMixin, TestCase):
         self.assertEqual(
             MusicLibraryEntry.objects.get().rotation_suitability,
             MusicLibraryEntry.RotationSuitability.UNASSESSED,
+        )
+        selection = RecordingMediaSelection.objects.get(
+            recording=item.recording
+        )
+        self.assertEqual(selection.current_radio_id, item.file_asset_id)
+        self.assertEqual(
+            item.file_asset.lifecycle_status,
+            FileAsset.LifecycleStatus.CURRENT,
         )
         self.assertEqual(path.read_bytes(), before)
 
