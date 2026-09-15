@@ -3,15 +3,15 @@ from django.db.models.deletion import ProtectedError
 from django.test import TestCase
 from django.urls import reverse
 
-from catalogue.models import Recording
+from catalogue.models import Recording, Release
 from music_library.models import MusicLibraryEntry
 from parties.models import Party
 from rights.models import RightsClaim, RightsConfiguration
 from rights.services import decide_rights_claim
 from rights_core.models import VerificationStatus
 
-from managed_music.models import ManagedRecording
-from managed_music.services import create_managed_recording
+from managed_music.models import ManagedRecording, ManagedRelease
+from managed_music.services import create_managed_recording, save_managed_release
 
 
 class ManagedMusicTests(TestCase):
@@ -91,6 +91,40 @@ class ManagedMusicTests(TestCase):
         )
         managed.refresh_from_db()
         self.assertEqual(managed.status, ManagedRecording.Status.ACTIVE)
+
+    def test_managed_release_is_independent_of_recording_management_and_rights(
+        self,
+    ):
+        release = Release.objects.create(title="Forvaltet samleplate")
+        recording = Recording.objects.create(title="Tredjepartsspor")
+        managed = save_managed_release(
+            release=release,
+            status=ManagedRelease.Status.ACTIVE,
+            relationship=ManagedRelease.Relationship.MANAGED_CATALOGUE,
+            notes="Forvaltes som katalogprodukt.",
+        )
+
+        self.assertEqual(managed.release, release)
+        self.assertFalse(ManagedRecording.objects.exists())
+        self.assertFalse(RightsClaim.objects.filter(recording=recording).exists())
+
+    def test_managed_release_is_unique_and_protects_release(self):
+        release = Release.objects.create(title="Beskyttet utgivelse")
+        managed = save_managed_release(
+            release=release,
+            status=ManagedRelease.Status.PENDING,
+            relationship=ManagedRelease.Relationship.OWNED_CATALOGUE,
+        )
+        updated = save_managed_release(
+            release=release,
+            status=ManagedRelease.Status.ACTIVE,
+            relationship=ManagedRelease.Relationship.OWNED_CATALOGUE,
+        )
+
+        self.assertEqual(updated.pk, managed.pk)
+        self.assertEqual(ManagedRelease.objects.count(), 1)
+        with self.assertRaises(ProtectedError):
+            release.delete()
 
 
 class ManagedMusicAdminTests(TestCase):

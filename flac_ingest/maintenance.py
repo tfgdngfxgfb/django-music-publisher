@@ -14,7 +14,7 @@ from catalogue.models import (
     RecordingContribution,
     Release,
 )
-from managed_music.models import ManagedRecording
+from managed_music.models import ManagedRecording, ManagedRelease
 from media_assets.models import FileAsset, FileLocation
 from music_library.models import MusicLibraryEntry
 from provenance.models import (
@@ -343,7 +343,12 @@ def create_cleanup_preview(*, user, relative_root=".", recording_id=None):
             source_system__name=SOURCE_SYSTEM_NAME,
             flac_ingest_item__isnull=True,
         ).count(),
-        "empty_releases": Release.objects.filter(tracks__isnull=True).count(),
+        "empty_releases": Release.objects.filter(
+            tracks__isnull=True, managed_release__isnull=True
+        ).count(),
+        "protected_empty_releases": ManagedRelease.objects.filter(
+            release__tracks__isnull=True
+        ).count(),
     }
     return FlacMaintenanceJob.objects.create(
         kind=FlacMaintenanceJob.Kind.CLEANUP,

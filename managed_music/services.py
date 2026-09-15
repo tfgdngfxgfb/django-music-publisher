@@ -13,7 +13,33 @@ from music_library.models import MusicLibraryEntry
 from rights.models import RightsClaim, RightsConfiguration
 from rights.services import create_rights_claim
 
-from .models import ManagedRecording
+from .models import ManagedRecording, ManagedRelease
+
+
+@transaction.atomic
+def save_managed_release(
+    *, release, status, relationship, source_system=None, notes=""
+):
+    """Save catalogue management without creating recording rights."""
+    managed = (
+        ManagedRelease.objects.select_for_update()
+        .filter(release=release)
+        .first()
+    )
+    if managed is None:
+        return ManagedRelease.objects.create(
+            release=release,
+            status=status,
+            relationship=relationship,
+            source_system=source_system,
+            notes=notes,
+        )
+    managed.status = status
+    managed.relationship = relationship
+    managed.source_system = source_system
+    managed.notes = notes
+    managed.save()
+    return managed
 
 
 @transaction.atomic

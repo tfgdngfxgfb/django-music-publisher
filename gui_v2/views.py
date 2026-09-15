@@ -62,7 +62,9 @@ from flac_ingest.services import (
     scan_directory,
     split_radio_file_to_new_recording,
 )
-from managed_music.models import ManagedRecording
+from managed_music.forms import ManagedReleaseForm
+from managed_music.models import ManagedRecording, ManagedRelease
+from managed_music.services import save_managed_release
 from media_assets.models import FileAsset, FileLocation
 from media_assets.playback import (
     RadioPlaybackStatus,
@@ -1735,6 +1737,19 @@ def release_detail(request, release_id):
         instance=release,
         prefix="release",
     )
+    managed_release = ManagedRelease.objects.filter(release=release).first()
+    can_view_release_management = request.user.has_perm("catalogue.view_release")
+    managed_permission = (
+        "managed_music.change_managedrelease"
+        if managed_release
+        else "managed_music.add_managedrelease"
+    )
+    can_edit_release_management = request.user.has_perm(managed_permission)
+    managed_release_form = ManagedReleaseForm(
+        request.POST if action == "managed_release" else None,
+        instance=managed_release,
+        prefix="managed-release",
+    )
     can_manage_rights = request.user.is_staff and request.user.has_perms(
         ("rights.view_rightsclaim", "rights.add_rightsclaim")
     )
@@ -1765,6 +1780,25 @@ def release_detail(request, release_id):
                 release_form.save()
                 release_form.save_barcode()
             messages.success(request, "Utgivelsesopplysningene er lagret.")
+            return redirect(
+                f"{reverse('gui_v2:release_detail', args=[release.pk])}?tab=details"
+            )
+    elif request.method == "POST" and action == "managed_release":
+        if not settings.GUI_V2_WRITES_ENABLED:
+            raise PermissionDenied(
+                "GUI v2 er skrivebeskyttet utenfor den isolerte testdatabasen."
+            )
+        if not can_edit_release_management:
+            raise PermissionDenied
+        if managed_release_form.is_valid():
+            save_managed_release(
+                release=release, **managed_release_form.cleaned_data
+            )
+            messages.success(
+                request,
+                "Utgivelsens katalogforvaltning er lagret uten å endre "
+                "rettigheter for innspillingene.",
+            )
             return redirect(
                 f"{reverse('gui_v2:release_detail', args=[release.pk])}?tab=details"
             )
@@ -1972,6 +2006,10 @@ def release_detail(request, release_id):
             "selected_track": selected_track,
             "selected_track_data": selected_track_data,
             "release_form": release_form,
+            "managed_release": managed_release,
+            "managed_release_form": managed_release_form,
+            "can_view_release_management": can_view_release_management,
+            "can_edit_release_management": can_edit_release_management,
             "release_barcode": release_barcode,
             "release_artist_text": release_artist_text,
             "release_cover": release_cover,

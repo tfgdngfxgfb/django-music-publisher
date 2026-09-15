@@ -19,7 +19,7 @@ from catalogue.models import (
     Release,
     ReleaseTrack,
 )
-from managed_music.models import ManagedRecording
+from managed_music.models import ManagedRecording, ManagedRelease
 from media_assets.models import FileAsset, FileLocation
 from music_library.models import (
     Channel,
@@ -864,6 +864,45 @@ class GuiV2WorkspaceTests(TestCase):
             rights, "Registrer rettigheter for valgte innspillinger"
         )
         self.assertContains(rights, 'id="id_rights-recordings"')
+
+    @override_settings(GUI_V2_WRITES_ENABLED=True)
+    def test_release_management_does_not_create_track_rights(self):
+        self._superuser()
+        response = self.client.post(
+            reverse("gui_v2:release_detail", args=[self.release.pk]),
+            {
+                "action": "managed_release",
+                "tab": "details",
+                "managed-release-status": ManagedRelease.Status.ACTIVE,
+                "managed-release-relationship": (
+                    ManagedRelease.Relationship.OWNED_CATALOGUE
+                ),
+                "managed-release-source_system": "",
+                "managed-release-notes": "Katalogen er overtatt.",
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            f"{reverse('gui_v2:release_detail', args=[self.release.pk])}?tab=details",
+        )
+        managed = ManagedRelease.objects.get(release=self.release)
+        self.assertEqual(
+            managed.relationship,
+            ManagedRelease.Relationship.OWNED_CATALOGUE,
+        )
+        self.assertFalse(ManagedRecording.objects.exists())
+        self.assertFalse(RightsClaim.objects.exists())
+
+        response = self.client.get(
+            reverse("gui_v2:release_detail", args=[self.release.pk]),
+            {"tab": "details"},
+        )
+        self.assertContains(response, "Eid/kontrollert katalog")
+        self.assertContains(
+            response,
+            "Rettigheter og forvaltning for hvert spor vurderes separat",
+        )
 
     @override_settings(GUI_V2_WRITES_ENABLED=True)
     def test_integrated_rights_tab_creates_claim_on_selected_recording(self):

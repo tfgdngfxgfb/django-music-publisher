@@ -6,6 +6,15 @@ from parties.models import ArtistIdentity
 from provenance.models import SourceSystem
 from rights.models import RightsClaim
 
+from .models import ManagedRelease
+
+
+class ManagedReleaseForm(forms.ModelForm):
+    class Meta:
+        model = ManagedRelease
+        fields = ("status", "relationship", "source_system", "notes")
+        widgets = {"notes": forms.Textarea(attrs={"rows": 2})}
+
 
 class ManagedRecordingCreationForm(forms.Form):
     recording = forms.ModelChoiceField(

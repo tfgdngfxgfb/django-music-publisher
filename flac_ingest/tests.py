@@ -23,7 +23,7 @@ from catalogue.models import (
     Release,
     ReleaseTrack,
 )
-from managed_music.models import ManagedRecording
+from managed_music.models import ManagedRecording, ManagedRelease
 from media_assets.models import FileAsset, FileLocation
 from music_library.models import MusicLibraryEntry
 from parties.models import Party
@@ -1260,6 +1260,21 @@ class FlacMaintenanceTests(FlacTestMixin, TestCase):
         self.assertEqual(
             FileLocation.objects.get().status, FileLocation.Status.MISSING
         )
+
+    def test_cleanup_classifies_managed_empty_release_as_protected(self):
+        protected = Release.objects.create(title="Forvaltet tom utgivelse")
+        Release.objects.create(title="Regenererbar tom utgivelse")
+        ManagedRelease.objects.create(
+            release=protected,
+            status=ManagedRelease.Status.ACTIVE,
+            relationship=ManagedRelease.Relationship.OWNED_CATALOGUE,
+        )
+
+        with override_settings(P7_MUSIC_ROOT=str(self.root)):
+            job = create_cleanup_preview(user=self.user)
+
+        self.assertEqual(job.plan["stats"]["empty_releases"], 1)
+        self.assertEqual(job.plan["stats"]["protected_empty_releases"], 1)
 
     def test_explicit_remove_from_library_keeps_existing_file_and_recording(
         self,

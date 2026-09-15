@@ -20,6 +20,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
 from catalogue.models import Label, Release, ReleaseTrack
+from managed_music.models import ManagedRelease
 from media_assets.digitization import (
     apply_plan,
     delete_empty_batch,
@@ -361,7 +362,10 @@ def batch_workspace(batch):
 def index(request):
     query = request.GET.get("q", "").strip()
     batches = DigitizationBatch.objects.select_related(
-        "release", "release__label", "created_by"
+        "release",
+        "release__label",
+        "release__managed_release",
+        "created_by",
     )
     if query:
         batches = batches.filter(
@@ -380,6 +384,32 @@ def index(request):
                 batches = batches.filter(**{field: value})
             except (ValidationError, ValueError):
                 batches = batches.none()
+    can_view_release_management = request.user.has_perm("catalogue.view_release")
+    management = request.GET.get("management", "")
+    if can_view_release_management:
+        if management == "owned":
+            batches = batches.filter(
+                release__managed_release__status=ManagedRelease.Status.ACTIVE,
+                release__managed_release__relationship=(
+                    ManagedRelease.Relationship.OWNED_CATALOGUE
+                ),
+            )
+        elif management == "managed":
+            batches = batches.filter(
+                release__managed_release__status=ManagedRelease.Status.ACTIVE,
+                release__managed_release__relationship=(
+                    ManagedRelease.Relationship.MANAGED_CATALOGUE
+                ),
+            )
+        elif management in {
+            ManagedRelease.Status.PENDING,
+            ManagedRelease.Status.INACTIVE,
+        }:
+            batches = batches.filter(
+                release__managed_release__status=management
+            )
+        elif management == "none":
+            batches = batches.filter(release__managed_release__isnull=True)
     new_release = request.POST.get("operation") == "create_release"
     form = BatchForm(
         request.POST if request.method == "POST" and not new_release else None,
@@ -448,6 +478,16 @@ def index(request):
                 }
             ),
         }
+        managed = getattr(batch.release, "managed_release", None)
+        if managed is None:
+            batch.release_management_label = "Ikke forvaltet"
+            batch.release_management_kind = "muted"
+        elif managed.status != ManagedRelease.Status.ACTIVE:
+            batch.release_management_label = managed.get_status_display()
+            batch.release_management_kind = "muted"
+        else:
+            batch.release_management_label = managed.get_relationship_display()
+            batch.release_management_kind = "ok"
     return render(
         request,
         "gui_v2/digitization_index.html",
@@ -458,6 +498,14 @@ def index(request):
             "release_form": release_form,
             "query": query,
             "statuses": DigitizationBatch.Status.choices,
+            "management_choices": (
+                ("owned", "Eid/kontrollert katalog"),
+                ("managed", "Forvaltet på vegne av andre"),
+                (ManagedRelease.Status.PENDING, "Til vurdering"),
+                (ManagedRelease.Status.INACTIVE, "Ikke aktiv"),
+                ("none", "Ikke forvaltet"),
+            ),
+            "can_view_release_management": can_view_release_management,
             "labels": Label.objects.all(),
             "writes_enabled": settings.GUI_V2_WRITES_ENABLED,
         },

@@ -7,7 +7,7 @@ from django.urls import reverse
 from rights_core.admin import CanonicalAdmin
 
 from .forms import ManagedRecordingCreationForm
-from .models import ManagedRecording
+from .models import ManagedRecording, ManagedRelease
 from .services import create_managed_recording
 
 
@@ -81,4 +81,24 @@ class ManagedRecordingAdmin(CanonicalAdmin):
             request,
             "admin/managed_music/managedrecording/add_form.html",
             context,
+        )
+
+
+@admin.register(ManagedRelease)
+class ManagedReleaseAdmin(CanonicalAdmin):
+    list_display = (
+        "release", "status", "relationship", "source_system", "updated_at"
+    )
+    list_filter = ("status", "relationship", "source_system")
+    search_fields = (
+        "release__title",
+        "release__catalogue_number",
+        "release__label__name",
+        "id",
+    )
+    autocomplete_fields = ("release", "source_system")
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related(
+            "release", "release__label", "source_system"
         )

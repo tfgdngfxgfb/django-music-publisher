@@ -13,6 +13,7 @@ from django.urls import reverse
 
 from catalogue.models import Recording, Release, ReleaseTrack
 from flac_ingest.maintenance import _protection_map
+from managed_music.models import ManagedRelease
 from media_assets.digitization import (
     apply_plan,
     delete_empty_batch,
@@ -611,6 +612,37 @@ class DigitizationWorkflowTests(TestCase):
         self.assertEqual(
             self.client.get(reverse("gui_v2:digitization_index")).status_code,
             403,
+        )
+
+    def test_index_shows_and_filters_release_management(self):
+        ManagedRelease.objects.create(
+            release=self.release,
+            status=ManagedRelease.Status.ACTIVE,
+            relationship=ManagedRelease.Relationship.MANAGED_CATALOGUE,
+        )
+        other_release = Release.objects.create(title="Ikke forvaltet")
+        DigitizationBatch.objects.create(
+            release=other_release,
+            title="Annen digitalisering",
+            created_by=self.user,
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse("gui_v2:digitization_index"))
+        self.assertContains(response, "Forvaltet på vegne av andre")
+        response = self.client.get(
+            reverse("gui_v2:digitization_index"), {"management": "managed"}
+        )
+        self.assertEqual(
+            [batch.release for batch in response.context["page"]],
+            [self.release],
+        )
+        response = self.client.get(
+            reverse("gui_v2:digitization_index"), {"management": "none"}
+        )
+        self.assertEqual(
+            [batch.release for batch in response.context["page"]],
+            [other_release],
         )
 
     def test_empty_batch_can_be_removed_without_removing_release(self):
