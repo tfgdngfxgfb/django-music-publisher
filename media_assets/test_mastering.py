@@ -106,9 +106,7 @@ class MasteringWorkflowTests(TestCase):
     def _radio(self, name="external.flac"):
         path = self.root / "radio" / name
         path.parent.mkdir(parents=True, exist_ok=True)
-        sf.write(
-            path, self._samples(2), 48000, format="FLAC", subtype="PCM_24"
-        )
+        sf.write(path, self._samples(2), 48000, format="FLAC", subtype="PCM_24")
         audio = FLAC(path)
         audio["TITLE"] = ["Gammel filtittel"]
         audio["ARTIST"] = ["Gammel filartist"]
@@ -173,9 +171,7 @@ class MasteringWorkflowTests(TestCase):
                 relative_path="master/second.wav",
                 user=self.user,
             )
-        selection = RecordingMediaSelection.objects.get(
-            recording=self.recording
-        )
+        selection = RecordingMediaSelection.objects.get(recording=self.recording)
         self.assertEqual(selection.selected_master, first)
         self.assertEqual(
             FileAsset.objects.filter(
@@ -211,7 +207,56 @@ class MasteringWorkflowTests(TestCase):
             tool_name="test",
         )
         with self.assertRaises(ValidationError):
-            relation.full_clean()
+            relation.save()
+        with self.assertRaises(ValidationError):
+            FileDerivation.objects.create(
+                source_asset=first,
+                derived_asset=first,
+                tool_name="test",
+            )
+
+    def test_selection_rejects_master_and_current_from_other_recording(self):
+        other = Recording.objects.create(title="Annen")
+        local_radio = FileAsset.objects.create(
+            recording=self.recording,
+            filename="local-radio.flac",
+            role=FileAsset.Role.RADIO_FLAC,
+        )
+        other_master = FileAsset.objects.create(
+            recording=other,
+            filename="other-master.wav",
+            role=FileAsset.Role.EDITED_WAV_MASTER,
+        )
+        other_radio = FileAsset.objects.create(
+            recording=other,
+            filename="other-radio.flac",
+            role=FileAsset.Role.RADIO_FLAC,
+            lifecycle_status=FileAsset.LifecycleStatus.CURRENT,
+        )
+        with self.assertRaises(ValidationError):
+            RecordingMediaSelection.objects.create(
+                recording=self.recording,
+                selected_master=other_master,
+            )
+        with self.assertRaises(ValidationError):
+            RecordingMediaSelection.objects.create(
+                recording=self.recording,
+                selected_master=local_radio,
+            )
+        with self.assertRaises(ValidationError):
+            RecordingMediaSelection.objects.create(
+                recording=self.recording,
+                current_radio=other_radio,
+            )
+        with self.assertRaises(ValidationError):
+            RadioFlacGeneration.objects.create(
+                recording=self.recording,
+                master_asset=other_master,
+                target_root_key="generated_media",
+                target_relative_path="P7-generert/wrong.flac",
+                status=RadioFlacGeneration.Status.PLANNED,
+                created_by=self.user,
+            )
 
     def test_explicit_current_selection_must_be_activated_and_wins_over_legacy(
         self,
@@ -232,9 +277,7 @@ class MasteringWorkflowTests(TestCase):
             current_radio=second,
             current_radio_by=self.user,
         )
-        self.assertEqual(
-            resolve_current_radio_asset(self.recording).asset, second
-        )
+        self.assertEqual(resolve_current_radio_asset(self.recording).asset, second)
         self.assertNotEqual(selection.current_radio, first)
 
     def test_write_gate_blocks_generation_without_new_file(self):
@@ -248,8 +291,35 @@ class MasteringWorkflowTests(TestCase):
             with self.assertRaises(PermissionDenied):
                 generate_candidate(generation=generation, user=self.user)
         self.assertFalse(target.exists())
-        self.assertIsNone(
-            FileAsset.objects.filter(generation__isnull=False).first()
+        self.assertIsNone(FileAsset.objects.filter(generation__isnull=False).first())
+
+    def test_identical_plan_and_generation_are_idempotent(self):
+        with self._settings(writes=True):
+            self._radio()
+            self._registered_selected_master()
+            first = create_generation_plan(recording=self.recording, user=self.user)
+            repeated_plan = create_generation_plan(
+                recording=self.recording, user=self.user
+            )
+            self.assertEqual(repeated_plan.pk, first.pk)
+
+            generate_candidate(generation=first, user=self.user)
+            first.refresh_from_db()
+            candidate_id = first.candidate_asset_id
+            repeated_generation = generate_candidate(generation=first, user=self.user)
+            repeated_plan_after_file = create_generation_plan(
+                recording=self.recording, user=self.user
+            )
+
+        self.assertEqual(repeated_generation.pk, first.pk)
+        self.assertEqual(repeated_plan_after_file.pk, first.pk)
+        self.assertEqual(repeated_generation.candidate_asset_id, candidate_id)
+        self.assertEqual(
+            FileAsset.objects.filter(
+                recording=self.recording,
+                lifecycle_status=FileAsset.LifecycleStatus.CANDIDATE,
+            ).count(),
+            1,
         )
 
     def test_managed_metadata_audio_roundtrip_and_activation(self):
@@ -274,9 +344,7 @@ class MasteringWorkflowTests(TestCase):
             generate_candidate(generation=generation, user=self.user)
             generation.refresh_from_db()
             candidate = generation.candidate_asset
-            self.assertEqual(
-                generation.status, RadioFlacGeneration.Status.VERIFIED
-            )
+            self.assertEqual(generation.status, RadioFlacGeneration.Status.VERIFIED)
             self.assertEqual(
                 candidate.lifecycle_status, FileAsset.LifecycleStatus.CANDIDATE
             )
@@ -301,6 +369,14 @@ class MasteringWorkflowTests(TestCase):
             )
             self.assertEqual(
                 candidate.lifecycle_status, FileAsset.LifecycleStatus.CURRENT
+            )
+            self.assertEqual(
+                FileAsset.objects.filter(
+                    recording=self.recording,
+                    role=FileAsset.Role.RADIO_FLAC,
+                    lifecycle_status=FileAsset.LifecycleStatus.CURRENT,
+                ).count(),
+                1,
             )
             self.assertEqual(
                 old_asset.lifecycle_status,
@@ -332,18 +408,10 @@ class MasteringWorkflowTests(TestCase):
             preview = build_generation_preview(recording=self.recording)
 
         self.assertFalse(preview["is_managed"])
-        self.assertEqual(
-            preview["expected_tags"]["TITLE"], ["Gammel filtittel"]
-        )
-        self.assertEqual(
-            preview["expected_tags"]["ARTIST"], ["Gammel filartist"]
-        )
-        self.assertEqual(
-            preview["expected_tags"]["KANAL"], ["P7 Riks", "P7 Ung"]
-        )
-        self.assertEqual(
-            preview["expected_tags"]["ROTATION"], ["Ikke vurdert"]
-        )
+        self.assertEqual(preview["expected_tags"]["TITLE"], ["Gammel filtittel"])
+        self.assertEqual(preview["expected_tags"]["ARTIST"], ["Gammel filartist"])
+        self.assertEqual(preview["expected_tags"]["KANAL"], ["P7 Riks", "P7 Ung"])
+        self.assertEqual(preview["expected_tags"]["ROTATION"], ["Ikke vurdert"])
 
     def test_ambiguous_radio_source_blocks_generation_preview(self):
         with self._settings():
@@ -367,9 +435,7 @@ class MasteringWorkflowTests(TestCase):
                 generate_candidate(generation=generation, user=self.user)
 
         self.assertEqual(occupied.read_bytes(), b"occupied")
-        self.assertEqual(
-            resolve_current_radio_asset(self.recording).asset, old
-        )
+        self.assertEqual(resolve_current_radio_asset(self.recording).asset, old)
 
     def test_activation_failure_rolls_back_and_keeps_release_track(self):
         release = Release.objects.create(title="Testutgivelse")
@@ -381,7 +447,13 @@ class MasteringWorkflowTests(TestCase):
         )
         with self._settings(writes=True):
             old, _ = self._radio()
-            self._registered_selected_master()
+            master, _ = self._registered_selected_master()
+            old.lifecycle_status = FileAsset.LifecycleStatus.CURRENT
+            old.save(update_fields=("lifecycle_status",))
+            selection = RecordingMediaSelection.objects.get(recording=self.recording)
+            selection.current_radio = old
+            selection.current_radio_by = self.user
+            selection.save()
             generation = create_generation_plan(
                 recording=self.recording, user=self.user
             )
@@ -397,17 +469,49 @@ class MasteringWorkflowTests(TestCase):
         old.refresh_from_db()
         candidate.refresh_from_db()
         generation.refresh_from_db()
+        selection.refresh_from_db()
         track.refresh_from_db()
-        self.assertEqual(
-            old.lifecycle_status, FileAsset.LifecycleStatus.UNCLASSIFIED
-        )
+        self.assertEqual(old.lifecycle_status, FileAsset.LifecycleStatus.CURRENT)
         self.assertEqual(
             candidate.lifecycle_status, FileAsset.LifecycleStatus.CANDIDATE
         )
-        self.assertEqual(
-            generation.status, RadioFlacGeneration.Status.VERIFIED
-        )
+        self.assertEqual(generation.status, RadioFlacGeneration.Status.VERIFIED)
+        self.assertEqual(selection.current_radio_id, old.pk)
+        self.assertEqual(selection.selected_master_id, master.pk)
         self.assertEqual(track.recording_id, self.recording.pk)
+
+    def test_database_registration_failure_removes_final_candidate_file(self):
+        with self._settings(writes=True):
+            old, _ = self._radio()
+            master, _ = self._registered_selected_master()
+            generation = create_generation_plan(
+                recording=self.recording, user=self.user
+            )
+            target = self.root / generation.target_relative_path
+            with patch.object(
+                FileDerivation,
+                "save",
+                side_effect=RuntimeError("database registration failed"),
+            ), self.assertRaises(RuntimeError):
+                generate_candidate(generation=generation, user=self.user)
+
+        generation.refresh_from_db()
+        selection = RecordingMediaSelection.objects.get(recording=self.recording)
+        self.assertFalse(target.exists())
+        self.assertFalse(FileDerivation.objects.exists())
+        self.assertFalse(
+            FileAsset.objects.filter(
+                recording=self.recording,
+                lifecycle_status=FileAsset.LifecycleStatus.CANDIDATE,
+            ).exists()
+        )
+        self.assertEqual(generation.status, RadioFlacGeneration.Status.FAILED)
+        self.assertEqual(selection.selected_master_id, master.pk)
+        self.assertIsNone(selection.current_radio_id)
+        self.assertEqual(
+            resolve_current_radio_asset(self.recording).asset,
+            old,
+        )
 
     def test_rebuild_preserves_selection_lineage_and_generated_p7uuid_rescans(
         self,
@@ -438,12 +542,8 @@ class MasteringWorkflowTests(TestCase):
             self.assertEqual(rebuild.plan["stats"]["protected_recordings"], 1)
             execute_rebuild(rebuild, user=self.user)
 
-        self.assertEqual(
-            Recording.objects.filter(pk=self.recording.pk).count(), 1
-        )
-        selection = RecordingMediaSelection.objects.get(
-            recording=self.recording
-        )
+        self.assertEqual(Recording.objects.filter(pk=self.recording.pk).count(), 1)
+        selection = RecordingMediaSelection.objects.get(recording=self.recording)
         self.assertEqual(selection.selected_master_id, master.pk)
         self.assertEqual(selection.current_radio_id, candidate.pk)
         self.assertTrue(
@@ -454,15 +554,9 @@ class MasteringWorkflowTests(TestCase):
         )
         old.refresh_from_db()
         candidate.refresh_from_db()
-        self.assertEqual(
-            old.lifecycle_status, FileAsset.LifecycleStatus.HISTORICAL
-        )
-        self.assertEqual(
-            candidate.lifecycle_status, FileAsset.LifecycleStatus.CURRENT
-        )
-        self.assertEqual(
-            resolve_current_radio_asset(self.recording).asset, candidate
-        )
+        self.assertEqual(old.lifecycle_status, FileAsset.LifecycleStatus.HISTORICAL)
+        self.assertEqual(candidate.lifecycle_status, FileAsset.LifecycleStatus.CURRENT)
+        self.assertEqual(resolve_current_radio_asset(self.recording).asset, candidate)
 
     def test_supported_quality_and_channels_are_preserved(self):
         for subtype, rate, channels in (
@@ -471,9 +565,7 @@ class MasteringWorkflowTests(TestCase):
             ("PCM_24", 96000, 2),
         ):
             with self.subTest(subtype=subtype, rate=rate, channels=channels):
-                recording = Recording.objects.create(
-                    title=f"Test {subtype} {rate}"
-                )
+                recording = Recording.objects.create(title=f"Test {subtype} {rate}")
                 MusicLibraryEntry.objects.create(recording=recording)
                 self.recording = recording
                 with self._settings(writes=True):
@@ -491,9 +583,7 @@ class MasteringWorkflowTests(TestCase):
                     generation.refresh_from_db()
                 technical = generation.candidate_asset.technical_metadata
                 self.assertEqual(technical["sample_rate"], rate)
-                self.assertEqual(
-                    technical["bits_per_sample"], int(subtype[-2:])
-                )
+                self.assertEqual(technical["bits_per_sample"], int(subtype[-2:]))
                 self.assertEqual(technical["channels"], channels)
                 self.assertEqual(
                     generation.verification["source_pcm_sha256"],
@@ -515,12 +605,8 @@ class MasteringWorkflowTests(TestCase):
         generation.refresh_from_db()
         self.assertEqual(generation.status, RadioFlacGeneration.Status.FAILED)
         self.assertTrue(old_path.exists())
-        self.assertEqual(
-            resolve_current_radio_asset(self.recording).asset, old
-        )
-        self.assertFalse(
-            (self.root / generation.target_relative_path).exists()
-        )
+        self.assertEqual(resolve_current_radio_asset(self.recording).asset, old)
+        self.assertFalse((self.root / generation.target_relative_path).exists())
 
     def test_missing_master_and_metadata_failure_leave_current_untouched(self):
         with self._settings(writes=True):
@@ -532,9 +618,7 @@ class MasteringWorkflowTests(TestCase):
             master_path.unlink()
             with self.assertRaises(OSError):
                 generate_candidate(generation=missing_plan, user=self.user)
-            self.assertEqual(
-                resolve_current_radio_asset(self.recording).asset, old
-            )
+            self.assertEqual(resolve_current_radio_asset(self.recording).asset, old)
 
             # Restore the controlled source and create a fresh plan. A tag
             # failure must clean the candidate just like an encoder failure.
@@ -549,9 +633,5 @@ class MasteringWorkflowTests(TestCase):
                 generate_candidate(generation=metadata_plan, user=self.user)
 
         self.assertTrue(old_path.exists())
-        self.assertEqual(
-            resolve_current_radio_asset(self.recording).asset, old
-        )
-        self.assertFalse(
-            (self.root / metadata_plan.target_relative_path).exists()
-        )
+        self.assertEqual(resolve_current_radio_asset(self.recording).asset, old)
+        self.assertFalse((self.root / metadata_plan.target_relative_path).exists())
