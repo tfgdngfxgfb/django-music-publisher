@@ -10,7 +10,7 @@ jmespath==1.1.0
 Markdown==3.7
 music_metadata_territories==24.12
 mutagen==1.48.1
-numpy==2.5.3
+numpy==2.4.6
 pillow==12.3.0
 psycopg2-binary==2.9.13
 python-dateutil==2.9.0.post0
