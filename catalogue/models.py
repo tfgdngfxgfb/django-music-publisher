@@ -2,8 +2,16 @@ from django.core.exceptions import ValidationError
 from django.db import models
 
 from parties.models import ArtistIdentity, Party
-from rights_core.models import CanonicalModel, VerificationStatus, validate_not_blank
-from .validators import normalize_isrc, normalize_trade_item_number, validate_language
+from rights_core.models import (
+    CanonicalModel,
+    VerificationStatus,
+    validate_not_blank,
+)
+from .validators import (
+    normalize_isrc,
+    normalize_trade_item_number,
+    validate_language,
+)
 
 
 class Recording(CanonicalModel):
@@ -15,7 +23,9 @@ class Recording(CanonicalModel):
         DRAFT = "draft", "Utkast"
         REVIEWED = "reviewed", "Metadata kontrollert"
 
-    title = models.CharField("tittel", max_length=500, validators=[validate_not_blank])
+    title = models.CharField(
+        "tittel", max_length=500, validators=[validate_not_blank]
+    )
     version_designation = models.CharField(
         "versjonsbetegnelse", max_length=255, blank=True
     )
@@ -64,7 +74,9 @@ class Recording(CanonicalModel):
 
 
 class Label(CanonicalModel):
-    name = models.CharField("navn", max_length=255, validators=[validate_not_blank])
+    name = models.CharField(
+        "navn", max_length=255, validators=[validate_not_blank]
+    )
     party = models.ForeignKey(
         Party,
         verbose_name="tilknyttet person/organisasjon",
@@ -82,7 +94,8 @@ class Label(CanonicalModel):
         ordering = ("name", "id")
         constraints = [
             models.CheckConstraint(
-                condition=models.Q(name__regex=r".*\S.*"), name="label_nonblank_name"
+                condition=models.Q(name__regex=r".*\S.*"),
+                name="label_nonblank_name",
             )
         ]
 
@@ -100,13 +113,18 @@ class Release(CanonicalModel):
         DIGITAL = "digital", "Digital utgivelse"
         OTHER = "other", "Annen"
 
-    title = models.CharField("tittel", max_length=500, validators=[validate_not_blank])
+    title = models.CharField(
+        "tittel", max_length=500, validators=[validate_not_blank]
+    )
     release_type = models.CharField(
         "utgivelsestype", max_length=20, choices=Type.choices, blank=True
     )
     release_date = models.DateField("utgivelsesdato", null=True, blank=True)
     release_year = models.PositiveSmallIntegerField(
-        "utgivelsesår", null=True, blank=True, help_text="Bruk når bare året er kjent."
+        "utgivelsesår",
+        null=True,
+        blank=True,
+        help_text="Bruk når bare året er kjent.",
     )
     label = models.ForeignKey(
         Label,
@@ -116,7 +134,9 @@ class Release(CanonicalModel):
         null=True,
         blank=True,
     )
-    catalogue_number = models.CharField("katalognummer", max_length=100, blank=True)
+    catalogue_number = models.CharField(
+        "katalognummer", max_length=100, blank=True
+    )
     verification_status = models.CharField(
         "verifikasjonsstatus",
         max_length=20,
@@ -130,7 +150,9 @@ class Release(CanonicalModel):
         verbose_name_plural = "utgivelser"
         ordering = ("title", "id")
         indexes = [
-            models.Index(fields=("catalogue_number",), name="release_catalogue_idx"),
+            models.Index(
+                fields=("catalogue_number",), name="release_catalogue_idx"
+            ),
             models.Index(fields=("release_year",), name="release_year_idx"),
         ]
         constraints = [
@@ -153,7 +175,9 @@ class Release(CanonicalModel):
             and self.release_date.year != self.release_year
         ):
             raise ValidationError(
-                {"release_year": "Utgivelsesår og utgivelsesdato må angi samme år."}
+                {
+                    "release_year": "Utgivelsesår og utgivelsesdato må angi samme år."
+                }
             )
 
     def __str__(self):
@@ -173,11 +197,18 @@ class ReleaseTrack(CanonicalModel):
         on_delete=models.PROTECT,
         related_name="release_tracks",
     )
-    disc_number = models.PositiveSmallIntegerField("disc/medium", null=True, blank=True)
-    side = models.CharField(
-        "side", max_length=10, blank=True, help_text="For eksempel A, B, C eller D."
+    disc_number = models.PositiveSmallIntegerField(
+        "disc/medium", null=True, blank=True
     )
-    track_number = models.PositiveSmallIntegerField("spornummer", null=True, blank=True)
+    side = models.CharField(
+        "side",
+        max_length=10,
+        blank=True,
+        help_text="For eksempel A, B, C eller D.",
+    )
+    track_number = models.PositiveSmallIntegerField(
+        "spornummer", null=True, blank=True
+    )
     title_override = models.CharField(
         "utgivelsesspesifikk tittel", max_length=500, blank=True
     )
@@ -207,7 +238,9 @@ class ReleaseTrack(CanonicalModel):
                 fields=("release", "disc_number", "side", "track_number"),
                 name="release_track_position_idx",
             ),
-            models.Index(fields=("recording",), name="release_track_recording_idx"),
+            models.Index(
+                fields=("recording",), name="release_track_recording_idx"
+            ),
         ]
 
     @property
@@ -257,7 +290,9 @@ class RecordingContribution(CanonicalModel):
         blank=True,
     )
     credited_as = models.CharField("kreditert som", max_length=255, blank=True)
-    display_order = models.PositiveIntegerField("visningsrekkefølge", default=0)
+    display_order = models.PositiveIntegerField(
+        "visningsrekkefølge", default=0
+    )
     source_record = models.ForeignKey(
         "provenance.SourceRecord",
         verbose_name="kildepost",
@@ -399,7 +434,9 @@ class ExternalIdentifier(CanonicalModel):
             models.CheckConstraint(
                 condition=(
                     models.Q(
-                        scheme="ISRC", recording__isnull=False, release__isnull=True
+                        scheme="ISRC",
+                        recording__isnull=False,
+                        release__isnull=True,
                     )
                     | models.Q(
                         scheme__in=["UPC", "EAN", "GTIN"],
@@ -412,7 +449,9 @@ class ExternalIdentifier(CanonicalModel):
             ),
             models.CheckConstraint(
                 condition=~models.Q(scheme="ISRC")
-                | models.Q(normalized_value__regex=r"^[A-Z]{2}[A-Z0-9]{3}[0-9]{7}$"),
+                | models.Q(
+                    normalized_value__regex=r"^[A-Z]{2}[A-Z0-9]{3}[0-9]{7}$"
+                ),
                 name="identifier_valid_isrc",
             ),
         ]
@@ -423,7 +462,11 @@ class ExternalIdentifier(CanonicalModel):
                 self.normalized_value = normalize_isrc(self.value)
             except ValidationError as error:
                 raise ValidationError({"value": error.messages}) from error
-        elif self.scheme in {self.Scheme.UPC, self.Scheme.EAN, self.Scheme.GTIN}:
+        elif self.scheme in {
+            self.Scheme.UPC,
+            self.Scheme.EAN,
+            self.Scheme.GTIN,
+        }:
             try:
                 self.normalized_value = normalize_trade_item_number(
                     self.value, self.scheme

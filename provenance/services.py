@@ -18,7 +18,10 @@ def _assertion_value(assertion):
 
 SUPPORTED_CATALOGUE_FIELDS = {
     (MetadataAssertion.EntityType.RECORDING, "title"): (Recording, "title"),
-    (MetadataAssertion.EntityType.RECORDING, "language"): (Recording, "language"),
+    (MetadataAssertion.EntityType.RECORDING, "language"): (
+        Recording,
+        "language",
+    ),
 }
 
 
@@ -31,7 +34,9 @@ def decide_assertion(assertion, decision, *, user=None, note=""):
     }
     if decision not in allowed:
         raise ValueError("Ugyldig avgjørelse for metadatapåstand.")
-    assertion = MetadataAssertion.objects.select_for_update().get(pk=assertion.pk)
+    assertion = MetadataAssertion.objects.select_for_update().get(
+        pk=assertion.pk
+    )
     result = AssertionDecision.objects.create(
         assertion=assertion, decision=decision, decided_by=user, note=note
     )
@@ -42,7 +47,9 @@ def decide_assertion(assertion, decision, *, user=None, note=""):
 
 @transaction.atomic
 def supersede_assertion(previous, replacement, *, user=None, note=""):
-    previous = MetadataAssertion.objects.select_for_update().get(pk=previous.pk)
+    previous = MetadataAssertion.objects.select_for_update().get(
+        pk=previous.pk
+    )
     replacement.supersedes = previous
     replacement.save()
     previous.status = VerificationStatus.SUPERSEDED
@@ -57,7 +64,9 @@ def supersede_assertion(previous, replacement, *, user=None, note=""):
 
 
 @transaction.atomic
-def apply_assertion(assertion, *, expected_revision, user, confirm=False, note=""):
+def apply_assertion(
+    assertion, *, expected_revision, user, confirm=False, note=""
+):
     assertion = (
         MetadataAssertion.objects.select_for_update()
         .select_related("source_record__source_system")
@@ -95,13 +104,17 @@ def apply_assertion(assertion, *, expected_revision, user, confirm=False, note="
         changed_by=user,
     )
     if confirm:
-        decide_assertion(assertion, VerificationStatus.CONFIRMED, user=user, note=note)
+        decide_assertion(
+            assertion, VerificationStatus.CONFIRMED, user=user, note=note
+        )
     return change
 
 
 @transaction.atomic
 def correct_assertion(assertion, *, raw_value, user, note=""):
-    assertion = MetadataAssertion.objects.select_for_update().get(pk=assertion.pk)
+    assertion = MetadataAssertion.objects.select_for_update().get(
+        pk=assertion.pk
+    )
     replacement = MetadataAssertion(
         source_record=assertion.source_record,
         entity_type=assertion.entity_type,

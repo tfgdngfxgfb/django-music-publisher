@@ -6,13 +6,23 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('music_library', '0006_channel_logo'),
+        ("music_library", "0006_channel_logo"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='musiclibraryentry',
-            name='rotation_suitability',
-            field=models.CharField(blank=True, choices=[('suitable', 'Rotasjonsverdig'), ('not_suitable', 'Ikke rotasjonsverdig'), ('unassessed', 'Ikke vurdert')], help_text='Lokal vurdering av om innspillingen er egnet for rotasjon. Leses fra OneTagger/FLAC-feltet Rotasjon.', max_length=20, verbose_name='rotasjonsvurdering'),
+            model_name="musiclibraryentry",
+            name="rotation_suitability",
+            field=models.CharField(
+                blank=True,
+                choices=[
+                    ("suitable", "Rotasjonsverdig"),
+                    ("not_suitable", "Ikke rotasjonsverdig"),
+                    ("unassessed", "Ikke vurdert"),
+                ],
+                help_text="Lokal vurdering av om innspillingen er egnet for rotasjon. Leses fra OneTagger/FLAC-feltet Rotasjon.",
+                max_length=20,
+                verbose_name="rotasjonsvurdering",
+            ),
         ),
     ]

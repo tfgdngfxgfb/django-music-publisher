@@ -36,7 +36,9 @@ class ProvenanceTests(TestCase):
             assertion.save()
         return assertion
 
-    def test_assertion_can_be_confirmed_disputed_and_rejected_with_history(self):
+    def test_assertion_can_be_confirmed_disputed_and_rejected_with_history(
+        self,
+    ):
         user = get_user_model().objects.create_user("reviewer")
         assertion = self.assertion(self.cover, "1978")
         decide_assertion(assertion, VerificationStatus.CONFIRMED, user=user)
@@ -79,7 +81,9 @@ class ProvenanceTests(TestCase):
         self.assertEqual(source_record.raw_payload, {})
 
     def test_admin_decision_action_records_reviewer(self):
-        user = get_user_model().objects.create_superuser("admin", password="test")
+        user = get_user_model().objects.create_superuser(
+            "admin", password="test"
+        )
         self.client.force_login(user)
         assertion = self.assertion(self.cover, "1978")
         response = self.client.post(

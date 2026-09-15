@@ -2,7 +2,13 @@
 
 from django.db.models import Prefetch
 
-from catalogue.models import DuplicateCandidate, ExternalIdentifier, Recording, RecordingContribution, ReleaseTrack
+from catalogue.models import (
+    DuplicateCandidate,
+    ExternalIdentifier,
+    Recording,
+    RecordingContribution,
+    ReleaseTrack,
+)
 from flac_ingest.models import FlacIngestItem
 from media_assets.models import FileAsset, FileLocation
 
@@ -23,7 +29,9 @@ def recording_release_tracks_with_covers_queryset():
         .prefetch_related(
             Prefetch(
                 "release__file_assets",
-                queryset=FileAsset.objects.filter(role=FileAsset.Role.COVER_IMAGE)
+                queryset=FileAsset.objects.filter(
+                    role=FileAsset.Role.COVER_IMAGE
+                )
                 .prefetch_related("locations")
                 .order_by("filename", "id"),
             )
@@ -93,7 +101,9 @@ def _credit_data(contribution):
 
 def _technical_file(asset):
     technical = asset.technical_metadata or {}
-    current_locations = [location for location in asset.locations.all() if location.is_current]
+    current_locations = [
+        location for location in asset.locations.all() if location.is_current
+    ]
     active_locations = [
         location
         for location in current_locations
@@ -115,22 +125,41 @@ def _technical_file(asset):
     return {
         "object": asset,
         "filename": asset.filename,
-        "format": "FLAC" if asset.role == FileAsset.Role.RADIO_FLAC else (asset.mime_type or ""),
+        "format": (
+            "FLAC"
+            if asset.role == FileAsset.Role.RADIO_FLAC
+            else (asset.mime_type or "")
+        ),
         "sample_rate": sample_rate_text,
-        "bit_depth": f"{technical.get('bits_per_sample')} bit" if technical.get("bits_per_sample") else "",
+        "bit_depth": (
+            f"{technical.get('bits_per_sample')} bit"
+            if technical.get("bits_per_sample")
+            else ""
+        ),
         "channels": channel_text,
         "duration": _duration(technical.get("duration_ms")),
         "locations": current_locations,
-        "available": bool(active_locations) and asset.sync_status not in {
+        "available": bool(active_locations)
+        and asset.sync_status
+        not in {
             FileAsset.SyncStatus.MISSING,
             FileAsset.SyncStatus.FAILED,
         },
         "status": (
             "Tilgjengelig"
-            if active_locations and asset.sync_status not in {FileAsset.SyncStatus.MISSING, FileAsset.SyncStatus.FAILED}
-            else asset.get_sync_status_display()
-            if asset.sync_status in {FileAsset.SyncStatus.MISSING, FileAsset.SyncStatus.FAILED, FileAsset.SyncStatus.CONFLICT}
-            else "Ikke tilgjengelig"
+            if active_locations
+            and asset.sync_status
+            not in {FileAsset.SyncStatus.MISSING, FileAsset.SyncStatus.FAILED}
+            else (
+                asset.get_sync_status_display()
+                if asset.sync_status
+                in {
+                    FileAsset.SyncStatus.MISSING,
+                    FileAsset.SyncStatus.FAILED,
+                    FileAsset.SyncStatus.CONFLICT,
+                }
+                else "Ikke tilgjengelig"
+            )
         ),
         "last_read": asset.metadata_read_at,
     }
@@ -140,12 +169,17 @@ def build_recording_overview(recording, *, can_view_files, can_view_releases):
     contributions = list(recording.contributions.all())
     grouped = {}
     for contribution in contributions:
-        grouped.setdefault(contribution.role, []).append(_credit_data(contribution))
+        grouped.setdefault(contribution.role, []).append(
+            _credit_data(contribution)
+        )
 
-    artist_credits = grouped.get(RecordingContribution.Role.PRIMARY, []) + grouped.get(
-        RecordingContribution.Role.FEATURED, []
+    artist_credits = grouped.get(
+        RecordingContribution.Role.PRIMARY, []
+    ) + grouped.get(RecordingContribution.Role.FEATURED, [])
+    artist_text = (
+        ", ".join(dict.fromkeys(item["name"] for item in artist_credits))
+        or "Uavklart artist"
     )
-    artist_text = ", ".join(dict.fromkeys(item["name"] for item in artist_credits)) or "Uavklart artist"
     isrc = next(
         (
             identifier.normalized_value
@@ -156,7 +190,9 @@ def build_recording_overview(recording, *, can_view_files, can_view_releases):
     )
     entry = getattr(recording, "music_library_entry", None)
     managed = getattr(entry, "managed_recording", None) if entry else None
-    releases = list(recording.release_tracks.all()) if can_view_releases else []
+    releases = (
+        list(recording.release_tracks.all()) if can_view_releases else []
+    )
 
     cover = select_recording_cover(releases) if can_view_files else None
 
@@ -173,35 +209,86 @@ def build_recording_overview(recording, *, can_view_files, can_view_releases):
     )
     known_isrc_collision = any(
         case.status == DuplicateCandidate.Status.DISMISSED
-        and {"reported_isrc_collision", "manual_separate_recordings"}.issubset(set(case.signals or []))
+        and {"reported_isrc_collision", "manual_separate_recordings"}.issubset(
+            set(case.signals or [])
+        )
         for case in duplicate_cases
     )
-    open_duplicate = any(case.status == DuplicateCandidate.Status.OPEN for case in duplicate_cases)
-    unresolved_credits = [item for values in grouped.values() for item in values if item["unresolved"]]
+    open_duplicate = any(
+        case.status == DuplicateCandidate.Status.OPEN
+        for case in duplicate_cases
+    )
+    unresolved_credits = [
+        item
+        for values in grouped.values()
+        for item in values
+        if item["unresolved"]
+    ]
 
     follow_up = []
     if can_view_files:
         if not radio_assets:
-            follow_up.append({"kind": "warning", "title": "Ingen radiofil registrert", "text": "Innspillingen har ingen koblet radio-FLAC."})
+            follow_up.append(
+                {
+                    "kind": "warning",
+                    "title": "Ingen radiofil registrert",
+                    "text": "Innspillingen har ingen koblet radio-FLAC.",
+                }
+            )
         elif len(radio_assets) > 1:
-            follow_up.append({"kind": "warning", "title": f"{len(radio_assets)} radiofiler registrert", "text": "Systemet velger ikke én fil når koblingen er tvetydig."})
+            follow_up.append(
+                {
+                    "kind": "warning",
+                    "title": f"{len(radio_assets)} radiofiler registrert",
+                    "text": "Systemet velger ikke én fil når koblingen er tvetydig.",
+                }
+            )
         elif not radio_assets[0]["available"]:
-            follow_up.append({"kind": "error", "title": "Radiofilen er ikke tilgjengelig", "text": "Innspillingen og katalogdataene er fortsatt bevart."})
+            follow_up.append(
+                {
+                    "kind": "error",
+                    "title": "Radiofilen er ikke tilgjengelig",
+                    "text": "Innspillingen og katalogdataene er fortsatt bevart.",
+                }
+            )
     if open_duplicate:
-        follow_up.append({"kind": "warning", "title": "Mulig dublett må vurderes", "text": "En åpen katalogsak berører denne innspillingen."})
+        follow_up.append(
+            {
+                "kind": "warning",
+                "title": "Mulig dublett må vurderes",
+                "text": "En åpen katalogsak berører denne innspillingen.",
+            }
+        )
     ingest_issue = recording.flac_ingest_items.filter(
-        action__in=(FlacIngestItem.Action.CONFLICT, FlacIngestItem.Action.INVALID, FlacIngestItem.Action.RETRY),
+        action__in=(
+            FlacIngestItem.Action.CONFLICT,
+            FlacIngestItem.Action.INVALID,
+            FlacIngestItem.Action.RETRY,
+        ),
         applied_at__isnull=True,
     ).exists()
     if ingest_issue:
-        follow_up.append({"kind": "warning", "title": "Uløst innlesingsavvik", "text": "Minst én filinnlesing krever kontroll."})
+        follow_up.append(
+            {
+                "kind": "warning",
+                "title": "Uløst innlesingsavvik",
+                "text": "Minst én filinnlesing krever kontroll.",
+            }
+        )
 
     years = [
-        track.release.release_date.year if track.release.release_date else track.release.release_year
+        (
+            track.release.release_date.year
+            if track.release.release_date
+            else track.release.release_year
+        )
         for track in releases
         if track.release.release_date or track.release.release_year
     ]
-    last_read = max((item["last_read"] for item in radio_assets if item["last_read"]), default=None)
+    last_read = max(
+        (item["last_read"] for item in radio_assets if item["last_read"]),
+        default=None,
+    )
     return {
         "artist_text": artist_text,
         "artist_credits": artist_credits,
@@ -223,7 +310,9 @@ def build_recording_overview(recording, *, can_view_files, can_view_releases):
         "release_count": len(releases),
         "first_release_year": min(years) if years else None,
         "radio_files": radio_assets,
-        "single_radio_file": radio_assets[0] if len(radio_assets) == 1 else None,
+        "single_radio_file": (
+            radio_assets[0] if len(radio_assets) == 1 else None
+        ),
         "known_isrc_collision": known_isrc_collision,
         "follow_up": follow_up,
         "last_read": last_read,

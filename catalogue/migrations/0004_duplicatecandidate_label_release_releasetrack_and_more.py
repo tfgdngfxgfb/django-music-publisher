@@ -10,7 +10,10 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ("catalogue", "0003_alter_externalidentifier_options_and_more"),
-        ("parties", "0003_alter_artistidentity_options_alter_party_options_and_more"),
+        (
+            "parties",
+            "0003_alter_artistidentity_options_alter_party_options_and_more",
+        ),
     ]
 
     operations = [
@@ -29,11 +32,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "created_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="opprettet"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="opprettet"
+                    ),
                 ),
                 (
                     "updated_at",
-                    models.DateTimeField(auto_now=True, verbose_name="sist endret"),
+                    models.DateTimeField(
+                        auto_now=True, verbose_name="sist endret"
+                    ),
                 ),
                 (
                     "revision",
@@ -68,7 +75,10 @@ class Migration(migrations.Migration):
                         verbose_name="status",
                     ),
                 ),
-                ("notes", models.TextField(blank=True, verbose_name="vurdering")),
+                (
+                    "notes",
+                    models.TextField(blank=True, verbose_name="vurdering"),
+                ),
             ],
             options={
                 "verbose_name": "mulig dublett",
@@ -91,11 +101,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "created_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="opprettet"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="opprettet"
+                    ),
                 ),
                 (
                     "updated_at",
-                    models.DateTimeField(auto_now=True, verbose_name="sist endret"),
+                    models.DateTimeField(
+                        auto_now=True, verbose_name="sist endret"
+                    ),
                 ),
                 (
                     "revision",
@@ -111,7 +125,10 @@ class Migration(migrations.Migration):
                         verbose_name="navn",
                     ),
                 ),
-                ("notes", models.TextField(blank=True, verbose_name="merknader")),
+                (
+                    "notes",
+                    models.TextField(blank=True, verbose_name="merknader"),
+                ),
             ],
             options={
                 "verbose_name": "label",
@@ -134,11 +151,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "created_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="opprettet"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="opprettet"
+                    ),
                 ),
                 (
                     "updated_at",
-                    models.DateTimeField(auto_now=True, verbose_name="sist endret"),
+                    models.DateTimeField(
+                        auto_now=True, verbose_name="sist endret"
+                    ),
                 ),
                 (
                     "revision",
@@ -189,7 +210,9 @@ class Migration(migrations.Migration):
                 (
                     "catalogue_number",
                     models.CharField(
-                        blank=True, max_length=100, verbose_name="katalognummer"
+                        blank=True,
+                        max_length=100,
+                        verbose_name="katalognummer",
                     ),
                 ),
                 (
@@ -207,7 +230,10 @@ class Migration(migrations.Migration):
                         verbose_name="verifikasjonsstatus",
                     ),
                 ),
-                ("notes", models.TextField(blank=True, verbose_name="merknader")),
+                (
+                    "notes",
+                    models.TextField(blank=True, verbose_name="merknader"),
+                ),
             ],
             options={
                 "verbose_name": "utgivelse",
@@ -230,11 +256,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "created_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="opprettet"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="opprettet"
+                    ),
                 ),
                 (
                     "updated_at",
-                    models.DateTimeField(auto_now=True, verbose_name="sist endret"),
+                    models.DateTimeField(
+                        auto_now=True, verbose_name="sist endret"
+                    ),
                 ),
                 (
                     "revision",
@@ -421,8 +451,12 @@ class Migration(migrations.Migration):
             model_name="externalidentifier",
             constraint=models.CheckConstraint(
                 condition=models.Q(
-                    models.Q(("recording__isnull", False), ("release__isnull", True)),
-                    models.Q(("recording__isnull", True), ("release__isnull", False)),
+                    models.Q(
+                        ("recording__isnull", False), ("release__isnull", True)
+                    ),
+                    models.Q(
+                        ("recording__isnull", True), ("release__isnull", False)
+                    ),
                     _connector="OR",
                 ),
                 name="identifier_exactly_one_target",
@@ -453,7 +487,10 @@ class Migration(migrations.Migration):
             constraint=models.CheckConstraint(
                 condition=models.Q(
                     models.Q(("scheme", "ISRC"), _negated=True),
-                    ("normalized_value__regex", "^[A-Z]{2}[A-Z0-9]{3}[0-9]{7}$"),
+                    (
+                        "normalized_value__regex",
+                        "^[A-Z]{2}[A-Z0-9]{3}[0-9]{7}$",
+                    ),
                     _connector="OR",
                 ),
                 name="identifier_valid_isrc",
@@ -517,7 +554,9 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name="release",
-            index=models.Index(fields=["release_year"], name="release_year_idx"),
+            index=models.Index(
+                fields=["release_year"], name="release_year_idx"
+            ),
         ),
         migrations.AddConstraint(
             model_name="release",
@@ -531,7 +570,10 @@ class Migration(migrations.Migration):
             constraint=models.CheckConstraint(
                 condition=models.Q(
                     ("release_year__isnull", True),
-                    models.Q(("release_year__gte", 1800), ("release_year__lte", 2200)),
+                    models.Q(
+                        ("release_year__gte", 1800),
+                        ("release_year__lte", 2200),
+                    ),
                     _connector="OR",
                 ),
                 name="release_sensible_year",

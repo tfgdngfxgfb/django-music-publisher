@@ -6,9 +6,12 @@ from parties.models import ArtistIdentity
 from provenance.models import SourceSystem
 from rights.models import RightsClaim
 
+
 class ManagedRecordingCreationForm(forms.Form):
     recording = forms.ModelChoiceField(
-        Recording.objects.all(), label="Bruk eksisterende innspilling", required=False
+        Recording.objects.all(),
+        label="Bruk eksisterende innspilling",
+        required=False,
     )
     new_recording_title = forms.CharField(
         label="Tittel på ny innspilling", max_length=500, required=False
@@ -41,7 +44,9 @@ class ManagedRecordingCreationForm(forms.Form):
     source_system = forms.ModelChoiceField(
         SourceSystem.objects.all(), label="Kilde", required=False
     )
-    notes = forms.CharField(label="Merknader", widget=forms.Textarea, required=False)
+    notes = forms.CharField(
+        label="Merknader", widget=forms.Textarea, required=False
+    )
 
     def clean(self):
         data = super().clean()
@@ -57,10 +62,13 @@ class ManagedRecordingCreationForm(forms.Form):
             and hasattr(recording.music_library_entry, "managed_recording")
         ):
             self.add_error(
-                "recording", "Innspillingen finnes allerede i Forvaltet musikk."
+                "recording",
+                "Innspillingen finnes allerede i Forvaltet musikk.",
             )
         if recording and data.get("new_isrc"):
-            self.add_error("new_isrc", "Legg ISRC på den eksisterende innspillingen.")
+            self.add_error(
+                "new_isrc", "Legg ISRC på den eksisterende innspillingen."
+            )
         if title and not data.get("force_create"):
             matches = find_recording_candidates(
                 title=title,
@@ -78,9 +86,18 @@ class ManagedRecordingCreationForm(forms.Form):
                 )
         relationship_type = data.get("relationship_type")
         share = data.get("ownership_share")
-        if relationship_type == RightsClaim.RightType.OWNERSHIP and share is None:
-            self.add_error("ownership_share", "Angi eierandelen som skal vurderes.")
-        elif relationship_type and relationship_type != RightsClaim.RightType.OWNERSHIP and share is not None:
+        if (
+            relationship_type == RightsClaim.RightType.OWNERSHIP
+            and share is None
+        ):
+            self.add_error(
+                "ownership_share", "Angi eierandelen som skal vurderes."
+            )
+        elif (
+            relationship_type
+            and relationship_type != RightsClaim.RightType.OWNERSHIP
+            and share is not None
+        ):
             self.add_error(
                 "ownership_share", "Andel brukes bare for mastereierskap."
             )

@@ -16,6 +16,7 @@ from .storage import (
 
 from django.core.exceptions import ObjectDoesNotExist
 
+
 class RadioPlaybackStatus(StrEnum):
     AVAILABLE = "available"
     NO_RADIO_FILE = "no_radio_file"

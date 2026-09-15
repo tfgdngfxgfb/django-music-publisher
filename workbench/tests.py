@@ -8,7 +8,12 @@ from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
-from catalogue.models import ExternalIdentifier, Recording, Release, ReleaseTrack
+from catalogue.models import (
+    ExternalIdentifier,
+    Recording,
+    Release,
+    ReleaseTrack,
+)
 from media_assets.models import FileAsset, FileLocation
 from managed_music.models import ManagedRecording
 from managed_music.services import create_managed_recording
@@ -30,7 +35,9 @@ from rights_core.models import VerificationStatus
 class WorkbenchTestCase(TestCase):
     password = "workbench-password"
 
-    def create_user(self, username="cataloguer", *, superuser=False, permissions=()):
+    def create_user(
+        self, username="cataloguer", *, superuser=False, permissions=()
+    ):
         user = get_user_model().objects.create_user(
             username=username,
             password=self.password,
@@ -74,7 +81,9 @@ class AuthenticationAndPermissionTests(WorkbenchTestCase):
     def test_global_catalogue_search_follows_library_permission(self):
         user = self.create_user()
         self.login(user)
-        self.assertNotContains(self.client.get(reverse("home")), 'id="global-search"')
+        self.assertNotContains(
+            self.client.get(reverse("home")), 'id="global-search"'
+        )
 
         viewer = self.create_user(
             username="search-viewer",
@@ -83,7 +92,9 @@ class AuthenticationAndPermissionTests(WorkbenchTestCase):
         self.login(viewer)
         response = self.client.get(reverse("home"))
         self.assertContains(response, 'id="global-search"')
-        self.assertContains(response, 'action="%s"' % reverse("workbench:library"))
+        self.assertContains(
+            response, 'action="%s"' % reverse("workbench:library")
+        )
 
     def test_logout_page_is_norwegian(self):
         self.login(self.create_user())
@@ -112,10 +123,13 @@ class AuthenticationAndPermissionTests(WorkbenchTestCase):
         self.assertContains(response, "Utgivelser")
         self.assertNotContains(response, "Forvaltet musikk")
         self.assertNotContains(response, "Administrasjon")
-        self.assertEqual(self.client.get(reverse("workbench:managed")).status_code, 403)
+        self.assertEqual(
+            self.client.get(reverse("workbench:managed")).status_code, 403
+        )
         release = Release.objects.create(title="Beskyttet")
         response = self.client.post(
-            reverse("workbench:release", args=(release.pk,)), {"title": "Endret"}
+            reverse("workbench:release", args=(release.pk,)),
+            {"title": "Endret"},
         )
         self.assertEqual(response.status_code, 403)
         release.refresh_from_db()
@@ -135,7 +149,10 @@ class AuthenticationAndPermissionTests(WorkbenchTestCase):
             permissions=("catalogue.view_recording", "rights.view_rightsclaim")
         )
         self.login(viewer)
-        detail = reverse("workbench:recording", args=(recording.pk,)) + "?fane=rights"
+        detail = (
+            reverse("workbench:recording", args=(recording.pk,))
+            + "?fane=rights"
+        )
         response = self.client.get(detail)
         self.assertContains(response, "Rettighetskontroll er derfor skjult")
         self.assertNotContains(response, "Rettighetshaver")
@@ -178,7 +195,8 @@ class AuthenticationAndPermissionTests(WorkbenchTestCase):
         )
         self.login(viewer)
         response = self.client.get(
-            reverse("workbench:recording", args=(recording.pk,)) + "?fane=rights"
+            reverse("workbench:recording", args=(recording.pk,))
+            + "?fane=rights"
         )
         self.assertContains(response, "Forvaltet av lokal organisasjon")
         self.assertContains(response, "Ja")
@@ -201,7 +219,8 @@ class AuthenticationAndPermissionTests(WorkbenchTestCase):
         )
         self.login(viewer)
         response = self.client.get(
-            reverse("workbench:recording", args=(recording.pk,)) + "?fane=rights"
+            reverse("workbench:recording", args=(recording.pk,))
+            + "?fane=rights"
         )
         self.assertContains(response, 'class="help-tip"')
         self.assertContains(response, 'aria-expanded="false"')
@@ -261,7 +280,9 @@ class AuthenticationAndPermissionTests(WorkbenchTestCase):
         )
         self.assertEqual(response.status_code, 302)
         replacement = RightsClaim.objects.get(supersedes=claim)
-        self.assertEqual(replacement.right_type, RightsClaim.RightType.OWNERSHIP)
+        self.assertEqual(
+            replacement.right_type, RightsClaim.RightType.OWNERSHIP
+        )
         self.assertEqual(replacement.source_record, source_record)
         self.assertEqual(replacement.agreement, agreement)
 
@@ -272,7 +293,9 @@ class AuthenticationAndPermissionTests(WorkbenchTestCase):
             recording=recording,
             relationship_type=RightsClaim.RightType.ADMINISTRATION,
         )
-        holder = Party.objects.create(name="Kravpart", kind=Party.Kind.ORGANIZATION)
+        holder = Party.objects.create(
+            name="Kravpart", kind=Party.Kind.ORGANIZATION
+        )
         cataloguer = self.create_user(
             permissions=(
                 "catalogue.view_recording",
@@ -520,7 +543,9 @@ class ReleaseRightsWorkflowTests(WorkbenchTestCase):
             "notes": "Felles grunnlag fra utgivelsen",
         }
 
-    def test_admin_creates_one_recording_claim_per_selected_release_recording(self):
+    def test_admin_creates_one_recording_claim_per_selected_release_recording(
+        self,
+    ):
         admin = self.create_user(superuser=True)
         self.login(admin)
         response = self.client.post(
@@ -593,7 +618,9 @@ class CatalogueWorkflowTests(WorkbenchTestCase):
         return data
 
     def test_filtered_release_list_is_preserved_in_detail_return_link(self):
-        release = Release.objects.create(title="Nordlys", catalogue_number="LYN-1")
+        release = Release.objects.create(
+            title="Nordlys", catalogue_number="LYN-1"
+        )
         response = self.client.get(reverse("workbench:releases") + "?q=LYN-1")
         self.assertContains(response, "Nordlys")
         self.assertContains(response, "return=/arbeid/utgivelser/%3Fq%3DLYN-1")
@@ -612,7 +639,9 @@ class CatalogueWorkflowTests(WorkbenchTestCase):
         response = self.client.get(
             release_detail + "?return=" + quote(filtered_list, safe="")
         )
-        expected_tracks = reverse("workbench:release_tracks", args=(release.pk,))
+        expected_tracks = reverse(
+            "workbench:release_tracks", args=(release.pk,)
+        )
         self.assertContains(response, expected_tracks)
 
         recording_detail = (
@@ -645,7 +674,9 @@ class CatalogueWorkflowTests(WorkbenchTestCase):
         response = self.client.get(url)
         self.assertContains(response, "Beskrivelse for radio")
         self.assertContains(response, "Bruk i radio")
-        self.assertContains(response, '<div id="id_channels" class="radio-choice-grid">')
+        self.assertContains(
+            response, '<div id="id_channels" class="radio-choice-grid">'
+        )
         self.assertContains(
             response,
             '<div id="id_target_audiences" class="radio-choice-grid">',
@@ -668,7 +699,8 @@ class CatalogueWorkflowTests(WorkbenchTestCase):
         )
         self.assertRedirects(
             response,
-            reverse("workbench:recording", args=(recording.pk,)) + "?fane=radio",
+            reverse("workbench:recording", args=(recording.pk,))
+            + "?fane=radio",
         )
         self.assertEqual(
             set(entry.channels.values_list("name", flat=True)),
@@ -679,10 +711,14 @@ class CatalogueWorkflowTests(WorkbenchTestCase):
             {"60+", "30–60"},
         )
 
-    def test_multiple_tracks_are_atomic_and_existing_recording_keeps_radio_data(self):
+    def test_multiple_tracks_are_atomic_and_existing_recording_keeps_radio_data(
+        self,
+    ):
         release = Release.objects.create(title="Album")
         existing = Recording.objects.create(title="Gjenbruk meg")
-        library = MusicLibraryEntry.objects.create(recording=existing, genre="Pop")
+        library = MusicLibraryEntry.objects.create(
+            recording=existing, genre="Pop"
+        )
         data = self.track_formset_data(
             release,
             [
@@ -707,7 +743,9 @@ class CatalogueWorkflowTests(WorkbenchTestCase):
             reverse("workbench:release", args=(release.pk,)),
             fetch_redirect_response=False,
         )
-        self.assertEqual(ReleaseTrack.objects.filter(release=release).count(), 2)
+        self.assertEqual(
+            ReleaseTrack.objects.filter(release=release).count(), 2
+        )
         self.assertEqual(Recording.objects.count(), 2)
         new_track = ReleaseTrack.objects.get(recording__title="Ny master")
         self.assertEqual(new_track.duration_ms, 187000)
@@ -715,7 +753,9 @@ class CatalogueWorkflowTests(WorkbenchTestCase):
         library.refresh_from_db()
         self.assertEqual(library.genre, "Pop")
 
-    def test_duplicate_sequence_rolls_back_every_track_and_preserves_input(self):
+    def test_duplicate_sequence_rolls_back_every_track_and_preserves_input(
+        self,
+    ):
         release = Release.objects.create(title="Album")
         data = self.track_formset_data(
             release,
@@ -730,11 +770,15 @@ class CatalogueWorkflowTests(WorkbenchTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Første")
         self.assertContains(response, "Andre")
-        self.assertContains(response, "Rekkefølgen er brukt i flere utfylte rader")
+        self.assertContains(
+            response, "Rekkefølgen er brukt i flere utfylte rader"
+        )
         self.assertEqual(ReleaseTrack.objects.count(), 0)
         self.assertEqual(Recording.objects.count(), 0)
 
-    def test_track_entry_is_a_table_with_bulk_paste_and_single_save_action(self):
+    def test_track_entry_is_a_table_with_bulk_paste_and_single_save_action(
+        self,
+    ):
         release = Release.objects.create(title="Tabellalbum")
         response = self.client.get(
             reverse("workbench:release_tracks", args=(release.pk,))
@@ -747,7 +791,9 @@ class CatalogueWorkflowTests(WorkbenchTestCase):
         self.assertContains(response, "Lagre sporlisten", count=1)
         self.assertContains(response, "data-track-submit")
 
-    def test_duplicate_candidate_is_shown_on_its_row_without_creating_data(self):
+    def test_duplicate_candidate_is_shown_on_its_row_without_creating_data(
+        self,
+    ):
         existing = Recording.objects.create(title="Samme innspilling")
         release = Release.objects.create(title="Dublettkontroll")
         data = self.track_formset_data(
@@ -770,7 +816,9 @@ class CatalogueWorkflowTests(WorkbenchTestCase):
         self.assertEqual(ReleaseTrack.objects.count(), 0)
         self.assertEqual(Recording.objects.count(), 1)
 
-    def test_track_entry_requires_both_release_change_and_track_add_permissions(self):
+    def test_track_entry_requires_both_release_change_and_track_add_permissions(
+        self,
+    ):
         release = Release.objects.create(title="Beskyttet utgivelse")
         url = reverse("workbench:release_tracks", args=(release.pk,))
         only_release = self.create_user(
@@ -780,7 +828,9 @@ class CatalogueWorkflowTests(WorkbenchTestCase):
         self.login(only_release)
         self.assertEqual(self.client.get(url).status_code, 403)
         self.assertEqual(
-            self.client.post(url, self.track_formset_data(release, [])).status_code,
+            self.client.post(
+                url, self.track_formset_data(release, [])
+            ).status_code,
             403,
         )
         only_track = self.create_user(
@@ -790,7 +840,9 @@ class CatalogueWorkflowTests(WorkbenchTestCase):
         self.login(only_track)
         self.assertEqual(self.client.get(url).status_code, 403)
         self.assertEqual(
-            self.client.post(url, self.track_formset_data(release, [])).status_code,
+            self.client.post(
+                url, self.track_formset_data(release, [])
+            ).status_code,
             403,
         )
 
@@ -815,23 +867,30 @@ class CatalogueWorkflowTests(WorkbenchTestCase):
         self.assertEqual(ReleaseTrack.objects.count(), 0)
         self.assertEqual(Recording.objects.count(), 0)
 
-    def test_recording_autocomplete_is_bounded_and_does_not_render_full_catalogue(self):
+    def test_recording_autocomplete_is_bounded_and_does_not_render_full_catalogue(
+        self,
+    ):
         recordings = [
-            Recording.objects.create(title=f"Søkbar {index:02}") for index in range(25)
+            Recording.objects.create(title=f"Søkbar {index:02}")
+            for index in range(25)
         ]
         release = Release.objects.create(title="Søk")
         response = self.client.get(
             reverse("workbench:release_tracks", args=(release.pk,))
         )
         self.assertNotContains(response, recordings[0].title)
-        response = self.client.get(reverse("workbench:recording_search") + "?q=Søkbar")
+        response = self.client.get(
+            reverse("workbench:recording_search") + "?q=Søkbar"
+        )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.json()["results"]), 20)
 
     def test_library_list_prefetches_related_catalogue_data(self):
         for index in range(10):
             MusicLibraryEntry.objects.create(
-                recording=Recording.objects.create(title=f"Innspilling {index}")
+                recording=Recording.objects.create(
+                    title=f"Innspilling {index}"
+                )
             )
         with CaptureQueriesContext(connection) as queries:
             response = self.client.get(reverse("workbench:library"))
@@ -849,7 +908,9 @@ class ProvenanceApplicationTests(WorkbenchTestCase):
 
     def test_confirm_and_apply_title_is_atomic_and_audited(self):
         recording = Recording.objects.create(title="Gammel tittel")
-        assertion = self.assertion(recording, field_name="title", value="Ny tittel")
+        assertion = self.assertion(
+            recording, field_name="title", value="Ny tittel"
+        )
         original_uuid = recording.pk
         response = self.client.post(
             reverse("workbench:assertion_action", args=(assertion.pk,)),
@@ -871,7 +932,9 @@ class ProvenanceApplicationTests(WorkbenchTestCase):
         self.assertEqual(change.before_value, "Gammel tittel")
         self.assertEqual(change.after_value, "Ny tittel")
         self.assertEqual(change.changed_by, self.user)
-        self.assertEqual(change.assertion.source_record.source_system.name, "LP-cover")
+        self.assertEqual(
+            change.assertion.source_record.source_system.name, "LP-cover"
+        )
 
     def test_invalid_language_preserves_catalogue_and_assertion(self):
         recording = Recording.objects.create(title="Språktest", language="nb")
@@ -893,7 +956,9 @@ class ProvenanceApplicationTests(WorkbenchTestCase):
 
     def test_concurrent_change_is_not_overwritten(self):
         recording = Recording.objects.create(title="Før")
-        assertion = self.assertion(recording, field_name="title", value="Fra kilde")
+        assertion = self.assertion(
+            recording, field_name="title", value="Fra kilde"
+        )
         stale_revision = recording.revision
         recording.title = "Redigert av annen bruker"
         recording.save()
@@ -909,7 +974,9 @@ class ProvenanceApplicationTests(WorkbenchTestCase):
 
     def test_unsupported_field_cannot_be_applied(self):
         recording = Recording.objects.create(title="Test")
-        assertion = self.assertion(recording, field_name="duration_ms", value="42")
+        assertion = self.assertion(
+            recording, field_name="duration_ms", value="42"
+        )
         with self.assertRaisesMessage(ValueError, "kan ikke brukes"):
             apply_assertion(
                 assertion,
@@ -919,7 +986,9 @@ class ProvenanceApplicationTests(WorkbenchTestCase):
 
     def test_correction_preserves_original_and_records_reviewer(self):
         recording = Recording.objects.create(title="Original")
-        assertion = self.assertion(recording, field_name="title", value="Feil verdi")
+        assertion = self.assertion(
+            recording, field_name="title", value="Feil verdi"
+        )
         response = self.client.post(
             reverse("workbench:assertion_action", args=(assertion.pk,)),
             {
@@ -945,7 +1014,9 @@ class FileWorkspaceTests(WorkbenchTestCase):
     def test_file_page_distinguishes_reference_from_verified_presence(self):
         user = self.create_user(superuser=True)
         self.login(user)
-        asset = FileAsset.objects.create(filename="radio.flac", role="radio_flac")
+        asset = FileAsset.objects.create(
+            filename="radio.flac", role="radio_flac"
+        )
         FileLocation.objects.create(
             asset=asset,
             storage_type="nas",
@@ -976,7 +1047,9 @@ class FileWorkspaceTests(WorkbenchTestCase):
 class CatalogueInspectorTests(WorkbenchTestCase):
     def test_library_workspace_shows_identifier_radio_and_file_state(self):
         self.login(self.create_user(superuser=True))
-        recording = Recording.objects.create(title="Visuell kontroll", duration_ms=193000)
+        recording = Recording.objects.create(
+            title="Visuell kontroll", duration_ms=193000
+        )
         ExternalIdentifier.objects.create(
             recording=recording,
             scheme=ExternalIdentifier.Scheme.ISRC,
@@ -1022,13 +1095,15 @@ class CatalogueInspectorTests(WorkbenchTestCase):
                 "selected": str(recording.pk),
             },
         )
-        self.assertEqual(response.context["selected_entry"].recording_id, recording.pk)
+        self.assertEqual(
+            response.context["selected_entry"].recording_id, recording.pk
+        )
         self.assertContains(response, "preview-radio")
         self.assertContains(response, "q%3DBl")
         self.assertIsNone(
-            self.client.get(reverse("workbench:library"), {"selected": "none"}).context[
-                "selected_entry"
-            ]
+            self.client.get(
+                reverse("workbench:library"), {"selected": "none"}
+            ).context["selected_entry"]
         )
         self.assertEqual(
             self.client.get(reverse("workbench:library"), {"genre": "Jazz"})
@@ -1043,9 +1118,14 @@ class CatalogueInspectorTests(WorkbenchTestCase):
         from pathlib import Path
         from PIL import Image
 
-        asset = FileAsset.objects.create(filename="cover.png", role="cover_image")
+        asset = FileAsset.objects.create(
+            filename="cover.png", role="cover_image"
+        )
         location = FileLocation.objects.create(
-            asset=asset, storage_type="nas", relative_path="cover.png", status="active"
+            asset=asset,
+            storage_type="nas",
+            relative_path="cover.png",
+            status="active",
         )
         url = reverse("workbench:cover_image", args=[asset.pk])
         self.assertEqual(self.client.get(url).status_code, 302)
@@ -1061,7 +1141,9 @@ class CatalogueInspectorTests(WorkbenchTestCase):
             self.assertEqual(response["Content-Type"], "image/jpeg")
             compact_response = self.client.get(url, {"size": "64"})
             self.assertEqual(compact_response.status_code, 200)
-            self.assertEqual(Image.open(BytesIO(compact_response.content)).size, (64, 32))
+            self.assertEqual(
+                Image.open(BytesIO(compact_response.content)).size, (64, 32)
+            )
             with connection.cursor() as cursor:
                 cursor.execute(
                     "UPDATE media_assets_filelocation SET relative_path = %s WHERE id = %s",

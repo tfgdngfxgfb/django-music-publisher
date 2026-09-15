@@ -10,7 +10,12 @@ import numpy as np
 import soundfile as sf
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError, close_old_connections, connection, transaction
+from django.db import (
+    IntegrityError,
+    close_old_connections,
+    connection,
+    transaction,
+)
 from django.test import TransactionTestCase
 from mutagen.flac import FLAC
 
@@ -128,7 +133,9 @@ class PostgreSQLMasteringConcurrencyTests(TransactionTestCase):
             barrier.wait(timeout=10)
             callback()
             return "ok"
-        except Exception as error:  # returned so the parent can assert the result
+        except (
+            Exception
+        ) as error:  # returned so the parent can assert the result
             return error
         finally:
             close_old_connections()
@@ -164,8 +171,12 @@ class PostgreSQLMasteringConcurrencyTests(TransactionTestCase):
                 )
         first.refresh_from_db()
         second.refresh_from_db()
-        self.assertEqual(first.lifecycle_status, FileAsset.LifecycleStatus.CURRENT)
-        self.assertEqual(second.lifecycle_status, FileAsset.LifecycleStatus.CANDIDATE)
+        self.assertEqual(
+            first.lifecycle_status, FileAsset.LifecycleStatus.CURRENT
+        )
+        self.assertEqual(
+            second.lifecycle_status, FileAsset.LifecycleStatus.CANDIDATE
+        )
 
     def test_concurrent_activation_serializes_to_one_consistent_current(self):
         _, old, candidates, _, generations = self._activation_fixture()
@@ -181,7 +192,9 @@ class PostgreSQLMasteringConcurrencyTests(TransactionTestCase):
                 executor.submit(
                     self._thread_call,
                     barrier,
-                    lambda generation_id=generation.pk: activate(generation_id),
+                    lambda generation_id=generation.pk: activate(
+                        generation_id
+                    ),
                 )
                 for generation in generations
             ]
@@ -196,18 +209,29 @@ class PostgreSQLMasteringConcurrencyTests(TransactionTestCase):
             )
         )
         self.assertEqual(len(current), 1)
-        selection = RecordingMediaSelection.objects.get(recording=self.recording)
+        selection = RecordingMediaSelection.objects.get(
+            recording=self.recording
+        )
         self.assertEqual(selection.current_radio_id, current[0].pk)
         old.refresh_from_db()
-        self.assertEqual(old.lifecycle_status, FileAsset.LifecycleStatus.HISTORICAL)
-        losing_candidate = next(item for item in candidates if item.pk != current[0].pk)
+        self.assertEqual(
+            old.lifecycle_status, FileAsset.LifecycleStatus.HISTORICAL
+        )
+        losing_candidate = next(
+            item for item in candidates if item.pk != current[0].pk
+        )
         losing_candidate.refresh_from_db()
         self.assertEqual(
-            losing_candidate.lifecycle_status, FileAsset.LifecycleStatus.HISTORICAL
+            losing_candidate.lifecycle_status,
+            FileAsset.LifecycleStatus.HISTORICAL,
         )
 
-    def test_derivation_database_constraint_and_cross_recording_validation(self):
-        master = self._asset("lineage-master.wav", FileAsset.Role.EDITED_WAV_MASTER)
+    def test_derivation_database_constraint_and_cross_recording_validation(
+        self,
+    ):
+        master = self._asset(
+            "lineage-master.wav", FileAsset.Role.EDITED_WAV_MASTER
+        )
         derived = self._asset("lineage-radio.flac", FileAsset.Role.RADIO_FLAC)
         relation = FileDerivation.objects.create(
             source_asset=master,
@@ -246,7 +270,9 @@ class PostgreSQLMasteringConcurrencyTests(TransactionTestCase):
 
     def test_concurrent_master_selection_leaves_one_valid_selection(self):
         masters = [
-            self._asset(f"master-{number}.wav", FileAsset.Role.EDITED_WAV_MASTER)
+            self._asset(
+                f"master-{number}.wav", FileAsset.Role.EDITED_WAV_MASTER
+            )
             for number in (1, 2)
         ]
         barrier = threading.Barrier(2)
@@ -271,12 +297,22 @@ class PostgreSQLMasteringConcurrencyTests(TransactionTestCase):
                 ]
             ]
         self.assertTrue(all(result == "ok" for result in outcomes), outcomes)
-        selection = RecordingMediaSelection.objects.get(recording=self.recording)
-        self.assertIn(selection.selected_master_id, {item.pk for item in masters})
-        self.assertEqual(selection.selected_master.recording_id, self.recording.pk)
+        selection = RecordingMediaSelection.objects.get(
+            recording=self.recording
+        )
+        self.assertIn(
+            selection.selected_master_id, {item.pk for item in masters}
+        )
+        self.assertEqual(
+            selection.selected_master.recording_id, self.recording.pk
+        )
 
-    def test_activation_exception_rolls_back_selection_lifecycle_and_lineage(self):
-        master, old, candidates, selection, generations = self._activation_fixture()
+    def test_activation_exception_rolls_back_selection_lifecycle_and_lineage(
+        self,
+    ):
+        master, old, candidates, selection, generations = (
+            self._activation_fixture()
+        )
         candidate = candidates[0]
         generation = generations[0]
         derivation = FileDerivation.objects.create(
@@ -295,14 +331,20 @@ class PostgreSQLMasteringConcurrencyTests(TransactionTestCase):
         candidate.refresh_from_db()
         selection.refresh_from_db()
         generation.refresh_from_db()
-        self.assertEqual(old.lifecycle_status, FileAsset.LifecycleStatus.CURRENT)
+        self.assertEqual(
+            old.lifecycle_status, FileAsset.LifecycleStatus.CURRENT
+        )
         self.assertEqual(
             candidate.lifecycle_status, FileAsset.LifecycleStatus.CANDIDATE
         )
         self.assertEqual(selection.current_radio_id, old.pk)
         self.assertEqual(selection.selected_master_id, master.pk)
-        self.assertEqual(generation.status, RadioFlacGeneration.Status.VERIFIED)
-        self.assertTrue(FileDerivation.objects.filter(pk=derivation.pk).exists())
+        self.assertEqual(
+            generation.status, RadioFlacGeneration.Status.VERIFIED
+        )
+        self.assertTrue(
+            FileDerivation.objects.filter(pk=derivation.pk).exists()
+        )
         self.assertEqual(
             FileAsset.objects.filter(
                 recording=self.recording,
@@ -346,7 +388,9 @@ class PostgreSQLMasteringConcurrencyTests(TransactionTestCase):
         )
         select_master(recording=self.recording, asset=master, user=self.user)
 
-    def test_concurrent_identical_plan_and_generation_create_one_candidate(self):
+    def test_concurrent_identical_plan_and_generation_create_one_candidate(
+        self,
+    ):
         self._prepare_real_generation()
         plan_barrier = threading.Barrier(2)
 
@@ -364,7 +408,9 @@ class PostgreSQLMasteringConcurrencyTests(TransactionTestCase):
                     for _ in range(2)
                 ]
             ]
-        self.assertTrue(all(result == "ok" for result in plan_outcomes), plan_outcomes)
+        self.assertTrue(
+            all(result == "ok" for result in plan_outcomes), plan_outcomes
+        )
         self.assertEqual(RadioFlacGeneration.objects.count(), 1)
         generation = RadioFlacGeneration.objects.get()
 
@@ -385,7 +431,9 @@ class PostgreSQLMasteringConcurrencyTests(TransactionTestCase):
                 self.assertTrue(encode_started.wait(timeout=10))
             try:
                 generate_candidate(
-                    generation=RadioFlacGeneration.objects.get(pk=generation.pk),
+                    generation=RadioFlacGeneration.objects.get(
+                        pk=generation.pk
+                    ),
                     user=get_user_model().objects.get(pk=self.user.pk),
                 )
                 return "ok"
@@ -397,19 +445,28 @@ class PostgreSQLMasteringConcurrencyTests(TransactionTestCase):
                 close_old_connections()
 
         close_old_connections()
-        with patch("media_assets.mastering._encode_lossless", controlled_encode):
+        with patch(
+            "media_assets.mastering._encode_lossless", controlled_encode
+        ):
             with ThreadPoolExecutor(max_workers=2) as executor:
                 first = executor.submit(run_generation)
                 second = executor.submit(run_generation, True)
-                outcomes = [first.result(timeout=20), second.result(timeout=20)]
+                outcomes = [
+                    first.result(timeout=20),
+                    second.result(timeout=20),
+                ]
         close_old_connections()
 
         self.assertEqual(outcomes.count("ok"), 1, outcomes)
         self.assertEqual(
-            sum(isinstance(item, ValidationError) for item in outcomes), 1, outcomes
+            sum(isinstance(item, ValidationError) for item in outcomes),
+            1,
+            outcomes,
         )
         generation.refresh_from_db()
-        self.assertEqual(generation.status, RadioFlacGeneration.Status.VERIFIED)
+        self.assertEqual(
+            generation.status, RadioFlacGeneration.Status.VERIFIED
+        )
         self.assertIsNotNone(generation.candidate_asset_id)
         self.assertEqual(
             FileAsset.objects.filter(
@@ -418,4 +475,6 @@ class PostgreSQLMasteringConcurrencyTests(TransactionTestCase):
             ).count(),
             1,
         )
-        self.assertEqual(len(list((self.root / "P7-generert").rglob("*.flac"))), 1)
+        self.assertEqual(
+            len(list((self.root / "P7-generert").rglob("*.flac"))), 1
+        )

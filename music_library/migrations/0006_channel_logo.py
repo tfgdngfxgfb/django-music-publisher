@@ -6,13 +6,18 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('music_library', '0005_musiclibraryentry_rotation_suitability'),
+        ("music_library", "0005_musiclibraryentry_rotation_suitability"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='channel',
-            name='logo',
-            field=models.ImageField(blank=True, help_text='Valgfri kanal-logo. PNG, JPEG eller WebP anbefales. Hvis feltet er tomt, brukes det innebygde kanalmerket når dette finnes.', upload_to='channel_logos/', verbose_name='logo'),
+            model_name="channel",
+            name="logo",
+            field=models.ImageField(
+                blank=True,
+                help_text="Valgfri kanal-logo. PNG, JPEG eller WebP anbefales. Hvis feltet er tomt, brukes det innebygde kanalmerket når dette finnes.",
+                upload_to="channel_logos/",
+                verbose_name="logo",
+            ),
         ),
     ]

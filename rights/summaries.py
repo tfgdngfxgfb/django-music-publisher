@@ -87,11 +87,17 @@ def classify_ownership(claims, local_organization, *, on_date=None):
         )
 
     confirmed = tuple(
-        claim for claim in active if claim.status == VerificationStatus.CONFIRMED
+        claim
+        for claim in active
+        if claim.status == VerificationStatus.CONFIRMED
     )
     if not confirmed or local_id is None:
         return OwnershipSummary(
-            OwnershipCategory.UNRESOLVED, active, (), confirmed, local_organization
+            OwnershipCategory.UNRESOLVED,
+            active,
+            (),
+            confirmed,
+            local_organization,
         )
 
     local_claims = tuple(
@@ -225,8 +231,10 @@ def local_confirmed_right_recording_ids(
             status=VerificationStatus.CONFIRMED,
         )
         .filter(
-            models.Q(valid_from__isnull=True) | models.Q(valid_from__lte=on_date),
-            models.Q(valid_until__isnull=True) | models.Q(valid_until__gte=on_date),
+            models.Q(valid_from__isnull=True)
+            | models.Q(valid_from__lte=on_date),
+            models.Q(valid_until__isnull=True)
+            | models.Q(valid_until__gte=on_date),
         )
         .values_list("recording_id", flat=True)
     )

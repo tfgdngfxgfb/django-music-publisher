@@ -12,7 +12,10 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ("catalogue", "0004_duplicatecandidate_label_release_releasetrack_and_more"),
+        (
+            "catalogue",
+            "0004_duplicatecandidate_label_release_releasetrack_and_more",
+        ),
     ]
 
     operations = [
@@ -31,11 +34,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "created_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="opprettet"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="opprettet"
+                    ),
                 ),
                 (
                     "updated_at",
-                    models.DateTimeField(auto_now=True, verbose_name="sist endret"),
+                    models.DateTimeField(
+                        auto_now=True, verbose_name="sist endret"
+                    ),
                 ),
                 (
                     "revision",
@@ -54,7 +61,9 @@ class Migration(migrations.Migration):
                 (
                     "mime_type",
                     models.CharField(
-                        blank=True, max_length=255, verbose_name="MIME-type/format"
+                        blank=True,
+                        max_length=255,
+                        verbose_name="MIME-type/format",
                     ),
                 ),
                 (
@@ -91,7 +100,9 @@ class Migration(migrations.Migration):
                 (
                     "technical_metadata",
                     models.JSONField(
-                        blank=True, default=dict, verbose_name="tekniske metadata"
+                        blank=True,
+                        default=dict,
+                        verbose_name="tekniske metadata",
                     ),
                 ),
                 (
@@ -138,11 +149,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "created_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="opprettet"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="opprettet"
+                    ),
                 ),
                 (
                     "updated_at",
-                    models.DateTimeField(auto_now=True, verbose_name="sist endret"),
+                    models.DateTimeField(
+                        auto_now=True, verbose_name="sist endret"
+                    ),
                 ),
                 (
                     "revision",
@@ -194,7 +209,9 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "observed_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="observert"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="observert"
+                    ),
                 ),
                 (
                     "ended_at",
@@ -205,13 +222,17 @@ class Migration(migrations.Migration):
                 (
                     "google_drive_id",
                     models.CharField(
-                        blank=True, max_length=255, verbose_name="Google Drive-ID"
+                        blank=True,
+                        max_length=255,
+                        verbose_name="Google Drive-ID",
                     ),
                 ),
                 (
                     "google_drive_url",
                     models.URLField(
-                        blank=True, max_length=1000, verbose_name="Google Drive-URL"
+                        blank=True,
+                        max_length=1000,
+                        verbose_name="Google Drive-URL",
                     ),
                 ),
                 (
@@ -259,7 +280,8 @@ class Migration(migrations.Migration):
         migrations.AddIndex(
             model_name="filelocation",
             index=models.Index(
-                fields=["storage_type", "relative_path"], name="file_location_path_idx"
+                fields=["storage_type", "relative_path"],
+                name="file_location_path_idx",
             ),
         ),
         migrations.AddIndex(

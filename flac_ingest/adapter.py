@@ -126,7 +126,9 @@ def _casefolded(raw_tags):
 def _normalized_label(value):
     decomposed = unicodedata.normalize("NFKD", value)
     ascii_value = "".join(
-        character for character in decomposed if not unicodedata.combining(character)
+        character
+        for character in decomposed
+        if not unicodedata.combining(character)
     )
     return re.sub(r"[^a-z0-9]", "", ascii_value.casefold())
 
@@ -148,7 +150,9 @@ def _with_embedded_txxx(tags):
             )
             if not match:
                 continue
-            target = COMMENT_TXXX_ALIASES.get(_normalized_label(match.group(1)))
+            target = COMMENT_TXXX_ALIASES.get(
+                _normalized_label(match.group(1))
+            )
             value = match.group(2).strip()
             if not target or not value:
                 continue
@@ -242,7 +246,13 @@ def read_flac(path):
     path = Path(path)
     try:
         audio = FLAC(path)
-    except (FLACNoHeaderError, MutagenError, OSError, TypeError, ValueError) as error:
+    except (
+        FLACNoHeaderError,
+        MutagenError,
+        OSError,
+        TypeError,
+        ValueError,
+    ) as error:
         raise FlacReadError(f"Kunne ikke lese FLAC-filen: {error}") from error
     raw_tags = {
         str(key): [str(value) for value in values]
@@ -349,7 +359,9 @@ def write_catalogue_tags(path, values):
                 del before[tag]
             continue
         before[tag] = (
-            [str(item) for item in value] if isinstance(value, list) else [str(value)]
+            [str(item) for item in value]
+            if isinstance(value, list)
+            else [str(value)]
         )
     try:
         before.save()
@@ -366,10 +378,14 @@ def write_catalogue_tags(path, values):
         tag = tag.upper()
         if value in (None, "", []):
             if tag in after_tags:
-                raise FlacWriteError(f"Kontroll etter sletting feilet for {tag}.")
+                raise FlacWriteError(
+                    f"Kontroll etter sletting feilet for {tag}."
+                )
             continue
         expected = (
-            [str(item) for item in value] if isinstance(value, list) else [str(value)]
+            [str(item) for item in value]
+            if isinstance(value, list)
+            else [str(value)]
         )
         if after_tags.get(tag) != expected:
             raise FlacWriteError(f"Kontroll etter skriving feilet for {tag}.")

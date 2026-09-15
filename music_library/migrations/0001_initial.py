@@ -11,7 +11,10 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ("catalogue", "0004_duplicatecandidate_label_release_releasetrack_and_more"),
+        (
+            "catalogue",
+            "0004_duplicatecandidate_label_release_releasetrack_and_more",
+        ),
     ]
 
     operations = [
@@ -30,11 +33,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "created_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="opprettet"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="opprettet"
+                    ),
                 ),
                 (
                     "updated_at",
-                    models.DateTimeField(auto_now=True, verbose_name="sist endret"),
+                    models.DateTimeField(
+                        auto_now=True, verbose_name="sist endret"
+                    ),
                 ),
                 (
                     "revision",
@@ -128,7 +135,10 @@ class Migration(migrations.Migration):
                         verbose_name="verifikasjonsstatus",
                     ),
                 ),
-                ("notes", models.TextField(blank=True, verbose_name="merknader")),
+                (
+                    "notes",
+                    models.TextField(blank=True, verbose_name="merknader"),
+                ),
                 (
                     "recording",
                     models.OneToOneField(
@@ -145,9 +155,12 @@ class Migration(migrations.Migration):
                 "ordering": ("recording__title", "id"),
                 "indexes": [
                     models.Index(fields=["genre"], name="library_genre_idx"),
-                    models.Index(fields=["channel"], name="library_channel_idx"),
                     models.Index(
-                        fields=["verification_status"], name="library_verify_idx"
+                        fields=["channel"], name="library_channel_idx"
+                    ),
+                    models.Index(
+                        fields=["verification_status"],
+                        name="library_verify_idx",
                     ),
                 ],
                 "constraints": [

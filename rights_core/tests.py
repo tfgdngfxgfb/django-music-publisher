@@ -66,7 +66,9 @@ class DevelopmentAdminCommandTests(TestCase):
 
 class SmokeDataCommandTests(TestCase):
     def test_refuses_to_write_without_explicit_smoke_environment(self):
-        with patch.dict("os.environ", {}, clear=True), self.assertRaises(CommandError):
+        with patch.dict("os.environ", {}, clear=True), self.assertRaises(
+            CommandError
+        ):
             call_command("create_phase2_smoke_data", verbosity=0)
 
 
@@ -95,9 +97,11 @@ class DemoDataTests(TestCase):
             )
             local = RightsConfiguration.objects.get().local_organization
             categories = {
-                Recording.objects.get(pk=demo_id).title: classify_ownership(
+                Recording.objects.get(pk=demo_id)
+                .title: classify_ownership(
                     RightsClaim.objects.filter(recording_id=demo_id), local
-                ).category
+                )
+                .category
                 for demo_id in (
                     "70000000-0000-4000-8000-000000000030",
                     "70000000-0000-4000-8000-000000000031",

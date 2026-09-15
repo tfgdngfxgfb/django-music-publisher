@@ -32,7 +32,9 @@ class CanonicalQuerySet(models.QuerySet):
         raise TypeError("Canonical changes must use instance.save().")
 
     def bulk_create(self, *args, **kwargs):
-        raise TypeError("Canonical creation must use instance.save() for validation.")
+        raise TypeError(
+            "Canonical creation must use instance.save() for validation."
+        )
 
 
 class CanonicalModel(models.Model):
@@ -41,7 +43,9 @@ class CanonicalModel(models.Model):
     )
     created_at = models.DateTimeField("opprettet", auto_now_add=True)
     updated_at = models.DateTimeField("sist endret", auto_now=True)
-    revision = models.PositiveBigIntegerField("revisjon", default=1, editable=False)
+    revision = models.PositiveBigIntegerField(
+        "revisjon", default=1, editable=False
+    )
 
     objects = CanonicalQuerySet.as_manager()
 
@@ -57,11 +61,16 @@ class CanonicalModel(models.Model):
     def save(self, *args, **kwargs):
         if getattr(self, "_saved_pk", self.pk) != self.pk:
             raise ValidationError("Den permanente UUID-en kan ikke endres.")
-        using = kwargs.get("using") or router.db_for_write(type(self), instance=self)
+        using = kwargs.get("using") or router.db_for_write(
+            type(self), instance=self
+        )
         with transaction.atomic(using=using):
             if not self._state.adding:
                 current = (
-                    type(self).objects.using(using).select_for_update().get(pk=self.pk)
+                    type(self)
+                    .objects.using(using)
+                    .select_for_update()
+                    .get(pk=self.pk)
                 )
                 self.revision = current.revision + 1
             self.full_clean()

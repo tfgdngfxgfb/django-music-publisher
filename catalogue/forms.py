@@ -8,7 +8,9 @@ from .services import find_recording_candidates
 
 class TrackCreationForm(forms.Form):
     recording = forms.ModelChoiceField(
-        Recording.objects.all(), label="Bruk eksisterende innspilling", required=False
+        Recording.objects.all(),
+        label="Bruk eksisterende innspilling",
+        required=False,
     )
     new_recording_title = forms.CharField(
         label="Tittel på ny innspilling", max_length=500, required=False
@@ -17,10 +19,16 @@ class TrackCreationForm(forms.Form):
     artist_identity = forms.ModelChoiceField(
         ArtistIdentity.objects.all(), label="Artistidentitet", required=False
     )
-    disc_number = forms.IntegerField(label="Disc/medium", min_value=1, required=False)
+    disc_number = forms.IntegerField(
+        label="Disc/medium", min_value=1, required=False
+    )
     side = forms.CharField(label="Side", max_length=10, required=False)
-    track_number = forms.IntegerField(label="Spornummer", min_value=1, required=False)
-    sequence_number = forms.IntegerField(label="Sorteringsrekkefølge", min_value=1)
+    track_number = forms.IntegerField(
+        label="Spornummer", min_value=1, required=False
+    )
+    sequence_number = forms.IntegerField(
+        label="Sorteringsrekkefølge", min_value=1
+    )
     title_override = forms.CharField(
         label="Utgivelsesspesifikk tittel", max_length=500, required=False
     )
@@ -43,7 +51,9 @@ class TrackCreationForm(forms.Form):
                 "Velg én eksisterende innspilling eller skriv inn tittel for én ny."
             )
         if recording and data.get("new_isrc"):
-            self.add_error("new_isrc", "Legg ISRC på den eksisterende innspillingen.")
+            self.add_error(
+                "new_isrc", "Legg ISRC på den eksisterende innspillingen."
+            )
         if title and not data.get("force_create"):
             matches = find_recording_candidates(
                 title=title,

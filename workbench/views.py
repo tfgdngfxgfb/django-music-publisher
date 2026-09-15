@@ -36,7 +36,11 @@ from flac_ingest.maintenance import (
     execute_cleanup,
     execute_rebuild,
 )
-from flac_ingest.models import FlacIngestBatch, FlacIngestItem, FlacMaintenanceJob
+from flac_ingest.models import (
+    FlacIngestBatch,
+    FlacIngestItem,
+    FlacMaintenanceJob,
+)
 from flac_ingest.services import (
     SOURCE_SYSTEM_NAME,
     apply_batch,
@@ -51,7 +55,11 @@ from media_assets.models import FileAsset, FileLocation
 from media_assets.storage import open_for_read, resolve_location
 from music_library.models import MusicLibraryEntry
 from parties.models import ArtistIdentity, Party
-from provenance.models import AppliedMetadataChange, MetadataAssertion, SourceSystem
+from provenance.models import (
+    AppliedMetadataChange,
+    MetadataAssertion,
+    SourceSystem,
+)
 from provenance.services import (
     apply_assertion,
     correct_assertion,
@@ -66,7 +74,11 @@ from rights.forms import (
     ReleaseRightsClaimForm,
     RightsDecisionForm,
 )
-from rights.help_content import RIGHTS_FORM_HELP, RIGHTS_HELP, RIGHTS_HELP_SECTIONS
+from rights.help_content import (
+    RIGHTS_FORM_HELP,
+    RIGHTS_HELP,
+    RIGHTS_HELP_SECTIONS,
+)
 from rights.models import Agreement, RightsClaim
 from rights.services import (
     create_release_rights_claims,
@@ -165,7 +177,9 @@ def home(request):
         tasks.append(
             {
                 "label": "Mulige dubletter",
-                "count": DuplicateCandidate.objects.filter(status="open").count(),
+                "count": DuplicateCandidate.objects.filter(
+                    status="open"
+                ).count(),
                 "url": reverse("workbench:control") + "?type=dubletter",
             }
         )
@@ -188,9 +202,9 @@ def home(request):
                 },
             )
         )
-    if request.user.has_perm("rights.view_rightsclaim") and request.user.has_perm(
-        "managed_music.view_managedrecording"
-    ):
+    if request.user.has_perm(
+        "rights.view_rightsclaim"
+    ) and request.user.has_perm("managed_music.view_managedrecording"):
         tasks.append(
             {
                 "label": "Uavklarte rettighetskrav",
@@ -223,12 +237,16 @@ def _primary_credit(recording):
 
 
 @staff
-@permission_required("music_library.view_musiclibraryentry", raise_exception=True)
+@permission_required(
+    "music_library.view_musiclibraryentry", raise_exception=True
+)
 def library_list(request):
     form = MusicLibraryFilterForm(request.GET)
     queryset = (
         MusicLibraryEntry.objects.select_related(
-            "recording", "managed_recording", "managed_recording__source_system"
+            "recording",
+            "managed_recording",
+            "managed_recording__source_system",
         )
         .prefetch_related(
             "channels",
@@ -268,7 +286,8 @@ def library_list(request):
             "recent": "-updated_at",
         }
         queryset = queryset.order_by(
-            ordering.get(form.cleaned_data.get("order"), "recording__title"), "id"
+            ordering.get(form.cleaned_data.get("order"), "recording__title"),
+            "id",
         )
         if status:
             queryset = queryset.filter(verification_status=status)
@@ -301,7 +320,8 @@ def library_list(request):
     ):
         covers = dict(
             FileAsset.objects.filter(
-                role="cover_image", recording_id__in=[e.recording_id for e in rows]
+                role="cover_image",
+                recording_id__in=[e.recording_id for e in rows],
             )
             .order_by("id")
             .values_list("recording_id", "id")
@@ -338,7 +358,8 @@ def library_list(request):
                 if location.is_current
             ]
             if any(
-                location.verification_status == FileLocation.VerificationStatus.VERIFIED
+                location.verification_status
+                == FileLocation.VerificationStatus.VERIFIED
                 for location in locations
             ):
                 entry.file_state = "verified"
@@ -398,7 +419,9 @@ def library_list(request):
 
 
 @staff
-@permission_required("music_library.add_musiclibraryentry", raise_exception=True)
+@permission_required(
+    "music_library.add_musiclibraryentry", raise_exception=True
+)
 def library_add(request):
     initial = (
         {"recording": request.GET["recording"]}
@@ -411,9 +434,13 @@ def library_add(request):
             recording=form.cleaned_data["recording"]
         )
         if created:
-            messages.success(request, "Innspillingen ble lagt til i Musikkarkivet.")
+            messages.success(
+                request, "Innspillingen ble lagt til i Musikkarkivet."
+            )
         else:
-            messages.info(request, "Innspillingen finnes allerede i Musikkarkivet.")
+            messages.info(
+                request, "Innspillingen finnes allerede i Musikkarkivet."
+            )
         return redirect("workbench:recording", pk=entry.recording_id)
     return render(
         request,
@@ -429,7 +456,9 @@ def library_add(request):
 
 
 @staff
-@permission_required("managed_music.view_managedrecording", raise_exception=True)
+@permission_required(
+    "managed_music.view_managedrecording", raise_exception=True
+)
 def managed_list(request):
     form = ManagedFilterForm(request.GET)
     can_view_rights = request.user.has_perm("rights.view_rightsclaim")
@@ -469,12 +498,16 @@ def managed_list(request):
                 | Q(
                     library_entry__recording__identifiers__normalized_value__icontains=q
                 )
-                | Q(library_entry__recording__contributions__party__name__icontains=q)
+                | Q(
+                    library_entry__recording__contributions__party__name__icontains=q
+                )
             ).distinct()
         if form.cleaned_data.get("status"):
             queryset = queryset.filter(status=form.cleaned_data["status"])
         if form.cleaned_data.get("source"):
-            queryset = queryset.filter(source_system=form.cleaned_data["source"])
+            queryset = queryset.filter(
+                source_system=form.cleaned_data["source"]
+            )
         if can_view_rights:
             ownership = form.cleaned_data.get("ownership")
             recording_ids = tuple(
@@ -491,7 +524,9 @@ def managed_list(request):
                     for recording_id, summary in summaries.items()
                     if summary.category == ownership
                 ]
-                queryset = queryset.filter(library_entry__recording_id__in=matching_ids)
+                queryset = queryset.filter(
+                    library_entry__recording_id__in=matching_ids
+                )
             for field_name, right_type in (
                 (
                     "local_administration",
@@ -524,7 +559,9 @@ def managed_list(request):
     if can_view_rights:
         for managed in rows:
             claims = tuple(managed.recording.rights_claims.all())
-            managed.ownership_summary = classify_ownership(claims, local_organization)
+            managed.ownership_summary = classify_ownership(
+                claims, local_organization
+            )
             managed.local_administration = has_local_confirmed_right(
                 claims,
                 local_organization,
@@ -604,7 +641,9 @@ def flac_ingest_preview(request, pk):
         )
     )
     counts["warning"] = warning_queryset.count()
-    valid_actions = {action for action, _label in FlacIngestItem.Action.choices}
+    valid_actions = {
+        action for action, _label in FlacIngestItem.Action.choices
+    }
     if selected_action == "warning":
         queryset = queryset.exclude(messages=[]).exclude(
             action__in=(
@@ -734,7 +773,9 @@ def flac_ingest_rescan(request, pk):
     elif mode != "all":
         return HttpResponseBadRequest("Ukjent type ny skanning.")
     if relative_paths == []:
-        messages.warning(request, "Ingen aktuelle filer ble valgt for ny skanning.")
+        messages.warning(
+            request, "Ingen aktuelle filer ble valgt for ny skanning."
+        )
         return redirect("workbench:flac_ingest_preview", pk=batch.pk)
     try:
         new_batch = scan_directory(
@@ -747,10 +788,14 @@ def flac_ingest_rescan(request, pk):
             user=request.user,
         )
     except (ImproperlyConfigured, ValidationError) as error:
-        details = error.messages if hasattr(error, "messages") else [str(error)]
+        details = (
+            error.messages if hasattr(error, "messages") else [str(error)]
+        )
         messages.error(request, "; ".join(details))
         return redirect("workbench:flac_ingest_preview", pk=batch.pk)
-    messages.success(request, f"{new_batch.items.count()} filer ble skannet på nytt.")
+    messages.success(
+        request, f"{new_batch.items.count()} filer ble skannet på nytt."
+    )
     return redirect("workbench:flac_ingest_preview", pk=new_batch.pk)
 
 
@@ -768,18 +813,26 @@ def flac_ingest_apply(request, pk):
     try:
         applied = apply_batch(batch, user=request.user)
     except (ImproperlyConfigured, ValidationError) as error:
-        details = error.messages if hasattr(error, "messages") else [str(error)]
+        details = (
+            error.messages if hasattr(error, "messages") else [str(error)]
+        )
         messages.error(request, "; ".join(details))
     else:
-        messages.success(request, f"{applied} FLAC-filer ble brukt i Musikkarkivet.")
+        messages.success(
+            request, f"{applied} FLAC-filer ble brukt i Musikkarkivet."
+        )
     return redirect("workbench:flac_ingest_preview", pk=batch.pk)
 
 
 @staff
-@permission_required("managed_music.add_managedrecording", raise_exception=True)
+@permission_required(
+    "managed_music.add_managedrecording", raise_exception=True
+)
 def managed_add(request):
     if not request.user.is_superuser:
-        return HttpResponseForbidden("Bare administrator kan registrere forvaltning.")
+        return HttpResponseForbidden(
+            "Bare administrator kan registrere forvaltning."
+        )
     initial = {}
     if request.GET.get("recording"):
         initial["recording"] = request.GET["recording"]
@@ -831,16 +884,22 @@ def release_list(request):
                 | Q(label__name__icontains=q)
                 | Q(identifiers__normalized_value__icontains=q)
                 | Q(tracks__recording__title__icontains=q)
-                | Q(tracks__recording__identifiers__normalized_value__icontains=q)
+                | Q(
+                    tracks__recording__identifiers__normalized_value__icontains=q
+                )
                 | Q(tracks__recording__contributions__party__name__icontains=q)
                 | Q(
                     tracks__recording__contributions__artist_identity__display_name__icontains=q
                 )
             ).distinct()
         if form.cleaned_data.get("release_type"):
-            queryset = queryset.filter(release_type=form.cleaned_data["release_type"])
+            queryset = queryset.filter(
+                release_type=form.cleaned_data["release_type"]
+            )
         if form.cleaned_data.get("status"):
-            queryset = queryset.filter(verification_status=form.cleaned_data["status"])
+            queryset = queryset.filter(
+                verification_status=form.cleaned_data["status"]
+            )
         source = form.cleaned_data.get("source")
         if source:
             release_ids = MetadataAssertion.objects.filter(
@@ -891,13 +950,17 @@ def release_detail(request, pk):
             "identifiers",
             Prefetch(
                 "tracks",
-                ReleaseTrack.objects.select_related("recording").prefetch_related(
+                ReleaseTrack.objects.select_related(
+                    "recording"
+                ).prefetch_related(
                     "recording__identifiers",
                     "recording__contributions__party",
                     "recording__contributions__artist_identity",
                 ),
             ),
-            Prefetch("file_assets", FileAsset.objects.prefetch_related("locations")),
+            Prefetch(
+                "file_assets", FileAsset.objects.prefetch_related("locations")
+            ),
         ),
         pk=pk,
     )
@@ -917,7 +980,8 @@ def release_detail(request, pk):
                 _safe_return(request, reverse("workbench:release", args=(pk,)))
             )
     assertions = MetadataAssertion.objects.filter(
-        entity_type=MetadataAssertion.EntityType.RELEASE, entity_uuid=release.pk
+        entity_type=MetadataAssertion.EntityType.RELEASE,
+        entity_uuid=release.pk,
     ).select_related("source_record__source_system")
     return render(
         request,
@@ -935,12 +999,18 @@ def release_detail(request, pk):
 
 @staff
 @permission_required(
-    ("catalogue.view_release", "rights.view_rightsclaim", "rights.add_rightsclaim"),
+    (
+        "catalogue.view_release",
+        "rights.view_rightsclaim",
+        "rights.add_rightsclaim",
+    ),
     raise_exception=True,
 )
 def release_rights_add(request, pk):
     release = get_object_or_404(Release, pk=pk)
-    return_url = _safe_return(request, reverse("workbench:release", args=(release.pk,)))
+    return_url = _safe_return(
+        request, reverse("workbench:release", args=(release.pk,))
+    )
     form = ReleaseRightsClaimForm(request.POST or None, release=release)
     if not request.user.has_perm("rights.view_agreement"):
         form.fields["agreement"].queryset = Agreement.objects.none()
@@ -1000,13 +1070,17 @@ def release_tracks(request, pk):
                 ["Fyll ut minst ett spor."], renderer=formset.renderer
             )
         else:
-            sequences = [form.cleaned_data["sequence_number"] for form in changed_forms]
+            sequences = [
+                form.cleaned_data["sequence_number"] for form in changed_forms
+            ]
             used = set(
-                release.tracks.filter(sequence_number__in=sequences).values_list(
-                    "sequence_number", flat=True
-                )
+                release.tracks.filter(
+                    sequence_number__in=sequences
+                ).values_list("sequence_number", flat=True)
             )
-            duplicates = {value for value in sequences if sequences.count(value) > 1}
+            duplicates = {
+                value for value in sequences if sequences.count(value) > 1
+            }
             if used or duplicates:
                 for form in changed_forms:
                     sequence = form.cleaned_data.get("sequence_number")
@@ -1043,11 +1117,13 @@ def release_tracks(request, pk):
                     )
                 else:
                     messages.success(
-                        request, f"{len(changed_forms)} spor ble registrert samlet."
+                        request,
+                        f"{len(changed_forms)} spor ble registrert samlet.",
                     )
                     return redirect(
                         _safe_return(
-                            request, reverse("workbench:release", args=(release.pk,))
+                            request,
+                            reverse("workbench:release", args=(release.pk,)),
                         )
                     )
     next_sequence = (
@@ -1077,13 +1153,17 @@ def _recording_queryset():
         "identifiers",
         Prefetch(
             "contributions",
-            RecordingContribution.objects.select_related("party", "artist_identity"),
+            RecordingContribution.objects.select_related(
+                "party", "artist_identity"
+            ),
         ),
         Prefetch(
             "release_tracks",
             ReleaseTrack.objects.select_related("release", "release__label"),
         ),
-        Prefetch("file_assets", FileAsset.objects.prefetch_related("locations")),
+        Prefetch(
+            "file_assets", FileAsset.objects.prefetch_related("locations")
+        ),
         "music_library_entry__channels",
         "music_library_entry__target_audiences",
         "music_library_entry__managed_recording",
@@ -1099,7 +1179,14 @@ def recording_detail(request, pk):
         library_entry and getattr(library_entry, "managed_recording", None)
     )
     tab = request.GET.get("fane", "overview")
-    allowed_tabs = {"overview", "radio", "releases", "contributors", "files", "sources"}
+    allowed_tabs = {
+        "overview",
+        "radio",
+        "releases",
+        "contributors",
+        "files",
+        "sources",
+    }
     if is_managed and request.user.has_perm("rights.view_rightsclaim"):
         allowed_tabs.add("rights")
     if tab not in allowed_tabs:
@@ -1110,7 +1197,9 @@ def recording_detail(request, pk):
             entity_uuid=recording.pk,
         )
         .select_related("source_record__source_system")
-        .prefetch_related("decisions__decided_by", "applied_changes__changed_by")
+        .prefetch_related(
+            "decisions__decided_by", "applied_changes__changed_by"
+        )
     )
     changes = AppliedMetadataChange.objects.filter(
         entity_type=MetadataAssertion.EntityType.RECORDING,
@@ -1124,11 +1213,16 @@ def recording_detail(request, pk):
         rights_claims = list(
             RightsClaim.objects.filter(recording=recording)
             .select_related(
-                "rights_holder", "grantor", "agreement", "source_record__source_system"
+                "rights_holder",
+                "grantor",
+                "agreement",
+                "source_record__source_system",
             )
             .prefetch_related("territories", "decisions__decided_by")
         )
-        ownership_summary = classify_ownership(rights_claims, local_organization)
+        ownership_summary = classify_ownership(
+            rights_claims, local_organization
+        )
     return render(
         request,
         "workbench/recording_detail.html",
@@ -1179,7 +1273,11 @@ def recording_detail(request, pk):
 
 @staff
 @permission_required(
-    ("catalogue.view_recording", "rights.view_rightsclaim", "rights.add_rightsclaim"),
+    (
+        "catalogue.view_recording",
+        "rights.view_rightsclaim",
+        "rights.add_rightsclaim",
+    ),
     raise_exception=True,
 )
 def rights_claim_add(request, pk):
@@ -1201,7 +1299,9 @@ def rights_claim_add(request, pk):
         data = form.cleaned_data.copy()
         territories = data.pop("territories")
         try:
-            create_rights_claim(recording=recording, territories=territories, **data)
+            create_rights_claim(
+                recording=recording, territories=territories, **data
+            )
         except ValidationError as error:
             form.add_error(None, error)
         else:
@@ -1209,7 +1309,8 @@ def rights_claim_add(request, pk):
                 request, "Rettighetskravet ble registrert som ikke verifisert."
             )
             return redirect(
-                reverse("workbench:recording", args=(recording.pk,)) + "?fane=rights"
+                reverse("workbench:recording", args=(recording.pk,))
+                + "?fane=rights"
             )
     return render(
         request,
@@ -1230,7 +1331,8 @@ def rights_claim_add(request, pk):
 @staff
 @require_POST
 @permission_required(
-    ("rights.view_rightsclaim", "rights.decide_rightsclaim"), raise_exception=True
+    ("rights.view_rightsclaim", "rights.decide_rightsclaim"),
+    raise_exception=True,
 )
 def rights_claim_decide(request, pk):
     claim = get_object_or_404(RightsClaim, pk=pk)
@@ -1263,7 +1365,8 @@ def rights_claim_decide(request, pk):
     return redirect(
         _safe_return(
             request,
-            reverse("workbench:recording", args=(claim.recording_id,)) + "?fane=rights",
+            reverse("workbench:recording", args=(claim.recording_id,))
+            + "?fane=rights",
         )
     )
 
@@ -1320,9 +1423,13 @@ def rights_claim_supersede(request, pk):
         except ValidationError as error:
             form.add_error(None, error)
         else:
-            messages.success(request, "Det tidligere kravet er bevart og erstattet.")
+            messages.success(
+                request, "Det tidligere kravet er bevart og erstattet."
+            )
             return redirect(
-                reverse("workbench:recording", args=(replacement.recording_id,))
+                reverse(
+                    "workbench:recording", args=(replacement.recording_id,)
+                )
                 + "?fane=rights"
             )
     return render(
@@ -1335,7 +1442,9 @@ def rights_claim_supersede(request, pk):
             form=form,
             form_help=RIGHTS_FORM_HELP,
             submit_label="Opprett erstatningskrav",
-            cancel_url=reverse("workbench:recording", args=(previous.recording_id,))
+            cancel_url=reverse(
+                "workbench:recording", args=(previous.recording_id,)
+            )
             + "?fane=rights",
         ),
     )
@@ -1364,7 +1473,8 @@ def rights_claim_link_agreement(request, pk):
             request, "Avtalen ble knyttet til kravet og handlingen loggført."
         )
         return redirect(
-            reverse("workbench:recording", args=(claim.recording_id,)) + "?fane=rights"
+            reverse("workbench:recording", args=(claim.recording_id,))
+            + "?fane=rights"
         )
     return render(
         request,
@@ -1375,7 +1485,9 @@ def rights_claim_link_agreement(request, pk):
             form=form,
             form_help={"agreement": RIGHTS_HELP["agreement"]},
             submit_label="Knytt avtale",
-            cancel_url=reverse("workbench:recording", args=(claim.recording_id,))
+            cancel_url=reverse(
+                "workbench:recording", args=(claim.recording_id,)
+            )
             + "?fane=rights",
         ),
     )
@@ -1385,9 +1497,9 @@ def rights_claim_link_agreement(request, pk):
 @permission_required("rights.view_agreement", raise_exception=True)
 def agreement_list(request):
     form = SearchForm(request.GET)
-    agreements = Agreement.objects.prefetch_related("party_roles__party").order_by(
-        "title", "id"
-    )
+    agreements = Agreement.objects.prefetch_related(
+        "party_roles__party"
+    ).order_by("title", "id")
     if form.is_valid() and form.cleaned_data.get("q"):
         q = form.cleaned_data["q"]
         agreements = agreements.filter(
@@ -1399,7 +1511,9 @@ def agreement_list(request):
     return render(
         request,
         "workbench/agreement_list.html",
-        _page_context("rights", "Avtaler", form=form, page=page, page_query=query),
+        _page_context(
+            "rights", "Avtaler", form=form, page=page, page_query=query
+        ),
     )
 
 
@@ -1572,7 +1686,9 @@ def recording_identifier_add(request, pk):
 
 
 @staff
-@permission_required("catalogue.add_recordingcontribution", raise_exception=True)
+@permission_required(
+    "catalogue.add_recordingcontribution", raise_exception=True
+)
 def contribution_add(request, pk):
     recording = get_object_or_404(Recording, pk=pk)
     form = ContributionForm(request.POST or None)
@@ -1599,7 +1715,9 @@ def contribution_add(request, pk):
 
 
 @staff
-@permission_required("music_library.change_musiclibraryentry", raise_exception=True)
+@permission_required(
+    "music_library.change_musiclibraryentry", raise_exception=True
+)
 def radio_edit(request, pk):
     recording = get_object_or_404(Recording, pk=pk)
     entry = get_object_or_404(MusicLibraryEntry, recording=recording)
@@ -1626,7 +1744,9 @@ def radio_edit(request, pk):
 
 @staff
 @require_POST
-@permission_required("provenance.change_metadataassertion", raise_exception=True)
+@permission_required(
+    "provenance.change_metadataassertion", raise_exception=True
+)
 def assertion_action(request, pk):
     assertion = get_object_or_404(MetadataAssertion, pk=pk)
     form = AssertionActionForm(request.POST)
@@ -1639,7 +1759,9 @@ def assertion_action(request, pk):
     try:
         if action in {"apply", "confirm_apply"}:
             if not request.user.has_perm("catalogue.change_recording"):
-                return HttpResponseForbidden("Du kan ikke endre katalogverdien.")
+                return HttpResponseForbidden(
+                    "Du kan ikke endre katalogverdien."
+                )
             apply_assertion(
                 assertion,
                 expected_revision=form.cleaned_data["expected_revision"],
@@ -1652,17 +1774,28 @@ def assertion_action(request, pk):
             )
         elif action == "confirm":
             decide_assertion(
-                assertion, VerificationStatus.CONFIRMED, user=request.user, note=note
+                assertion,
+                VerificationStatus.CONFIRMED,
+                user=request.user,
+                note=note,
             )
             messages.success(request, "Kildeopplysningen ble bekreftet.")
         elif action == "dispute":
             decide_assertion(
-                assertion, VerificationStatus.DISPUTED, user=request.user, note=note
+                assertion,
+                VerificationStatus.DISPUTED,
+                user=request.user,
+                note=note,
             )
-            messages.success(request, "Kildeopplysningen ble markert som bestridt.")
+            messages.success(
+                request, "Kildeopplysningen ble markert som bestridt."
+            )
         elif action == "reject":
             decide_assertion(
-                assertion, VerificationStatus.REJECTED, user=request.user, note=note
+                assertion,
+                VerificationStatus.REJECTED,
+                user=request.user,
+                note=note,
             )
             messages.success(request, "Kildeopplysningen ble avvist.")
         elif action == "correct":
@@ -1672,7 +1805,9 @@ def assertion_action(request, pk):
                 user=request.user,
                 note=note,
             )
-            messages.success(request, "En korrigert kildeopplysning ble opprettet.")
+            messages.success(
+                request, "En korrigert kildeopplysning ble opprettet."
+            )
     except (ValidationError, ValueError, IntegrityError) as error:
         messages.error(request, str(error))
     return redirect(_safe_return(request, fallback))
@@ -1743,14 +1878,17 @@ def parties_list(request):
         request.user.has_perm("parties.view_party")
         or request.user.has_perm("parties.view_artistidentity")
     ):
-        return HttpResponseForbidden("Du har ikke tilgang til personer og artister.")
+        return HttpResponseForbidden(
+            "Du har ikke tilgang til personer og artister."
+        )
     form = SearchForm(request.GET)
     parties = Party.objects.prefetch_related("artist_identities")
     artists = ArtistIdentity.objects.select_related("party")
     if form.is_valid() and form.cleaned_data.get("q"):
         q = form.cleaned_data["q"]
         parties = parties.filter(
-            Q(name__icontains=q) | Q(artist_identities__display_name__icontains=q)
+            Q(name__icontains=q)
+            | Q(artist_identities__display_name__icontains=q)
         ).distinct()
         artists = artists.filter(
             Q(display_name__icontains=q) | Q(party__name__icontains=q)
@@ -1776,7 +1914,9 @@ def party_add(request):
     form = PartyForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         form.save()
-        messages.success(request, "Personen eller organisasjonen ble opprettet.")
+        messages.success(
+            request, "Personen eller organisasjonen ble opprettet."
+        )
         return redirect("workbench:parties")
     return render(
         request,
@@ -1828,9 +1968,9 @@ def library_maintenance(request):
         return HttpResponseForbidden(
             "Du har ikke tilgang til vedlikehold av Musikkarkivet."
         )
-    jobs = FlacMaintenanceJob.objects.filter(kind__in=allowed_kinds).select_related(
-        "created_by", "executed_by"
-    )
+    jobs = FlacMaintenanceJob.objects.filter(
+        kind__in=allowed_kinds
+    ).select_related("created_by", "executed_by")
     selected_job = None
     if request.GET.get("job"):
         selected_job = get_object_or_404(jobs, pk=request.GET["job"])
@@ -1846,11 +1986,15 @@ def library_maintenance(request):
             can_preview_cleanup=request.user.has_perm(
                 "flac_ingest.preview_library_cleanup"
             ),
-            can_run_cleanup=request.user.has_perm("flac_ingest.run_library_cleanup"),
+            can_run_cleanup=request.user.has_perm(
+                "flac_ingest.run_library_cleanup"
+            ),
             can_preview_rebuild=request.user.has_perm(
                 "flac_ingest.preview_library_rebuild"
             ),
-            can_run_rebuild=request.user.has_perm("flac_ingest.run_library_rebuild"),
+            can_run_rebuild=request.user.has_perm(
+                "flac_ingest.run_library_rebuild"
+            ),
         ),
     )
 
@@ -1864,7 +2008,9 @@ def library_maintenance_preview(request):
         FlacMaintenanceJob.Kind.REBUILD: "flac_ingest.preview_library_rebuild",
     }.get(kind)
     if not permission or not request.user.has_perm(permission):
-        return HttpResponseForbidden("Du kan ikke lage denne vedlikeholdsplanen.")
+        return HttpResponseForbidden(
+            "Du kan ikke lage denne vedlikeholdsplanen."
+        )
     form = LibraryMaintenanceScopeForm(request.POST)
     if not form.is_valid():
         messages.error(request, "Velg et tilgjengelig område i musikkarkivet.")
@@ -1885,7 +2031,9 @@ def library_maintenance_preview(request):
     except ValidationError as error:
         messages.error(request, " ".join(error.messages))
         return redirect("workbench:library_maintenance")
-    messages.success(request, "Planen er klar. Ingen data eller filer er endret.")
+    messages.success(
+        request, "Planen er klar. Ingen data eller filer er endret."
+    )
     return redirect(f'{reverse("workbench:library_maintenance")}?job={job.pk}')
 
 
@@ -1898,16 +2046,26 @@ def library_maintenance_execute(request, pk):
         FlacMaintenanceJob.Kind.REBUILD: "flac_ingest.run_library_rebuild",
     }[job.kind]
     if not request.user.has_perm(permission):
-        return HttpResponseForbidden("Du kan ikke utføre denne vedlikeholdsplanen.")
+        return HttpResponseForbidden(
+            "Du kan ikke utføre denne vedlikeholdsplanen."
+        )
     if request.POST.get("confirmed") != "yes":
-        messages.error(request, "Les planen og bekreft konsekvensene før utføring.")
-        return redirect(f'{reverse("workbench:library_maintenance")}?job={job.pk}')
+        messages.error(
+            request, "Les planen og bekreft konsekvensene før utføring."
+        )
+        return redirect(
+            f'{reverse("workbench:library_maintenance")}?job={job.pk}'
+        )
     if (
         job.kind == FlacMaintenanceJob.Kind.REBUILD
         and request.POST.get("backup_confirmed") != "yes"
     ):
-        messages.error(request, "Bekreft at databasebackup er vurdert før rebuild.")
-        return redirect(f'{reverse("workbench:library_maintenance")}?job={job.pk}')
+        messages.error(
+            request, "Bekreft at databasebackup er vurdert før rebuild."
+        )
+        return redirect(
+            f'{reverse("workbench:library_maintenance")}?job={job.pk}'
+        )
     executor = (
         execute_cleanup
         if job.kind == FlacMaintenanceJob.Kind.CLEANUP
@@ -1935,14 +2093,16 @@ def control(request):
         or request.user.has_perm("provenance.view_metadataassertion")
         or _maintenance_kinds_for(request.user)
     ):
-        return HttpResponseForbidden("Du har ikke tilgang til kontrolloppgavene.")
+        return HttpResponseForbidden(
+            "Du har ikke tilgang til kontrolloppgavene."
+        )
     selected = request.GET.get("type", "dubletter")
     duplicates = DuplicateCandidate.objects.none()
     assertions = MetadataAssertion.objects.none()
     if request.user.has_perm("catalogue.view_duplicatecandidate"):
-        duplicates = DuplicateCandidate.objects.filter(status="open").select_related(
-            "recording_a", "recording_b"
-        )
+        duplicates = DuplicateCandidate.objects.filter(
+            status="open"
+        ).select_related("recording_a", "recording_b")
     if request.user.has_perm("provenance.view_metadataassertion"):
         assertions = MetadataAssertion.objects.select_related(
             "source_record__source_system"
@@ -1950,7 +2110,9 @@ def control(request):
         if selected == "konflikter":
             assertions = assertions.filter(status=VerificationStatus.DISPUTED)
         else:
-            assertions = assertions.filter(status=VerificationStatus.UNVERIFIED)
+            assertions = assertions.filter(
+                status=VerificationStatus.UNVERIFIED
+            )
     flac_unverified_count = 0
     if request.user.has_perm("provenance.change_metadataassertion"):
         flac_unverified_count = MetadataAssertion.objects.filter(
@@ -1974,7 +2136,9 @@ def control(request):
 
 @require_POST
 @staff
-@permission_required("provenance.change_metadataassertion", raise_exception=True)
+@permission_required(
+    "provenance.change_metadataassertion", raise_exception=True
+)
 def confirm_flac_metadata(request):
     count = confirm_existing_flac_assertions(user=request.user)
     if count:
@@ -1983,7 +2147,9 @@ def confirm_flac_metadata(request):
             f"{count} tidligere anvendte FLAC-opplysninger ble bekreftet.",
         )
     else:
-        messages.info(request, "Ingen uverifiserte FLAC-opplysninger gjenstod.")
+        messages.info(
+            request, "Ingen uverifiserte FLAC-opplysninger gjenstod."
+        )
     return redirect(reverse("workbench:control") + "?type=uverifisert")
 
 
@@ -2006,7 +2172,9 @@ def files_list(request):
     return render(
         request,
         "workbench/files.html",
-        _page_context("files", "Filer", form=form, page=page, page_query=query),
+        _page_context(
+            "files", "Filer", form=form, page=page, page_query=query
+        ),
     )
 
 
@@ -2014,9 +2182,9 @@ def files_list(request):
 @permission_required("media_assets.view_fileasset", raise_exception=True)
 def file_detail(request, pk):
     asset = get_object_or_404(
-        FileAsset.objects.select_related("recording", "release").prefetch_related(
-            "locations"
-        ),
+        FileAsset.objects.select_related(
+            "recording", "release"
+        ).prefetch_related("locations"),
         pk=pk,
     )
     form = None
@@ -2052,7 +2220,8 @@ def file_add(request):
     if request.method == "POST" and form.is_valid():
         asset = form.save()
         messages.success(
-            request, "Filreferansen ble opprettet. Filen er ikke kontrollert av dette."
+            request,
+            "Filreferansen ble opprettet. Filen er ikke kontrollert av dette.",
         )
         return redirect("workbench:file", pk=asset.pk)
     return render(
@@ -2136,8 +2305,12 @@ def cover_image(request, pk):
                         continue
                     source.thumbnail((thumbnail_size, thumbnail_size))
                     output = BytesIO()
-                    source.convert("RGB").save(output, format="JPEG", quality=quality)
-            response = HttpResponse(output.getvalue(), content_type="image/jpeg")
+                    source.convert("RGB").save(
+                        output, format="JPEG", quality=quality
+                    )
+            response = HttpResponse(
+                output.getvalue(), content_type="image/jpeg"
+            )
             response["Cache-Control"] = "private, no-store"
             response["X-Content-Type-Options"] = "nosniff"
             return response

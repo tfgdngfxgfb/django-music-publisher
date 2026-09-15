@@ -13,7 +13,13 @@ from .services import create_managed_recording
 
 @admin.register(ManagedRecording)
 class ManagedRecordingAdmin(CanonicalAdmin):
-    list_display = ("recording_title", "status", "source_system", "updated_at", "id")
+    list_display = (
+        "recording_title",
+        "status",
+        "source_system",
+        "updated_at",
+        "id",
+    )
     list_filter = ("status", "source_system")
     search_fields = (
         "library_entry__recording__title",
@@ -41,7 +47,9 @@ class ManagedRecordingAdmin(CanonicalAdmin):
         return (*fields, "library_entry") if obj else tuple(fields)
 
     def has_add_permission(self, request):
-        return request.user.is_superuser and super().has_add_permission(request)
+        return request.user.is_superuser and super().has_add_permission(
+            request
+        )
 
     def add_view(self, request, form_url="", extra_context=None):
         if not self.has_add_permission(request):
@@ -56,7 +64,8 @@ class ManagedRecordingAdmin(CanonicalAdmin):
             )
             return redirect(
                 reverse(
-                    "admin:managed_music_managedrecording_change", args=(managed.pk,)
+                    "admin:managed_music_managedrecording_change",
+                    args=(managed.pk,),
                 )
             )
         context = {
@@ -69,5 +78,7 @@ class ManagedRecordingAdmin(CanonicalAdmin):
             "has_view_permission": self.has_view_permission(request),
         }
         return TemplateResponse(
-            request, "admin/managed_music/managedrecording/add_form.html", context
+            request,
+            "admin/managed_music/managedrecording/add_form.html",
+            context,
         )

@@ -13,9 +13,15 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ("catalogue", "0004_duplicatecandidate_label_release_releasetrack_and_more"),
+        (
+            "catalogue",
+            "0004_duplicatecandidate_label_release_releasetrack_and_more",
+        ),
         ("media_assets", "0002_filelocation_verification_status_and_more"),
-        ("parties", "0003_alter_artistidentity_options_alter_party_options_and_more"),
+        (
+            "parties",
+            "0003_alter_artistidentity_options_alter_party_options_and_more",
+        ),
         ("provenance", "0002_appliedmetadatachange"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
@@ -36,11 +42,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "created_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="opprettet"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="opprettet"
+                    ),
                 ),
                 (
                     "updated_at",
-                    models.DateTimeField(auto_now=True, verbose_name="sist endret"),
+                    models.DateTimeField(
+                        auto_now=True, verbose_name="sist endret"
+                    ),
                 ),
                 (
                     "revision",
@@ -59,7 +69,9 @@ class Migration(migrations.Migration):
                 (
                     "internal_reference",
                     models.CharField(
-                        blank=True, max_length=100, verbose_name="intern referanse"
+                        blank=True,
+                        max_length=100,
+                        verbose_name="intern referanse",
                     ),
                 ),
                 (
@@ -84,7 +96,9 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "expiry_date",
-                    models.DateField(blank=True, null=True, verbose_name="utløpsdato"),
+                    models.DateField(
+                        blank=True, null=True, verbose_name="utløpsdato"
+                    ),
                 ),
                 (
                     "status",
@@ -100,13 +114,18 @@ class Migration(migrations.Migration):
                         verbose_name="status",
                     ),
                 ),
-                ("notes", models.TextField(blank=True, verbose_name="merknader")),
+                (
+                    "notes",
+                    models.TextField(blank=True, verbose_name="merknader"),
+                ),
             ],
             options={
                 "verbose_name": "avtale",
                 "verbose_name_plural": "avtaler",
                 "ordering": ("title", "id"),
-                "permissions": (("manage_agreement", "Kan administrere avtaler"),),
+                "permissions": (
+                    ("manage_agreement", "Kan administrere avtaler"),
+                ),
             },
         ),
         migrations.CreateModel(
@@ -124,11 +143,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "created_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="opprettet"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="opprettet"
+                    ),
                 ),
                 (
                     "updated_at",
-                    models.DateTimeField(auto_now=True, verbose_name="sist endret"),
+                    models.DateTimeField(
+                        auto_now=True, verbose_name="sist endret"
+                    ),
                 ),
                 (
                     "revision",
@@ -175,11 +198,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "created_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="opprettet"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="opprettet"
+                    ),
                 ),
                 (
                     "updated_at",
-                    models.DateTimeField(auto_now=True, verbose_name="sist endret"),
+                    models.DateTimeField(
+                        auto_now=True, verbose_name="sist endret"
+                    ),
                 ),
                 (
                     "revision",
@@ -241,11 +268,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "created_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="opprettet"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="opprettet"
+                    ),
                 ),
                 (
                     "updated_at",
-                    models.DateTimeField(auto_now=True, verbose_name="sist endret"),
+                    models.DateTimeField(
+                        auto_now=True, verbose_name="sist endret"
+                    ),
                 ),
                 (
                     "revision",
@@ -324,11 +355,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "created_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="opprettet"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="opprettet"
+                    ),
                 ),
                 (
                     "updated_at",
-                    models.DateTimeField(auto_now=True, verbose_name="sist endret"),
+                    models.DateTimeField(
+                        auto_now=True, verbose_name="sist endret"
+                    ),
                 ),
                 (
                     "revision",
@@ -364,7 +399,10 @@ class Migration(migrations.Migration):
                         choices=[
                             ("world", "Hele verden"),
                             ("include", "Bare angitte territorier"),
-                            ("exclude", "Hele verden unntatt angitte territorier"),
+                            (
+                                "exclude",
+                                "Hele verden unntatt angitte territorier",
+                            ),
                         ],
                         default="world",
                         max_length=20,
@@ -373,11 +411,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "valid_from",
-                    models.DateField(blank=True, null=True, verbose_name="gyldig fra"),
+                    models.DateField(
+                        blank=True, null=True, verbose_name="gyldig fra"
+                    ),
                 ),
                 (
                     "valid_until",
-                    models.DateField(blank=True, null=True, verbose_name="gyldig til"),
+                    models.DateField(
+                        blank=True, null=True, verbose_name="gyldig til"
+                    ),
                 ),
                 (
                     "status",
@@ -395,7 +437,10 @@ class Migration(migrations.Migration):
                         verbose_name="status",
                     ),
                 ),
-                ("notes", models.TextField(blank=True, verbose_name="merknader")),
+                (
+                    "notes",
+                    models.TextField(blank=True, verbose_name="merknader"),
+                ),
                 (
                     "agreement",
                     models.ForeignKey(
@@ -462,8 +507,15 @@ class Migration(migrations.Migration):
             options={
                 "verbose_name": "rettighetskrav",
                 "verbose_name_plural": "rettighetskrav",
-                "ordering": ("recording", "right_type", "status", "rights_holder"),
-                "permissions": (("decide_rightsclaim", "Kan beslutte rettighetskrav"),),
+                "ordering": (
+                    "recording",
+                    "right_type",
+                    "status",
+                    "rights_holder",
+                ),
+                "permissions": (
+                    ("decide_rightsclaim", "Kan beslutte rettighetskrav"),
+                ),
             },
         ),
         migrations.CreateModel(
@@ -481,11 +533,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "created_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="opprettet"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="opprettet"
+                    ),
                 ),
                 (
                     "updated_at",
-                    models.DateTimeField(auto_now=True, verbose_name="sist endret"),
+                    models.DateTimeField(
+                        auto_now=True, verbose_name="sist endret"
+                    ),
                 ),
                 (
                     "revision",
@@ -532,11 +588,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "created_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="opprettet"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="opprettet"
+                    ),
                 ),
                 (
                     "updated_at",
-                    models.DateTimeField(auto_now=True, verbose_name="sist endret"),
+                    models.DateTimeField(
+                        auto_now=True, verbose_name="sist endret"
+                    ),
                 ),
                 (
                     "revision",
@@ -546,7 +606,9 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "singleton",
-                    models.BooleanField(default=True, editable=False, unique=True),
+                    models.BooleanField(
+                        default=True, editable=False, unique=True
+                    ),
                 ),
                 (
                     "local_organization",
@@ -578,11 +640,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "created_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="opprettet"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="opprettet"
+                    ),
                 ),
                 (
                     "updated_at",
-                    models.DateTimeField(auto_now=True, verbose_name="sist endret"),
+                    models.DateTimeField(
+                        auto_now=True, verbose_name="sist endret"
+                    ),
                 ),
                 (
                     "revision",
@@ -604,7 +670,10 @@ class Migration(migrations.Migration):
                         verbose_name="beslutning",
                     ),
                 ),
-                ("note", models.TextField(blank=True, verbose_name="begrunnelse")),
+                (
+                    "note",
+                    models.TextField(blank=True, verbose_name="begrunnelse"),
+                ),
                 (
                     "claim",
                     models.ForeignKey(
@@ -691,13 +760,15 @@ class Migration(migrations.Migration):
         migrations.AddIndex(
             model_name="rightsclaim",
             index=models.Index(
-                fields=["rights_holder", "right_type"], name="rights_claim_holder_idx"
+                fields=["rights_holder", "right_type"],
+                name="rights_claim_holder_idx",
             ),
         ),
         migrations.AddIndex(
             model_name="rightsclaim",
             index=models.Index(
-                fields=["valid_from", "valid_until"], name="rights_claim_period_idx"
+                fields=["valid_from", "valid_until"],
+                name="rights_claim_period_idx",
             ),
         ),
         migrations.AddConstraint(
@@ -706,7 +777,8 @@ class Migration(migrations.Migration):
                 condition=models.Q(
                     ("share__isnull", True),
                     models.Q(
-                        ("share__gte", Decimal("0")), ("share__lte", Decimal("100"))
+                        ("share__gte", Decimal("0")),
+                        ("share__lte", Decimal("100")),
                     ),
                     _connector="OR",
                 ),
@@ -728,7 +800,8 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="claimterritory",
             constraint=models.UniqueConstraint(
-                fields=("claim", "territory"), name="rights_claim_unique_territory"
+                fields=("claim", "territory"),
+                name="rights_claim_unique_territory",
             ),
         ),
     ]

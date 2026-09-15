@@ -7,13 +7,18 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('music_library', '0003_alter_musiclibraryentry_gender'),
+        ("music_library", "0003_alter_musiclibraryentry_gender"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='musiclibraryentry',
-            name='language',
-            field=models.CharField(blank=True, max_length=64, validators=[music_library.validators.validate_radio_language], verbose_name='språk'),
+            model_name="musiclibraryentry",
+            name="language",
+            field=models.CharField(
+                blank=True,
+                max_length=64,
+                validators=[music_library.validators.validate_radio_language],
+                verbose_name="språk",
+            ),
         ),
     ]

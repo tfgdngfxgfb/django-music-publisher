@@ -75,7 +75,9 @@ class FlacTestMixin:
         self.addCleanup(self.folder.cleanup)
         self.root = Path(self.folder.name)
         self.user = get_user_model().objects.create_superuser(
-            username="flac-admin", email="flac@example.invalid", password="test"
+            username="flac-admin",
+            email="flac@example.invalid",
+            password="test",
         )
 
     def make_flac(self, name="radio.flac", **tags):
@@ -104,8 +106,12 @@ class FlacAdapterTests(FlacTestMixin, TestCase):
         snapshot = read_flac(path)
         self.assertEqual(snapshot.parsed["energy"], 4)
         self.assertEqual(snapshot.parsed["channels"], ["P7 Riks", "P7 Ung"])
-        self.assertEqual(snapshot.parsed["target_audiences"], ["Ung voksen", "Voksen"])
-        raw_tags = {key.upper(): values for key, values in snapshot.raw_tags.items()}
+        self.assertEqual(
+            snapshot.parsed["target_audiences"], ["Ung voksen", "Voksen"]
+        )
+        raw_tags = {
+            key.upper(): values for key, values in snapshot.raw_tags.items()
+        }
         self.assertEqual(raw_tags["X_UNKNOWN"], ["rå verdi"])
         self.assertEqual(snapshot.technical["sample_rate"], 44100)
         self.assertEqual(snapshot.technical["bits_per_sample"], 16)
@@ -120,7 +126,9 @@ class FlacAdapterTests(FlacTestMixin, TestCase):
             ("80", 4),
             ("100", 5),
         ):
-            path = self.make_flac(f"rating-{raw_rating}.flac", RATING=raw_rating)
+            path = self.make_flac(
+                f"rating-{raw_rating}.flac", RATING=raw_rating
+            )
             self.assertEqual(read_flac(path).parsed["energy"], expected_energy)
 
     def test_track_and_disc_fraction_variants_keep_raw_values(self):
@@ -152,8 +160,12 @@ class FlacAdapterTests(FlacTestMixin, TestCase):
         self.assertEqual(snapshot.parsed["language"], "no")
         self.assertEqual(snapshot.parsed["target_audiences"], ["60+"])
         self.assertEqual(snapshot.parsed["gender"], "group")
-        self.assertEqual(snapshot.parsed["channels"], ["P7 Evangelisk", "P7 Riks"])
-        self.assertEqual(snapshot.parsed["rotation_suitability"], "not_suitable")
+        self.assertEqual(
+            snapshot.parsed["channels"], ["P7 Evangelisk", "P7 Riks"]
+        )
+        self.assertEqual(
+            snapshot.parsed["rotation_suitability"], "not_suitable"
+        )
         self.assertEqual(snapshot.raw_tags["comment"], comments)
 
     def test_onetagger_not_assessed_rotation_maps_to_empty_state(self):
@@ -170,7 +182,9 @@ class FlacAdapterTests(FlacTestMixin, TestCase):
         self.assertNotIn("rotation_suitability_invalid", snapshot.parsed)
 
         with override_settings(P7_MUSIC_ROOT=str(self.root)):
-            batch = scan_directory(relative_root=".", recursive=True, user=self.user)
+            batch = scan_directory(
+                relative_root=".", recursive=True, user=self.user
+            )
             apply_batch(batch, user=self.user)
         item = batch.items.get()
         self.assertEqual(item.action, FlacIngestItem.Action.NEW)
@@ -194,12 +208,16 @@ class FlacAdapterTests(FlacTestMixin, TestCase):
         self.assertEqual(snapshot.raw_tags["language"], ["Afrikanske språk"])
 
     def test_multiple_genres_are_preserved_in_the_interpreted_value(self):
-        path = self.make_flac("multiple-genres.flac", GENRE=["Evangelisk", "Viser"])
+        path = self.make_flac(
+            "multiple-genres.flac", GENRE=["Evangelisk", "Viser"]
+        )
 
         snapshot = read_flac(path)
 
         self.assertEqual(snapshot.parsed["genre"], "Evangelisk; Viser")
-        self.assertEqual(snapshot.parsed["genre_values"], ["Evangelisk", "Viser"])
+        self.assertEqual(
+            snapshot.parsed["genre_values"], ["Evangelisk", "Viser"]
+        )
         self.assertEqual(snapshot.raw_tags["genre"], ["Evangelisk", "Viser"])
 
     def test_flac_without_vorbis_comments_keeps_technical_metadata(self):
@@ -216,7 +234,9 @@ class FlacAdapterTests(FlacTestMixin, TestCase):
         self.assertEqual(snapshot.technical["sample_rate"], 44100)
 
     @override_settings(P7_ALLOW_FILE_WRITES=True)
-    def test_writeback_changes_allowlist_and_preserves_radio_and_unknown_tags(self):
+    def test_writeback_changes_allowlist_and_preserves_radio_and_unknown_tags(
+        self,
+    ):
         path = self.make_flac(
             TITLE="Før",
             GENRE="Pop",
@@ -227,7 +247,10 @@ class FlacAdapterTests(FlacTestMixin, TestCase):
             X_UNKNOWN="behold meg",
         )
         write_catalogue_tags(path, {"TITLE": "Etter", "P7UUID": "test-id"})
-        tags = {key.upper(): list(values) for key, values in FLAC(path).tags.items()}
+        tags = {
+            key.upper(): list(values)
+            for key, values in FLAC(path).tags.items()
+        }
         self.assertEqual(tags["TITLE"], ["Etter"])
         self.assertEqual(tags["RATING"], ["5"])
         self.assertEqual(tags["KANAL"], ["P7 Riks", "P7 Ung"])
@@ -236,7 +259,9 @@ class FlacAdapterTests(FlacTestMixin, TestCase):
     def test_low_level_writeback_is_blocked_by_default(self):
         path = self.make_flac(TITLE="Uendret")
         before = path.read_bytes()
-        with self.assertRaisesMessage(FlacWriteError, "Filskriving er deaktivert"):
+        with self.assertRaisesMessage(
+            FlacWriteError, "Filskriving er deaktivert"
+        ):
             write_catalogue_tags(path, {"TITLE": "Skal ikke skrives"})
         self.assertEqual(path.read_bytes(), before)
 
@@ -244,14 +269,18 @@ class FlacAdapterTests(FlacTestMixin, TestCase):
 class FlacIngestTests(FlacTestMixin, TestCase):
     def scan(self):
         with override_settings(P7_MUSIC_ROOT=str(self.root)):
-            return scan_directory(relative_root=".", recursive=True, user=self.user)
+            return scan_directory(
+                relative_root=".", recursive=True, user=self.user
+            )
 
     def apply(self, batch):
         with override_settings(P7_MUSIC_ROOT=str(self.root)):
             with self.captureOnCommitCallbacks(execute=True):
                 return apply_batch(batch, user=self.user)
 
-    def test_long_path_uses_bounded_source_identity_and_preserves_full_path(self):
+    def test_long_path_uses_bounded_source_identity_and_preserves_full_path(
+        self,
+    ):
         relative_path = f"lang-katalog/{'svært-lang-kildetittel-' * 24}.flac"
         item = SimpleNamespace(
             batch_id=uuid4(), pk=uuid4(), relative_path=relative_path
@@ -281,7 +310,9 @@ class FlacIngestTests(FlacTestMixin, TestCase):
             "Afrikanske språk",
         )
 
-    def test_new_tagged_file_creates_operational_catalogue_and_is_idempotent(self):
+    def test_new_tagged_file_creates_operational_catalogue_and_is_idempotent(
+        self,
+    ):
         path = self.make_flac(
             "Album/spor01.flac",
             TITLE="Lyset vender",
@@ -327,9 +358,12 @@ class FlacIngestTests(FlacTestMixin, TestCase):
         entry = recording.music_library_entry
         self.assertEqual(entry.energy, 3)
         self.assertEqual(entry.rotation_suitability, "not_suitable")
-        self.assertEqual(entry.verification_status, VerificationStatus.CONFIRMED)
         self.assertEqual(
-            set(entry.channels.values_list("name", flat=True)), {"P7 Riks", "P7 Ung"}
+            entry.verification_status, VerificationStatus.CONFIRMED
+        )
+        self.assertEqual(
+            set(entry.channels.values_list("name", flat=True)),
+            {"P7 Riks", "P7 Ung"},
         )
         self.assertEqual(
             set(entry.target_audiences.values_list("name", flat=True)),
@@ -340,13 +374,17 @@ class FlacIngestTests(FlacTestMixin, TestCase):
         asset = FileAsset.objects.get(recording=recording)
         self.assertEqual(asset.release_track_id, item.release_track_id)
         self.assertEqual(asset.sync_status, FileAsset.SyncStatus.SYNCED)
-        self.assertTrue(SourceRecord.objects.filter(pk=item.source_record_id).exists())
+        self.assertTrue(
+            SourceRecord.objects.filter(pk=item.source_record_id).exists()
+        )
         flac_assertions = MetadataAssertion.objects.filter(
             source_record_id=item.source_record_id
         )
         self.assertTrue(flac_assertions.exists())
         self.assertFalse(
-            flac_assertions.exclude(status=VerificationStatus.CONFIRMED).exists()
+            flac_assertions.exclude(
+                status=VerificationStatus.CONFIRMED
+            ).exists()
         )
         self.assertEqual(
             AssertionDecision.objects.filter(
@@ -362,10 +400,13 @@ class FlacIngestTests(FlacTestMixin, TestCase):
         self.assertEqual(library_response.status_code, 200)
         self.assertContains(library_response, "Uavklart artistnavn")
         contributors_response = self.client.get(
-            reverse("workbench:recording", args=[recording.pk]) + "?fane=contributors"
+            reverse("workbench:recording", args=[recording.pk])
+            + "?fane=contributors"
         )
         self.assertEqual(contributors_response.status_code, 200)
-        self.assertContains(contributors_response, "Komponist uten identitetsmatch")
+        self.assertContains(
+            contributors_response, "Komponist uten identitetsmatch"
+        )
         release_response = self.client.get(
             reverse("workbench:release", args=[Release.objects.get().pk])
         )
@@ -373,7 +414,9 @@ class FlacIngestTests(FlacTestMixin, TestCase):
         self.assertContains(release_response, "Uavklart artistnavn")
 
         second = self.scan()
-        self.assertEqual(second.items.get().action, FlacIngestItem.Action.UNCHANGED)
+        self.assertEqual(
+            second.items.get().action, FlacIngestItem.Action.UNCHANGED
+        )
         self.client.force_login(self.user)
         preview = self.client.get(
             reverse("workbench:flac_ingest_preview", args=[second.pk])
@@ -401,7 +444,9 @@ class FlacIngestTests(FlacTestMixin, TestCase):
         self.assertEqual(ReleaseTrack.objects.count(), 1)
 
         third = self.scan()
-        self.assertEqual(third.items.get().action, FlacIngestItem.Action.UNCHANGED)
+        self.assertEqual(
+            third.items.get().action, FlacIngestItem.Action.UNCHANGED
+        )
 
     def test_new_adapter_version_reprocesses_unchanged_registered_file(self):
         self.make_flac(
@@ -416,7 +461,8 @@ class FlacIngestTests(FlacTestMixin, TestCase):
         first_item = first.items.get()
         entry = first_item.recording.music_library_entry
         self.assertEqual(
-            list(entry.channels.values_list("name", flat=True)), ["P7 Evangelisk"]
+            list(entry.channels.values_list("name", flat=True)),
+            ["P7 Evangelisk"],
         )
 
         entry.channel_links.all().delete()
@@ -427,13 +473,18 @@ class FlacIngestTests(FlacTestMixin, TestCase):
         second = self.scan()
         second_item = second.items.get()
         self.assertEqual(second_item.action, FlacIngestItem.Action.UPDATED)
-        self.assertEqual(second_item.parsed_metadata["channels"], ["P7 Evangelisk"])
+        self.assertEqual(
+            second_item.parsed_metadata["channels"], ["P7 Evangelisk"]
+        )
         self.assertEqual(self.apply(second), 1)
         self.assertEqual(
-            list(entry.channels.values_list("name", flat=True)), ["P7 Evangelisk"]
+            list(entry.channels.values_list("name", flat=True)),
+            ["P7 Evangelisk"],
         )
 
-    def test_release_context_version_backfills_structure_for_existing_file(self):
+    def test_release_context_version_backfills_structure_for_existing_file(
+        self,
+    ):
         self.make_flac(
             "Artist/Album/01.flac",
             TITLE="Eksisterende radiospor",
@@ -455,16 +506,22 @@ class FlacIngestTests(FlacTestMixin, TestCase):
         Release.objects.all().delete()
 
         second = self.scan()
-        self.assertEqual(second.items.get().action, FlacIngestItem.Action.UPDATED)
+        self.assertEqual(
+            second.items.get().action, FlacIngestItem.Action.UPDATED
+        )
         self.assertEqual(self.apply(second), 1)
         asset.refresh_from_db()
         self.assertIsNotNone(asset.release_track_id)
         self.assertEqual(Release.objects.count(), 1)
         self.assertEqual(ReleaseTrack.objects.count(), 1)
-        self.assertEqual(asset.technical_metadata["release_context_version"], 1)
+        self.assertEqual(
+            asset.technical_metadata["release_context_version"], 1
+        )
 
         third = self.scan()
-        self.assertEqual(third.items.get().action, FlacIngestItem.Action.UNCHANGED)
+        self.assertEqual(
+            third.items.get().action, FlacIngestItem.Action.UNCHANGED
+        )
 
     def test_broken_file_is_isolated_from_readable_files(self):
         self.make_flac("good.flac", TITLE="Lesbar")
@@ -484,7 +541,9 @@ class FlacIngestTests(FlacTestMixin, TestCase):
         self.assertEqual(self.apply(batch), 1)
         self.assertEqual(Recording.objects.get().title, "Lesbar")
 
-    def test_missing_and_overlong_title_are_isolated_as_actionable_conflicts(self):
+    def test_missing_and_overlong_title_are_isolated_as_actionable_conflicts(
+        self,
+    ):
         empty_path = self.make_flac("empty-tags.flac", TITLE="Fjernes")
         empty_audio = FLAC(empty_path)
         empty_audio.clear()
@@ -505,7 +564,9 @@ class FlacIngestTests(FlacTestMixin, TestCase):
             list(Recording.objects.values_list("title", flat=True)), ["Gyldig"]
         )
 
-    def test_file_changed_during_scan_is_deferred_without_catalogue_writes(self):
+    def test_file_changed_during_scan_is_deferred_without_catalogue_writes(
+        self,
+    ):
         path = self.make_flac("changing.flac", TITLE="Ustabil")
         real_hash = file_sha256
 
@@ -515,7 +576,9 @@ class FlacIngestTests(FlacTestMixin, TestCase):
                 stream.write(b"changed")
             return checksum
 
-        with patch("flac_ingest.services.file_sha256", side_effect=hash_then_change):
+        with patch(
+            "flac_ingest.services.file_sha256", side_effect=hash_then_change
+        ):
             batch = self.scan()
 
         item = batch.items.get()
@@ -524,7 +587,9 @@ class FlacIngestTests(FlacTestMixin, TestCase):
         self.assertEqual(Recording.objects.count(), 0)
         self.assertTrue(path.exists())
 
-    def test_missing_file_at_apply_is_isolated_and_other_file_is_imported(self):
+    def test_missing_file_at_apply_is_isolated_and_other_file_is_imported(
+        self,
+    ):
         missing = self.make_flac("a-missing.flac", TITLE="Forsvunnet")
         self.make_flac("b-good.flac", TITLE="Beholdt")
         batch = self.scan()
@@ -536,18 +601,25 @@ class FlacIngestTests(FlacTestMixin, TestCase):
         self.assertEqual(missing_item.action, FlacIngestItem.Action.RETRY)
         self.assertIn("ikke tilgjengelig", missing_item.messages[0])
         self.assertEqual(
-            list(Recording.objects.values_list("title", flat=True)), ["Beholdt"]
+            list(Recording.objects.values_list("title", flat=True)),
+            ["Beholdt"],
         )
         self.assertEqual(SourceRecord.objects.count(), 1)
 
-    def test_files_with_same_new_isrc_reuse_recording_when_batch_is_applied(self):
+    def test_files_with_same_new_isrc_reuse_recording_when_batch_is_applied(
+        self,
+    ):
         common_tags = {
             "ARTIST": "Uavklart felles artist",
             "ISRC": "NO-P7T-26-00999",
             "ALBUM": "Original og samleutgivelse",
         }
-        self.make_flac("sett/spor-a.flac", TITLE="Samme innspilling", **common_tags)
-        self.make_flac("sett/spor-b.flac", TITLE="Samme innspilling", **common_tags)
+        self.make_flac(
+            "sett/spor-a.flac", TITLE="Samme innspilling", **common_tags
+        )
+        self.make_flac(
+            "sett/spor-b.flac", TITLE="Samme innspilling", **common_tags
+        )
 
         batch = self.scan()
         self.assertEqual(
@@ -567,7 +639,9 @@ class FlacIngestTests(FlacTestMixin, TestCase):
         )
         self.assertEqual(FileAsset.objects.count(), 2)
 
-    def test_same_isrc_with_incompatible_metadata_requires_manual_separation(self):
+    def test_same_isrc_with_incompatible_metadata_requires_manual_separation(
+        self,
+    ):
         first = self.make_flac(
             "album-a/01.flac",
             TITLE="Første helt forskjellige sang",
@@ -641,10 +715,15 @@ class FlacIngestTests(FlacTestMixin, TestCase):
         # The explicit keep-separate decision survives a forced scan and rebuild.
         with override_settings(P7_MUSIC_ROOT=str(self.root)):
             repeated = scan_directory(
-                relative_root=".", recursive=True, force_read=True, user=self.user
+                relative_root=".",
+                recursive=True,
+                force_read=True,
+                user=self.user,
             )
             self.assertFalse(
-                repeated.items.filter(action=FlacIngestItem.Action.CONFLICT).exists()
+                repeated.items.filter(
+                    action=FlacIngestItem.Action.CONFLICT
+                ).exists()
             )
             apply_batch(repeated, user=self.user)
             rebuild = create_rebuild_preview(user=self.user)
@@ -712,8 +791,10 @@ class FlacIngestTests(FlacTestMixin, TestCase):
             assets.append(asset)
 
         with override_settings(P7_MUSIC_ROOT=str(self.root)):
-            new_recording, old_recording, remaining = split_radio_file_to_new_recording(
-                asset_id=assets[1].pk, user=self.user
+            new_recording, old_recording, remaining = (
+                split_radio_file_to_new_recording(
+                    asset_id=assets[1].pk, user=self.user
+                )
             )
 
         assets[0].refresh_from_db()
@@ -733,7 +814,9 @@ class FlacIngestTests(FlacTestMixin, TestCase):
             ],
             str(new_recording.pk),
         )
-        self.assertFalse(new_recording.identifiers.filter(scheme="ISRC").exists())
+        self.assertFalse(
+            new_recording.identifiers.filter(scheme="ISRC").exists()
+        )
         self.assertEqual(
             {path.name: path.read_bytes() for path in (first, second)}, before
         )
@@ -745,7 +828,9 @@ class FlacIngestTests(FlacTestMixin, TestCase):
             scheme=ExternalIdentifier.Scheme.ISRC,
             value="NO-P7T-26-00002",
         )
-        library = MusicLibraryEntry.objects.create(recording=recording, genre="Før")
+        library = MusicLibraryEntry.objects.create(
+            recording=recording, genre="Før"
+        )
         ManagedRecording.objects.create(library_entry=library)
         path = self.make_flac(
             TITLE="Feil filtittel",
@@ -759,7 +844,9 @@ class FlacIngestTests(FlacTestMixin, TestCase):
             X_UNKNOWN="beholdes",
         )
         batch = self.scan()
-        self.assertEqual(batch.items.get().action, FlacIngestItem.Action.MATCHED)
+        self.assertEqual(
+            batch.items.get().action, FlacIngestItem.Action.MATCHED
+        )
         self.apply(batch)
         recording.refresh_from_db()
         library.refresh_from_db()
@@ -767,7 +854,10 @@ class FlacIngestTests(FlacTestMixin, TestCase):
         self.assertEqual(library.genre, "Ny radiosjanger")
         self.assertEqual(library.language, "nn")
         self.assertEqual(library.energy, 5)
-        tags = {key.upper(): list(values) for key, values in FLAC(path).tags.items()}
+        tags = {
+            key.upper(): list(values)
+            for key, values in FLAC(path).tags.items()
+        }
         self.assertEqual(tags["TITLE"], ["Feil filtittel"])
         self.assertEqual(tags["RATING"], ["5"])
         self.assertEqual(tags["X_UNKNOWN"], ["beholdes"])
@@ -782,10 +872,15 @@ class FlacIngestTests(FlacTestMixin, TestCase):
             results = sync_recording_files(recording)
         self.assertEqual(results, [None])
         self.assertEqual(list(FLAC(path).tags["TITLE"]), ["Feil filtittel"])
-        with override_settings(P7_MUSIC_ROOT=str(self.root), P7_ALLOW_FILE_WRITES=True):
+        with override_settings(
+            P7_MUSIC_ROOT=str(self.root), P7_ALLOW_FILE_WRITES=True
+        ):
             results = sync_recording_files(recording)
         self.assertEqual(results[0].result, FlacSyncLog.Result.SUCCESS)
-        tags = {key.upper(): list(values) for key, values in FLAC(path).tags.items()}
+        tags = {
+            key.upper(): list(values)
+            for key, values in FLAC(path).tags.items()
+        }
         self.assertEqual(tags["TITLE"], ["Endret gjennom P7"])
         self.assertEqual(tags["GENRE"], ["Ny radiosjanger"])
         self.assertEqual(tags["RATING"], ["5"])
@@ -846,7 +941,9 @@ class FlacIngestTests(FlacTestMixin, TestCase):
         self.assertEqual(Recording.objects.get().pk, restored_uuid)
 
         repeated = self.scan()
-        self.assertEqual(repeated.items.get().action, FlacIngestItem.Action.UNCHANGED)
+        self.assertEqual(
+            repeated.items.get().action, FlacIngestItem.Action.UNCHANGED
+        )
 
     def test_uuid_recovery_does_not_override_existing_isrc_identity(self):
         existing = Recording.objects.create(title="Eksisterende ISRC")
@@ -882,14 +979,20 @@ class FlacIngestTests(FlacTestMixin, TestCase):
         self.assertEqual(Release.objects.count(), 0)
         self.assertEqual(ReleaseTrack.objects.count(), 0)
 
-    def test_album_artist_year_and_track_build_one_release_without_barcode(self):
+    def test_album_artist_year_and_track_build_one_release_without_barcode(
+        self,
+    ):
         shared = {
             "ALBUM": "Album uten katalognummer",
             "ALBUMARTIST": "Samlet artist",
             "DATE": "1978-04-03",
         }
-        self.make_flac("album/01.flac", TITLE="Første spor", TRACKNUMBER="1", **shared)
-        self.make_flac("album/02.flac", TITLE="Andre spor", TRACKNUMBER="2", **shared)
+        self.make_flac(
+            "album/01.flac", TITLE="Første spor", TRACKNUMBER="1", **shared
+        )
+        self.make_flac(
+            "album/02.flac", TITLE="Andre spor", TRACKNUMBER="2", **shared
+        )
 
         batch = self.scan()
         self.assertEqual(self.apply(batch), 2)
@@ -897,7 +1000,9 @@ class FlacIngestTests(FlacTestMixin, TestCase):
         release = Release.objects.get()
         self.assertEqual(release.title, "Album uten katalognummer")
         self.assertEqual(release.release_year, 1978)
-        self.assertEqual(release.verification_status, VerificationStatus.CONFIRMED)
+        self.assertEqual(
+            release.verification_status, VerificationStatus.CONFIRMED
+        )
         self.assertEqual(release.tracks.count(), 2)
         self.assertTrue(
             release.identifiers.filter(
@@ -906,8 +1011,14 @@ class FlacIngestTests(FlacTestMixin, TestCase):
             ).exists()
         )
 
-    def test_same_album_title_with_different_artist_does_not_merge_releases(self):
-        common = {"ALBUM": "Samme albumtittel", "DATE": "1984", "TRACKNUMBER": "1"}
+    def test_same_album_title_with_different_artist_does_not_merge_releases(
+        self,
+    ):
+        common = {
+            "ALBUM": "Samme albumtittel",
+            "DATE": "1984",
+            "TRACKNUMBER": "1",
+        }
         self.make_flac(
             "Artist A/Album/artist-a.flac",
             TITLE="Spor A",
@@ -955,10 +1066,13 @@ class FlacIngestTests(FlacTestMixin, TestCase):
             ),
             [1, 2],
         )
-        cover = FileAsset.objects.get(release=release, role=FileAsset.Role.COVER_IMAGE)
+        cover = FileAsset.objects.get(
+            release=release, role=FileAsset.Role.COVER_IMAGE
+        )
         self.assertEqual(cover.filename, "cover.jpg")
         self.assertEqual(
-            cover.locations.get().relative_path, "Artist/Album fra mappe/cover.jpg"
+            cover.locations.get().relative_path,
+            "Artist/Album fra mappe/cover.jpg",
         )
 
     def test_path_must_stay_inside_configured_root(self):
@@ -970,7 +1084,9 @@ class FlacIngestTests(FlacTestMixin, TestCase):
         self.make_flac(TITLE="Ugyldig Energy", RATING="9")
         item = self.scan().items.get()
         self.assertEqual(item.action, FlacIngestItem.Action.CONFLICT)
-        self.assertIn("RATING må være et Energy-nivå fra 1 til 5.", item.messages)
+        self.assertIn(
+            "RATING må være et Energy-nivå fra 1 til 5.", item.messages
+        )
 
     def test_invalid_isrc_is_an_actionable_file_conflict(self):
         self.make_flac(TITLE="Ugyldig kode", ISRC="not-an-isrc")
@@ -980,7 +1096,9 @@ class FlacIngestTests(FlacTestMixin, TestCase):
         self.assertEqual(item.action, FlacIngestItem.Action.CONFLICT)
         self.assertIn("ugyldig verdi «not-an-isrc»", item.messages[0])
 
-    def test_conflict_can_be_corrected_and_approved_without_changing_raw_tags(self):
+    def test_conflict_can_be_corrected_and_approved_without_changing_raw_tags(
+        self,
+    ):
         self.make_flac(
             TITLE="Kontroller meg",
             ARTIST="Uavklart artist",
@@ -1041,7 +1159,9 @@ class FlacIngestTests(FlacTestMixin, TestCase):
             storage_type=FileLocation.StorageType.NAS,
             relative_path="mangler.flac",
         )
-        with override_settings(P7_MUSIC_ROOT=str(self.root), P7_ALLOW_FILE_WRITES=True):
+        with override_settings(
+            P7_MUSIC_ROOT=str(self.root), P7_ALLOW_FILE_WRITES=True
+        ):
             result = sync_file_asset(asset.pk)
         recording.refresh_from_db()
         asset.refresh_from_db()
@@ -1054,7 +1174,9 @@ class FlacIngestTests(FlacTestMixin, TestCase):
 class FlacMaintenanceTests(FlacTestMixin, TestCase):
     def import_files(self):
         with override_settings(P7_MUSIC_ROOT=str(self.root)):
-            batch = scan_directory(relative_root=".", recursive=True, user=self.user)
+            batch = scan_directory(
+                relative_root=".", recursive=True, user=self.user
+            )
             apply_batch(batch, user=self.user)
         return batch
 
@@ -1073,7 +1195,9 @@ class FlacMaintenanceTests(FlacTestMixin, TestCase):
         self.assertEqual(location.status, FileLocation.Status.MISSING)
         self.assertEqual(asset.sync_status, FileAsset.SyncStatus.MISSING)
         self.assertTrue(Recording.objects.filter(pk=recording.pk).exists())
-        self.assertTrue(MusicLibraryEntry.objects.filter(recording=recording).exists())
+        self.assertTrue(
+            MusicLibraryEntry.objects.filter(recording=recording).exists()
+        )
 
     def test_pcm_md5_reconciles_a_moved_file_without_new_recording(self):
         old_path = self.make_flac("fra/spor.flac", TITLE="Samme lyd")
@@ -1086,7 +1210,10 @@ class FlacMaintenanceTests(FlacTestMixin, TestCase):
 
         with override_settings(P7_MUSIC_ROOT=str(self.root)):
             batch = scan_directory(
-                relative_root=".", recursive=True, user=self.user, force_read=True
+                relative_root=".",
+                recursive=True,
+                user=self.user,
+                force_read=True,
             )
             item = batch.items.get(relative_path="til/spor.flac")
             self.assertEqual(item.match_method, "audio_md5_move")
@@ -1110,7 +1237,9 @@ class FlacMaintenanceTests(FlacTestMixin, TestCase):
             ).exists()
         )
 
-    def test_cleanup_requires_preview_and_preserves_recording_and_file_history(self):
+    def test_cleanup_requires_preview_and_preserves_recording_and_file_history(
+        self,
+    ):
         path = self.make_flac("borte.flac", TITLE="Kan regenereres")
         self.import_files()
         recording = Recording.objects.get()
@@ -1123,25 +1252,35 @@ class FlacMaintenanceTests(FlacTestMixin, TestCase):
 
         job.refresh_from_db()
         self.assertEqual(job.status, FlacMaintenanceJob.Status.COMPLETED)
-        self.assertFalse(MusicLibraryEntry.objects.filter(recording=recording).exists())
+        self.assertFalse(
+            MusicLibraryEntry.objects.filter(recording=recording).exists()
+        )
         self.assertTrue(Recording.objects.filter(pk=recording.pk).exists())
         self.assertTrue(FileAsset.objects.filter(recording=recording).exists())
-        self.assertEqual(FileLocation.objects.get().status, FileLocation.Status.MISSING)
+        self.assertEqual(
+            FileLocation.objects.get().status, FileLocation.Status.MISSING
+        )
 
-    def test_explicit_remove_from_library_keeps_existing_file_and_recording(self):
+    def test_explicit_remove_from_library_keeps_existing_file_and_recording(
+        self,
+    ):
         path = self.make_flac("behold-filen.flac", TITLE="Fjern medlemskap")
         before = path.read_bytes()
         self.import_files()
         recording = Recording.objects.get()
 
         with override_settings(P7_MUSIC_ROOT=str(self.root)):
-            job = create_cleanup_preview(user=self.user, recording_id=recording.pk)
+            job = create_cleanup_preview(
+                user=self.user, recording_id=recording.pk
+            )
             self.assertEqual(job.plan["stats"]["safe_to_remove"], 1)
             execute_cleanup(job, user=self.user)
 
         self.assertEqual(path.read_bytes(), before)
         self.assertTrue(Recording.objects.filter(pk=recording.pk).exists())
-        self.assertFalse(MusicLibraryEntry.objects.filter(recording=recording).exists())
+        self.assertFalse(
+            MusicLibraryEntry.objects.filter(recording=recording).exists()
+        )
         location = FileLocation.objects.get()
         self.assertEqual(location.status, FileLocation.Status.HISTORICAL)
         self.assertFalse(location.is_current)
@@ -1176,8 +1315,12 @@ class FlacMaintenanceTests(FlacTestMixin, TestCase):
             rebuild = create_rebuild_preview(user=self.user)
             execute_rebuild(rebuild, user=self.user)
 
-        self.assertTrue(ManagedRecording.objects.filter(pk=managed.pk).exists())
-        self.assertTrue(MusicLibraryEntry.objects.filter(recording=recording).exists())
+        self.assertTrue(
+            ManagedRecording.objects.filter(pk=managed.pk).exists()
+        )
+        self.assertTrue(
+            MusicLibraryEntry.objects.filter(recording=recording).exists()
+        )
         self.assertTrue(RightsClaim.objects.filter(pk=claim.pk).exists())
         self.assertTrue(Agreement.objects.filter(pk=agreement.pk).exists())
 
@@ -1200,7 +1343,9 @@ class FlacMaintenanceTests(FlacTestMixin, TestCase):
         )
 
     def test_human_assertion_decision_blocks_regeneration(self):
-        path = self.make_flac("avgjort.flac", TITLE="Vurdert kilde", GENRE="Pop")
+        path = self.make_flac(
+            "avgjort.flac", TITLE="Vurdert kilde", GENRE="Pop"
+        )
         self.import_files()
         recording = Recording.objects.get()
         assertion = MetadataAssertion.objects.filter(
@@ -1256,7 +1401,9 @@ class FlacMaintenanceTests(FlacTestMixin, TestCase):
         self.assertEqual(
             set(Recording.objects.values_list("pk", flat=True)), recording_ids
         )
-        self.assertEqual(set(Release.objects.values_list("pk", flat=True)), release_ids)
+        self.assertEqual(
+            set(Release.objects.values_list("pk", flat=True)), release_ids
+        )
         self.assertEqual(MusicLibraryEntry.objects.count(), 2)
         self.assertEqual(ReleaseTrack.objects.count(), 2)
         self.assertEqual(
@@ -1271,7 +1418,9 @@ class FlacMaintenanceTests(FlacTestMixin, TestCase):
             {path.name: path.read_bytes() for path in (first, second)}, before
         )
 
-    def test_all_maintenance_operations_leave_existing_p7uuid_file_unchanged(self):
+    def test_all_maintenance_operations_leave_existing_p7uuid_file_unchanged(
+        self,
+    ):
         recording = Recording.objects.create(title="Eksisterende identitet")
         path = self.make_flac(
             "uuid.flac",
@@ -1281,10 +1430,15 @@ class FlacMaintenanceTests(FlacTestMixin, TestCase):
         )
         before = path.read_bytes()
         with override_settings(P7_MUSIC_ROOT=str(self.root)):
-            first = scan_directory(relative_root=".", recursive=True, user=self.user)
+            first = scan_directory(
+                relative_root=".", recursive=True, user=self.user
+            )
             apply_batch(first, user=self.user)
             second = scan_directory(
-                relative_root=".", recursive=True, user=self.user, force_read=True
+                relative_root=".",
+                recursive=True,
+                user=self.user,
+                force_read=True,
             )
             apply_batch(second, user=self.user)
             cleanup = create_cleanup_preview(user=self.user)
@@ -1295,8 +1449,12 @@ class FlacMaintenanceTests(FlacTestMixin, TestCase):
         self.assertEqual(path.read_bytes(), before)
         self.assertEqual(Recording.objects.count(), 1)
 
-    def test_sync_command_is_blocked_until_file_writes_are_explicitly_enabled(self):
-        with self.assertRaisesMessage(CommandError, "Filskriving er deaktivert"):
+    def test_sync_command_is_blocked_until_file_writes_are_explicitly_enabled(
+        self,
+    ):
+        with self.assertRaisesMessage(
+            CommandError, "Filskriving er deaktivert"
+        ):
             call_command("sync_flac_tags", stdout=StringIO())
 
 
@@ -1314,7 +1472,9 @@ class FlacWorkbenchPermissionTests(FlacTestMixin, TestCase):
 
         with override_settings(P7_MUSIC_ROOT=str(self.root)):
             self.assertEqual(
-                self.client.get(reverse("workbench:library_maintenance")).status_code,
+                self.client.get(
+                    reverse("workbench:library_maintenance")
+                ).status_code,
                 200,
             )
             response = self.client.post(
@@ -1339,7 +1499,9 @@ class FlacWorkbenchPermissionTests(FlacTestMixin, TestCase):
         )
         with override_settings(P7_MUSIC_ROOT=str(self.root)):
             response = self.client.post(
-                reverse("workbench:library_maintenance_execute", args=[job.pk]),
+                reverse(
+                    "workbench:library_maintenance_execute", args=[job.pk]
+                ),
                 {"confirmed": "yes"},
             )
         self.assertEqual(response.status_code, 302)
@@ -1384,7 +1546,9 @@ class FlacWorkbenchPermissionTests(FlacTestMixin, TestCase):
     def test_review_endpoint_enforces_apply_permission_on_direct_post(self):
         self.make_flac(TITLE="Kontroll", RATING="9")
         with override_settings(P7_MUSIC_ROOT=str(self.root)):
-            batch = scan_directory(relative_root=".", recursive=True, user=self.user)
+            batch = scan_directory(
+                relative_root=".", recursive=True, user=self.user
+            )
         item = batch.items.get()
         url = reverse("workbench:flac_ingest_review", args=[batch.pk, item.pk])
         staff = get_user_model().objects.create_user(
@@ -1422,11 +1586,15 @@ class FlacWorkbenchPermissionTests(FlacTestMixin, TestCase):
                 )
         self.assertEqual(FlacIngestBatch.objects.count(), 0)
 
-    def test_selected_rescan_creates_a_new_batch_with_only_selected_files(self):
+    def test_selected_rescan_creates_a_new_batch_with_only_selected_files(
+        self,
+    ):
         self.make_flac("first.flac", TITLE="Første")
         self.make_flac("second.flac", TITLE="Andre")
         with override_settings(P7_MUSIC_ROOT=str(self.root)):
-            batch = scan_directory(relative_root=".", recursive=True, user=self.user)
+            batch = scan_directory(
+                relative_root=".", recursive=True, user=self.user
+            )
         selected = batch.items.get(relative_path="second.flac")
         self.client.force_login(self.user)
 
@@ -1446,7 +1614,9 @@ class FlacWorkbenchPermissionTests(FlacTestMixin, TestCase):
     def test_rescan_endpoint_enforces_permission_on_direct_post(self):
         self.make_flac(TITLE="Beskyttet")
         with override_settings(P7_MUSIC_ROOT=str(self.root)):
-            batch = scan_directory(relative_root=".", recursive=True, user=self.user)
+            batch = scan_directory(
+                relative_root=".", recursive=True, user=self.user
+            )
         staff = get_user_model().objects.create_user(
             username="rescan-staff", password="test", is_staff=True
         )
@@ -1461,10 +1631,14 @@ class FlacWorkbenchPermissionTests(FlacTestMixin, TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertEqual(FlacIngestBatch.objects.count(), 1)
 
-    def test_legacy_flac_assertions_can_be_confirmed_without_other_sources(self):
+    def test_legacy_flac_assertions_can_be_confirmed_without_other_sources(
+        self,
+    ):
         self.make_flac(TITLE="Tidligere innlest", GENRE="Gospel")
         with override_settings(P7_MUSIC_ROOT=str(self.root)):
-            batch = scan_directory(relative_root=".", recursive=True, user=self.user)
+            batch = scan_directory(
+                relative_root=".", recursive=True, user=self.user
+            )
             with self.captureOnCommitCallbacks(execute=True):
                 apply_batch(batch, user=self.user)
         flac_assertion = MetadataAssertion.objects.filter(
@@ -1530,7 +1704,9 @@ class FlacWorkbenchPermissionTests(FlacTestMixin, TestCase):
         self.make_flac("warning.flac", TITLE="Med advarsel")
         self.make_flac("clean.flac", TITLE="Uten advarsel")
         with override_settings(P7_MUSIC_ROOT=str(self.root)):
-            batch = scan_directory(relative_root=".", recursive=True, user=self.user)
+            batch = scan_directory(
+                relative_root=".", recursive=True, user=self.user
+            )
         item = batch.items.get(relative_path="warning.flac")
         item.action = FlacIngestItem.Action.MATCHED
         item.messages = ["TITLE avviker fra databaseverdien"]
@@ -1549,7 +1725,9 @@ class FlacWorkbenchPermissionTests(FlacTestMixin, TestCase):
     def test_selected_rescan_rejects_invalid_item_identifier(self):
         self.make_flac(TITLE="Gyldig fil")
         with override_settings(P7_MUSIC_ROOT=str(self.root)):
-            batch = scan_directory(relative_root=".", recursive=True, user=self.user)
+            batch = scan_directory(
+                relative_root=".", recursive=True, user=self.user
+            )
         self.client.force_login(self.user)
 
         response = self.client.post(

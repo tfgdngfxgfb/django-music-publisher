@@ -17,7 +17,11 @@ from catalogue.models import (
 from managed_music.models import ManagedRecording
 from media_assets.models import FileAsset, FileLocation
 from music_library.models import MusicLibraryEntry
-from provenance.models import AssertionDecision, MetadataAssertion, SourceRecord
+from provenance.models import (
+    AssertionDecision,
+    MetadataAssertion,
+    SourceRecord,
+)
 from rights.models import RightsClaim
 
 from .models import FlacIngestItem, FlacMaintenanceJob
@@ -31,7 +35,12 @@ from .services import (
     scan_directory,
 )
 
-from media_assets.models import FileDerivation, RadioFlacGeneration, RecordingMediaSelection
+from media_assets.models import (
+    FileDerivation,
+    RadioFlacGeneration,
+    RecordingMediaSelection,
+)
+
 
 def _within_scope(path, relative_root):
     root = PurePosixPath(relative_root or ".")
@@ -282,7 +291,9 @@ def _radio_rows(relative_root=".", recording_id=None):
         missing = []
         for location in locations:
             path = root.joinpath(*PurePosixPath(location.relative_path).parts)
-            (existing if path.is_file() else missing).append(location.relative_path)
+            (existing if path.is_file() else missing).append(
+                location.relative_path
+            )
         rows.append(
             {
                 "recording_id": str(recording.pk),
@@ -305,7 +316,11 @@ def create_cleanup_preview(*, user, relative_root=".", recording_id=None):
     rows = _radio_rows(relative_root, recording_id=recording_id)
     items = []
     for row in rows:
-        if not recording_id and not row["missing_paths"] and row["existing_paths"]:
+        if (
+            not recording_id
+            and not row["missing_paths"]
+            and row["existing_paths"]
+        ):
             continue
         removable = bool(
             row["entry_id"]
@@ -319,7 +334,8 @@ def create_cleanup_preview(*, user, relative_root=".", recording_id=None):
             not item["existing_paths"] for item in items
         ),
         "entries_without_active_file": sum(
-            bool(item["entry_id"]) and not item["existing_paths"] for item in items
+            bool(item["entry_id"]) and not item["existing_paths"]
+            for item in items
         ),
         "safe_to_remove": sum(item["removable"] for item in items),
         "protected": sum(bool(item["protected_reasons"]) for item in items),
@@ -350,12 +366,16 @@ def create_rebuild_preview(*, user, relative_root="."):
     )
     rows = _radio_rows(relative_root)
     regenerable = [
-        row for row in rows if not row["protected_reasons"] and row["existing_paths"]
+        row
+        for row in rows
+        if not row["protected_reasons"] and row["existing_paths"]
     ]
     protected = [row for row in rows if row["protected_reasons"]]
     stats = {
         "flac_files": flac_count,
-        "regenerable_entries": sum(bool(row["entry_id"]) for row in regenerable),
+        "regenerable_entries": sum(
+            bool(row["entry_id"]) for row in regenerable
+        ),
         "recordings_reused": len(regenerable),
         "protected_recordings": len(protected),
         "managed_recordings_changed": 0,
@@ -363,15 +383,24 @@ def create_rebuild_preview(*, user, relative_root="."):
     return FlacMaintenanceJob.objects.create(
         kind=FlacMaintenanceJob.Kind.REBUILD,
         relative_root=relative_root,
-        plan={"stats": stats, "regenerable": regenerable, "protected": protected},
+        plan={
+            "stats": stats,
+            "regenerable": regenerable,
+            "protected": protected,
+        },
         created_by=user,
     )
 
 
 def _start(job, expected_kind, *, user):
     job = FlacMaintenanceJob.objects.select_for_update().get(pk=job.pk)
-    if job.kind != expected_kind or job.status != FlacMaintenanceJob.Status.PREVIEW:
-        raise ValidationError("Vedlikeholdsplanen kan ikke utføres i denne tilstanden.")
+    if (
+        job.kind != expected_kind
+        or job.status != FlacMaintenanceJob.Status.PREVIEW
+    ):
+        raise ValidationError(
+            "Vedlikeholdsplanen kan ikke utføres i denne tilstanden."
+        )
     job.status = FlacMaintenanceJob.Status.RUNNING
     job.executed_by = user
     job.started_at = timezone.now()
@@ -403,10 +432,14 @@ def execute_cleanup(job, *, user):
                     .select_related("recording")
                     .get(pk=planned["entry_id"])
                 )
-                reasons = _protection_map([entry.recording_id])[entry.recording_id]
+                reasons = _protection_map([entry.recording_id])[
+                    entry.recording_id
+                ]
                 if (
                     reasons
-                    or ManagedRecording.objects.filter(library_entry=entry).exists()
+                    or ManagedRecording.objects.filter(
+                        library_entry=entry
+                    ).exists()
                 ):
                     blocked += 1
                     continue
@@ -415,7 +448,9 @@ def execute_cleanup(job, *, user):
                     role=FileAsset.Role.RADIO_FLAC
                 ):
                     for location in asset.locations.filter(is_current=True):
-                        _root, path = resolve_music_path(location.relative_path)
+                        _root, path = resolve_music_path(
+                            location.relative_path
+                        )
                         if path.is_file() and not targeted_removal:
                             raise ValidationError(
                                 "Filen finnes igjen; posten ble ikke fjernet."
@@ -425,7 +460,11 @@ def execute_cleanup(job, *, user):
                             location.is_current = False
                             location.ended_at = timezone.now()
                             location.save(
-                                update_fields=("status", "is_current", "ended_at")
+                                update_fields=(
+                                    "status",
+                                    "is_current",
+                                    "ended_at",
+                                )
                             )
                         else:
                             location.status = FileLocation.Status.MISSING
@@ -456,7 +495,9 @@ def execute_cleanup(job, *, user):
 def execute_rebuild(job, *, user):
     with transaction.atomic():
         job = _start(job, FlacMaintenanceJob.Kind.REBUILD, user=user)
-    planned_ids = {row["recording_id"] for row in job.plan.get("regenerable", [])}
+    planned_ids = {
+        row["recording_id"] for row in job.plan.get("regenerable", [])
+    }
     try:
         batch = scan_directory(
             relative_root=job.relative_root,
@@ -490,7 +531,9 @@ def execute_rebuild(job, *, user):
                     if reasons:
                         skipped += 1
                         continue
-                    MusicLibraryEntry.objects.filter(recording=recording).delete()
+                    MusicLibraryEntry.objects.filter(
+                        recording=recording
+                    ).delete()
                     RecordingContribution.objects.filter(
                         recording=recording,
                         source_record__source_system__name=SOURCE_SYSTEM_NAME,
@@ -500,7 +543,11 @@ def execute_rebuild(job, *, user):
                 apply_item(item, user=user)
                 new += int(was_new)
                 rebuilt += int(not was_new)
-        except (ValidationError, IntegrityError, SourceFileUnavailable) as error:
+        except (
+            ValidationError,
+            IntegrityError,
+            SourceFileUnavailable,
+        ) as error:
             failed += 1
             item.refresh_from_db()
             item.action = FlacIngestItem.Action.CONFLICT

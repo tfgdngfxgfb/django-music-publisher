@@ -76,7 +76,9 @@ class FileAsset(CanonicalModel):
     filename = models.CharField(
         "filnavn", max_length=500, validators=[validate_not_blank]
     )
-    mime_type = models.CharField("MIME-type/format", max_length=255, blank=True)
+    mime_type = models.CharField(
+        "MIME-type/format", max_length=255, blank=True
+    )
     size_bytes = models.PositiveBigIntegerField(
         "størrelse i byte", null=True, blank=True
     )
@@ -93,11 +95,15 @@ class FileAsset(CanonicalModel):
         choices=LifecycleStatus.choices,
         default=LifecycleStatus.UNCLASSIFIED,
     )
-    technical_metadata = models.JSONField("tekniske metadata", default=dict, blank=True)
+    technical_metadata = models.JSONField(
+        "tekniske metadata", default=dict, blank=True
+    )
     metadata_read_at = models.DateTimeField(
         "filmetadata sist lest", null=True, blank=True
     )
-    source_modified_at = models.DateTimeField("fil sist endret", null=True, blank=True)
+    source_modified_at = models.DateTimeField(
+        "fil sist endret", null=True, blank=True
+    )
     sync_status = models.CharField(
         "synkroniseringsstatus",
         max_length=20,
@@ -115,7 +121,9 @@ class FileAsset(CanonicalModel):
         verbose_name_plural = "filressurser"
         ordering = ("filename", "id")
         indexes = [
-            models.Index(fields=("role", "sync_status"), name="file_asset_sync_idx")
+            models.Index(
+                fields=("role", "sync_status"), name="file_asset_sync_idx"
+            )
         ]
         constraints = [
             models.CheckConstraint(
@@ -236,7 +244,8 @@ class RecordingMediaSelection(CanonicalModel):
         if self.selected_master_id:
             if (
                 self.selected_master.recording_id != self.recording_id
-                or self.selected_master.role != FileAsset.Role.EDITED_WAV_MASTER
+                or self.selected_master.role
+                != FileAsset.Role.EDITED_WAV_MASTER
             ):
                 raise ValidationError(
                     {
@@ -312,9 +321,12 @@ class FileDerivation(CanonicalModel):
             raise ValidationError("En fil kan ikke være avledet fra seg selv.")
         if (
             self.source_asset.recording_id is None
-            or self.source_asset.recording_id != self.derived_asset.recording_id
+            or self.source_asset.recording_id
+            != self.derived_asset.recording_id
         ):
-            raise ValidationError("Kilde og avledet fil må tilhøre samme innspilling.")
+            raise ValidationError(
+                "Kilde og avledet fil må tilhøre samme innspilling."
+            )
 
     def save(self, *args, **kwargs):
         self.full_clean()
@@ -392,17 +404,23 @@ class RadioFlacGeneration(CanonicalModel):
             self.master_asset.recording_id != self.recording_id
             or self.master_asset.role != FileAsset.Role.EDITED_WAV_MASTER
         ):
-            raise ValidationError("Genereringsmasteren må tilhøre innspillingen.")
+            raise ValidationError(
+                "Genereringsmasteren må tilhøre innspillingen."
+            )
         if self.radio_metadata_source_id and (
             self.radio_metadata_source.recording_id != self.recording_id
             or self.radio_metadata_source.role != FileAsset.Role.RADIO_FLAC
         ):
-            raise ValidationError("Radiometadatakilden må tilhøre innspillingen.")
+            raise ValidationError(
+                "Radiometadatakilden må tilhøre innspillingen."
+            )
         if self.candidate_asset_id and (
             self.candidate_asset.recording_id != self.recording_id
             or self.candidate_asset.role != FileAsset.Role.RADIO_FLAC
         ):
-            raise ValidationError("Kandidaten må være en radio-FLAC for innspillingen.")
+            raise ValidationError(
+                "Kandidaten må være en radio-FLAC for innspillingen."
+            )
 
     def save(self, *args, **kwargs):
         self.full_clean()
@@ -454,9 +472,13 @@ class MediaAssetEvent(CanonicalModel):
         for field in ("asset", "related_asset"):
             value = getattr(self, field)
             if value and value.recording_id != self.recording_id:
-                raise ValidationError({field: "Filressursen må tilhøre innspillingen."})
+                raise ValidationError(
+                    {field: "Filressursen må tilhøre innspillingen."}
+                )
         if not self._state.adding:
-            raise ValidationError("Mediefilhendelser er historikk og kan ikke endres.")
+            raise ValidationError(
+                "Mediefilhendelser er historikk og kan ikke endres."
+            )
 
 
 class FileLocation(CanonicalModel):
@@ -509,8 +531,12 @@ class FileLocation(CanonicalModel):
     )
     observed_at = models.DateTimeField("observert", auto_now_add=True)
     ended_at = models.DateTimeField("avsluttet", null=True, blank=True)
-    google_drive_id = models.CharField("Google Drive-ID", max_length=255, blank=True)
-    google_drive_url = models.URLField("Google Drive-URL", max_length=1000, blank=True)
+    google_drive_id = models.CharField(
+        "Google Drive-ID", max_length=255, blank=True
+    )
+    google_drive_url = models.URLField(
+        "Google Drive-URL", max_length=1000, blank=True
+    )
 
     class Meta:
         verbose_name = "filplassering"
@@ -605,7 +631,9 @@ class FileChecksum(CanonicalModel):
     def clean_fields(self, exclude=None):
         self.sha256 = self.sha256.strip().lower()
         if not re.fullmatch(r"[0-9a-f]{64}", self.sha256):
-            raise ValidationError({"sha256": "SHA-256 må ha 64 heksadesimale tegn."})
+            raise ValidationError(
+                {"sha256": "SHA-256 må ha 64 heksadesimale tegn."}
+            )
         super().clean_fields(exclude=exclude)
 
     def __str__(self):

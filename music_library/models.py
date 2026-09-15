@@ -7,7 +7,6 @@ from rights_core.models import CanonicalModel, VerificationStatus
 
 from .validators import validate_radio_language
 
-
 code_validator = RegexValidator(
     regex=r"^[a-z0-9][a-z0-9_-]*$",
     message="Bruk små bokstaver, tall, bindestrek eller understrek i koden.",
@@ -78,7 +77,10 @@ class MusicLibraryEntry(CanonicalModel):
     )
     genre = models.CharField("sjanger", max_length=100, blank=True)
     language = models.CharField(
-        "språk", max_length=64, blank=True, validators=[validate_radio_language]
+        "språk",
+        max_length=64,
+        blank=True,
+        validators=[validate_radio_language],
     )
     channels = models.ManyToManyField(
         Channel,
@@ -127,7 +129,9 @@ class MusicLibraryEntry(CanonicalModel):
         ordering = ("recording__title", "id")
         indexes = [
             models.Index(fields=("genre",), name="library_genre_idx"),
-            models.Index(fields=("verification_status",), name="library_verify_idx"),
+            models.Index(
+                fields=("verification_status",), name="library_verify_idx"
+            ),
         ]
         constraints = [
             models.CheckConstraint(
@@ -159,7 +163,9 @@ class MusicLibraryEntry(CanonicalModel):
 
 class MusicLibraryChannel(CanonicalModel):
     library_entry = models.ForeignKey(
-        MusicLibraryEntry, on_delete=models.CASCADE, related_name="channel_links"
+        MusicLibraryEntry,
+        on_delete=models.CASCADE,
+        related_name="channel_links",
     )
     channel = models.ForeignKey(
         Channel, on_delete=models.PROTECT, related_name="library_links"
@@ -178,7 +184,9 @@ class MusicLibraryChannel(CanonicalModel):
 
 class MusicLibraryTargetAudience(CanonicalModel):
     library_entry = models.ForeignKey(
-        MusicLibraryEntry, on_delete=models.CASCADE, related_name="target_links"
+        MusicLibraryEntry,
+        on_delete=models.CASCADE,
+        related_name="target_links",
     )
     target_audience = models.ForeignKey(
         TargetAudience, on_delete=models.PROTECT, related_name="library_links"

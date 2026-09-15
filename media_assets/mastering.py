@@ -99,7 +99,9 @@ def _stream_sha256(handle):
 
 def inspect_master(*, root_key, relative_path):
     resolved = validate_readable_location(
-        resolve_storage_path(relative_path, root_key=root_key, require_root=True)
+        resolve_storage_path(
+            relative_path, root_key=root_key, require_root=True
+        )
     )
     try:
         with open_for_read(resolved) as handle:
@@ -108,9 +110,13 @@ def inspect_master(*, root_key, relative_path):
             digest = _stream_sha256(handle)
         stat = resolved.server_path.stat()
     except (OSError, RuntimeError, ValueError) as error:
-        raise ValidationError(f"Masterfilen kunne ikke inspiseres: {error}") from error
+        raise ValidationError(
+            f"Masterfilen kunne ikke inspiseres: {error}"
+        ) from error
     bit_depth = SUPPORTED_MASTER_SUBTYPES.get(info.subtype)
-    supported = info.format in SUPPORTED_MASTER_FORMATS and bit_depth is not None
+    supported = (
+        info.format in SUPPORTED_MASTER_FORMATS and bit_depth is not None
+    )
     message = (
         "Masteren kan konverteres tapsfritt til FLAC uten DSP."
         if supported
@@ -218,7 +224,9 @@ def select_master(*, recording, asset, user):
         asset.recording_id != recording.pk
         or asset.role != FileAsset.Role.EDITED_WAV_MASTER
     ):
-        raise ValidationError("Valgt fil er ikke en master for denne innspillingen.")
+        raise ValidationError(
+            "Valgt fil er ikke en master for denne innspillingen."
+        )
     (
         selection,
         _,
@@ -244,7 +252,8 @@ def _credit_values(recording, roles):
         dict.fromkeys(
             contribution.display_credit
             for contribution in recording.contributions.all()
-            if contribution.role in roles and contribution.display_credit != "Uavklart"
+            if contribution.role in roles
+            and contribution.display_credit != "Uavklart"
         )
     )
 
@@ -365,15 +374,21 @@ def _metadata_diff(snapshot, expected):
 
 
 def _target_relative_path(recording, *, inspection, expected_tags):
-    folder = str(getattr(settings, "P7_GENERATED_MEDIA_RELATIVE_ROOT", "P7-generert"))
+    folder = str(
+        getattr(settings, "P7_GENERATED_MEDIA_RELATIVE_ROOT", "P7-generert")
+    )
     stem = slugify(recording.title, allow_unicode=True) or "innspilling"
     tag_fingerprint = repr(
         sorted((key, tuple(values)) for key, values in expected_tags.items())
     )
     fingerprint = sha256(
-        (f"{recording.pk}:{inspection.sha256}:{tag_fingerprint}").encode("utf-8")
+        (f"{recording.pk}:{inspection.sha256}:{tag_fingerprint}").encode(
+            "utf-8"
+        )
     ).hexdigest()[:16]
-    return str(PurePosixPath(folder, str(recording.pk), f"{stem}-{fingerprint}.flac"))
+    return str(
+        PurePosixPath(folder, str(recording.pk), f"{stem}-{fingerprint}.flac")
+    )
 
 
 def _validated_target_relative_path(recording, value=None):
@@ -381,7 +396,9 @@ def _validated_target_relative_path(recording, value=None):
         raise ValidationError("Målfil mangler fra genereringsplanen.")
     proposed = str(value).replace("\\", "/")
     target = PurePosixPath(proposed)
-    folder = str(getattr(settings, "P7_GENERATED_MEDIA_RELATIVE_ROOT", "P7-generert"))
+    folder = str(
+        getattr(settings, "P7_GENERATED_MEDIA_RELATIVE_ROOT", "P7-generert")
+    )
     expected_parent = PurePosixPath(folder, str(recording.pk))
     if target.parent != expected_parent or target.suffix.casefold() != ".flac":
         raise ValidationError(
@@ -399,10 +416,14 @@ def build_generation_preview(
         .first()
     )
     if not selection or not selection.selected_master_id:
-        raise ValidationError("Velg en autoritativ master før radio-FLAC forberedes.")
+        raise ValidationError(
+            "Velg en autoritativ master før radio-FLAC forberedes."
+        )
     master = selection.selected_master
     locations = list(
-        master.locations.filter(is_current=True, status=FileLocation.Status.ACTIVE)
+        master.locations.filter(
+            is_current=True, status=FileLocation.Status.ACTIVE
+        )
     )
     if not locations:
         raise ValidationError("Valgt master har ingen aktiv filplassering.")
@@ -443,7 +464,9 @@ def build_generation_preview(
             expected_tags=expected,
         ),
     )
-    target = resolve_storage_path(target_relative_path, root_key=target_root_key)
+    target = resolve_storage_path(
+        target_relative_path, root_key=target_root_key
+    )
     target_exists = target.server_path.exists()
     if target_exists and not allow_existing_target:
         raise ValidationError("Planlagt målfil finnes allerede.")
@@ -505,7 +528,9 @@ def create_generation_plan(*, recording, user, target_relative_path=None):
             and plan.expected_tags == preview["expected_tags"]
         )
         if not matches:
-            raise ValidationError("Målfilen tilhører en annen genereringsplan.")
+            raise ValidationError(
+                "Målfilen tilhører en annen genereringsplan."
+            )
         return plan
     if preview["target_exists"]:
         plan.delete()
@@ -572,7 +597,9 @@ def _write_and_verify_tags(path, expected):
         key: [str(item) for item in values] for key, values in expected.items()
     }
     if actual != expected_normalized:
-        raise ValidationError("Metadata round-trip stemmer ikke med forhåndsvisningen.")
+        raise ValidationError(
+            "Metadata round-trip stemmer ikke med forhåndsvisningen."
+        )
     return actual
 
 
@@ -594,8 +621,13 @@ def generate_candidate(*, generation, user):
     selection = RecordingMediaSelection.objects.filter(
         recording=generation.recording
     ).first()
-    if not selection or selection.selected_master_id != generation.master_asset_id:
-        raise ValidationError("Valgt master er endret. Lag en ny forhåndsvisning.")
+    if (
+        not selection
+        or selection.selected_master_id != generation.master_asset_id
+    ):
+        raise ValidationError(
+            "Valgt master er endret. Lag en ny forhåndsvisning."
+        )
     master_locations = list(
         generation.master_asset.locations.filter(
             is_current=True, status=FileLocation.Status.ACTIVE
@@ -606,7 +638,9 @@ def generate_candidate(*, generation, user):
     if len(master_locations) > 1:
         raise ValidationError("Valgt master har flere aktive plasseringer.")
     master_location = master_locations[0]
-    master_resolved = validate_readable_location(resolve_location(master_location))
+    master_resolved = validate_readable_location(
+        resolve_location(master_location)
+    )
     before_master_hash = generation.master_asset.sha256 or _stream_sha256(
         open_for_read(master_resolved)
     )
@@ -634,8 +668,10 @@ def generate_candidate(*, generation, user):
     # holding a row lock. The expensive encoding happens after the lock is
     # released; other callers then observe GENERATING instead of duplicating it.
     with transaction.atomic():
-        claimed_generation = RadioFlacGeneration.objects.select_for_update().get(
-            pk=generation.pk
+        claimed_generation = (
+            RadioFlacGeneration.objects.select_for_update().get(
+                pk=generation.pk
+            )
         )
         if claimed_generation.status in {
             RadioFlacGeneration.Status.VERIFIED,
@@ -671,12 +707,15 @@ def generate_candidate(*, generation, user):
             info.samplerate != plan["sample_rate"]
             or info.channels != plan["channels"]
             or info.frames != plan["frames"]
-            or SUPPORTED_MASTER_SUBTYPES.get(info.subtype) != plan["bits_per_sample"]
+            or SUPPORTED_MASTER_SUBTYPES.get(info.subtype)
+            != plan["bits_per_sample"]
         ):
             raise ValidationError("Teknisk verifisering av kandidaten feilet.")
         with temporary.open("rb") as candidate_handle:
             candidate_hash = _stream_sha256(candidate_handle)
-        if before_master_hash != _stream_sha256(open_for_read(master_resolved)):
+        if before_master_hash != _stream_sha256(
+            open_for_read(master_resolved)
+        ):
             raise ValidationError("Masterfilen ble endret under genereringen.")
         os.replace(temporary, target.server_path)
         try:
@@ -693,7 +732,9 @@ def generate_candidate(*, generation, user):
                         "container": "FLAC",
                         "codec": "FLAC",
                         "sample_rate": info.samplerate,
-                        "bits_per_sample": SUPPORTED_MASTER_SUBTYPES.get(info.subtype),
+                        "bits_per_sample": SUPPORTED_MASTER_SUBTYPES.get(
+                            info.subtype
+                        ),
                         "channels": info.channels,
                         "frames": info.frames,
                         "duration_ms": round(info.duration * 1000),
@@ -794,7 +835,9 @@ def activate_candidate(*, generation, user):
     )
     if generation.status != RadioFlacGeneration.Status.VERIFIED:
         raise ValidationError("Bare en verifisert kandidat kan aktiveres.")
-    recording = Recording.objects.select_for_update().get(pk=generation.recording_id)
+    recording = Recording.objects.select_for_update().get(
+        pk=generation.recording_id
+    )
     (
         selection,
         _,
@@ -860,7 +903,10 @@ def activate_candidate(*, generation, user):
             lifecycle_status=FileAsset.LifecycleStatus.CURRENT,
         ).values_list("pk", flat=True)
     )
-    if current_ids != [candidate.pk] or selection.current_radio_id != candidate.pk:
+    if (
+        current_ids != [candidate.pk]
+        or selection.current_radio_id != candidate.pk
+    ):
         raise ValidationError(
             "Aktiveringen ga inkonsistent gjeldende radiofil og ble rullet tilbake."
         )

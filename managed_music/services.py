@@ -1,7 +1,14 @@
 from django.db import transaction
 
-from catalogue.models import ExternalIdentifier, Recording, RecordingContribution
-from catalogue.services import find_recording_candidates, record_duplicate_candidates
+from catalogue.models import (
+    ExternalIdentifier,
+    Recording,
+    RecordingContribution,
+)
+from catalogue.services import (
+    find_recording_candidates,
+    record_duplicate_candidates,
+)
 from music_library.models import MusicLibraryEntry
 from rights.models import RightsClaim, RightsConfiguration
 from rights.services import create_rights_claim
@@ -35,13 +42,17 @@ def create_managed_recording(
         "local_organization"
     ).first()
     if not configuration:
-        raise ValueError("Lokal organisasjon må konfigureres før forvaltning registreres.")
+        raise ValueError(
+            "Lokal organisasjon må konfigureres før forvaltning registreres."
+        )
     if recording and new_recording_title.strip():
         raise ValueError(
             "Velg eksisterende innspilling eller opprett en ny, ikke begge."
         )
     if not recording and not new_recording_title.strip():
-        raise ValueError("Velg en innspilling eller skriv inn tittel for en ny.")
+        raise ValueError(
+            "Velg en innspilling eller skriv inn tittel for en ny."
+        )
     matches = []
     if not recording:
         matches = find_recording_candidates(
@@ -55,7 +66,9 @@ def create_managed_recording(
                 for match in matches[:5]
             )
             raise ValueError(f"Mulig eksisterende innspilling: {names}")
-        if new_isrc and any("samme ISRC" in match.signals for match in matches):
+        if new_isrc and any(
+            "samme ISRC" in match.signals for match in matches
+        ):
             raise ValueError(
                 "ISRC finnes allerede. Opprett eventuelt den nye innspillingen uten ISRC, "
                 "og registrer kodekonflikten som en metadatapåstand."
@@ -76,7 +89,9 @@ def create_managed_recording(
                 credited_as=artist_identity.display_name,
             )
         record_duplicate_candidates(recording, matches)
-    library_entry, _ = MusicLibraryEntry.objects.get_or_create(recording=recording)
+    library_entry, _ = MusicLibraryEntry.objects.get_or_create(
+        recording=recording
+    )
     managed = ManagedRecording.objects.create(
         library_entry=library_entry,
         status=ManagedRecording.Status.PENDING,

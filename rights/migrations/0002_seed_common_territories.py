@@ -25,4 +25,6 @@ def seed_territories(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [("rights", "0001_initial")]
-    operations = [migrations.RunPython(seed_territories, migrations.RunPython.noop)]
+    operations = [
+        migrations.RunPython(seed_territories, migrations.RunPython.noop)
+    ]

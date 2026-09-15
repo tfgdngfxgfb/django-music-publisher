@@ -76,21 +76,29 @@ class AgreementAdmin(CanonicalAdmin):
 def confirm_claims(modeladmin, request, queryset):
     for claim in queryset:
         try:
-            decide_rights_claim(claim, VerificationStatus.CONFIRMED, user=request.user)
+            decide_rights_claim(
+                claim, VerificationStatus.CONFIRMED, user=request.user
+            )
         except ValidationError as error:
-            modeladmin.message_user(request, "; ".join(error.messages), messages.ERROR)
+            modeladmin.message_user(
+                request, "; ".join(error.messages), messages.ERROR
+            )
 
 
 @admin.action(description="Marker valgte rettighetskrav som bestridt")
 def dispute_claims(modeladmin, request, queryset):
     for claim in queryset:
-        decide_rights_claim(claim, VerificationStatus.DISPUTED, user=request.user)
+        decide_rights_claim(
+            claim, VerificationStatus.DISPUTED, user=request.user
+        )
 
 
 @admin.action(description="Avvis valgte rettighetskrav")
 def reject_claims(modeladmin, request, queryset):
     for claim in queryset:
-        decide_rights_claim(claim, VerificationStatus.REJECTED, user=request.user)
+        decide_rights_claim(
+            claim, VerificationStatus.REJECTED, user=request.user
+        )
 
 
 @admin.register(RightsClaim)
@@ -106,7 +114,12 @@ class RightsClaimAdmin(CanonicalAdmin):
         "valid_from",
         "valid_until",
     )
-    list_filter = ("right_type", "status", "evidence_strength", "territory_mode")
+    list_filter = (
+        "right_type",
+        "status",
+        "evidence_strength",
+        "territory_mode",
+    )
     search_fields = (
         "recording__title",
         "rights_holder__name",
@@ -147,7 +160,11 @@ class RightsClaimAdmin(CanonicalAdmin):
 class RightsDecisionAdmin(CanonicalAdmin):
     list_display = ("claim", "decision", "decided_by", "created_at")
     list_filter = ("decision",)
-    search_fields = ("claim__recording__title", "claim__rights_holder__name", "note")
+    search_fields = (
+        "claim__recording__title",
+        "claim__rights_holder__name",
+        "note",
+    )
     readonly_fields = CanonicalAdmin.readonly_fields + (
         "claim",
         "decision",
@@ -171,8 +188,9 @@ class RightsConfigurationAdmin(CanonicalAdmin):
     autocomplete_fields = ("local_organization",)
 
     def has_add_permission(self, request):
-        return not RightsConfiguration.objects.exists() and super().has_add_permission(
-            request
+        return (
+            not RightsConfiguration.objects.exists()
+            and super().has_add_permission(request)
         )
 
     def has_delete_permission(self, request, obj=None):

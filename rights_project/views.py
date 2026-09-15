@@ -14,7 +14,9 @@ def _admin_link(request, app_label, model_name, label, description):
     return {
         "label": label,
         "description": description,
-        "url": reverse(f"admin:{app_label}_{model._meta.model_name}_changelist"),
+        "url": reverse(
+            f"admin:{app_label}_{model._meta.model_name}_changelist"
+        ),
     }
 
 

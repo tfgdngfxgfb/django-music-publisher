@@ -84,7 +84,9 @@ class RecordingFilesPageTests(TestCase):
         return asset, location, path
 
     def test_requires_recording_and_file_view_permissions(self):
-        viewer = get_user_model().objects.create_user(username="viewer", password="x")
+        viewer = get_user_model().objects.create_user(
+            username="viewer", password="x"
+        )
         self.client.force_login(viewer)
         self.assertEqual(self.client.get(self._url()).status_code, 403)
         viewer.user_permissions.add(
@@ -103,7 +105,9 @@ class RecordingFilesPageTests(TestCase):
         response = self.client.get(self._url())
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Ingen radiofil registrert")
-        self.assertContains(response, "Ingen filer registrert for denne innspillingen")
+        self.assertContains(
+            response, "Ingen filer registrert for denne innspillingen"
+        )
         self.assertContains(response, 'aria-current="page" href="')
         self.assertNotContains(response, "data-file-row")
 
@@ -135,7 +139,8 @@ class RecordingFilesPageTests(TestCase):
         ):
             self.assertContains(response, text)
         self.assertContains(
-            response, reverse("gui_v2:recording_audio", args=[self.recording.pk])
+            response,
+            reverse("gui_v2:recording_audio", args=[self.recording.pk]),
         )
         self.assertContains(response, "data-player-primary")
         self.assertNotContains(response, "autoplay")
@@ -176,7 +181,9 @@ class RecordingFilesPageTests(TestCase):
         self.assertContains(response, "savnet.flac")
         self.assertContains(response, "Fil ikke funnet")
 
-    def test_multiple_locations_and_selected_asset_are_rendered_separately(self):
+    def test_multiple_locations_and_selected_asset_are_rendered_separately(
+        self,
+    ):
         radio, current, _ = self._radio_file()
         document = FileAsset.objects.create(
             recording=self.recording,
@@ -200,13 +207,21 @@ class RecordingFilesPageTests(TestCase):
         )
         with self._settings():
             response = self.client.get(self._url(selected_file=document.pk))
-        self.assertEqual(response.context["file_view"]["selected"]["object"], document)
+        self.assertEqual(
+            response.context["file_view"]["selected"]["object"], document
+        )
         self.assertContains(response, "notat.pdf")
         self.assertContains(response, "Historisk")
-        self.assertContains(response, r"\\P7-CLIENT\Music\Dokumenter\notat.pdf")
+        self.assertContains(
+            response, r"\\P7-CLIENT\Music\Dokumenter\notat.pdf"
+        )
         self.assertContains(response, r"\\P7-CLIENT\Music\Historikk\notat.pdf")
-        self.assertContains(response, r"\\P7-CLIENT\Music\Norsk\Ingrid\Nordlys.flac")
-        self.assertEqual(len(response.context["file_view"]["selected"]["locations"]), 2)
+        self.assertContains(
+            response, r"\\P7-CLIENT\Music\Norsk\Ingrid\Nordlys.flac"
+        )
+        self.assertEqual(
+            len(response.context["file_view"]["selected"]["locations"]), 2
+        )
         self.assertTrue(current_document.is_current)
         self.assertTrue(current.is_current)
         self.assertContains(response, str(radio.pk))
@@ -236,7 +251,9 @@ class RecordingFilesPageTests(TestCase):
             response = self.client.get(self._url(selected_file=asset.pk))
         self.assertContains(
             response,
-            reverse("gui_v2:rescan_library_file", args=[self.entry.pk, asset.pk]),
+            reverse(
+                "gui_v2:rescan_library_file", args=[self.entry.pk, asset.pk]
+            ),
         )
         self.assertContains(response, "Les fil på nytt")
 
@@ -250,9 +267,12 @@ class RecordingFilesPageTests(TestCase):
         asset.refresh_from_db()
         location.refresh_from_db()
         self.assertEqual(response.status_code, 200)
-        self.assertEqual((path.read_bytes(), path.stat().st_mtime_ns), before_file)
         self.assertEqual(
-            (self.recording.revision, asset.revision, location.revision), before
+            (path.read_bytes(), path.stat().st_mtime_ns), before_file
+        )
+        self.assertEqual(
+            (self.recording.revision, asset.revision, location.revision),
+            before,
         )
 
     def test_without_client_root_only_logical_path_is_shown(self):
@@ -260,6 +280,8 @@ class RecordingFilesPageTests(TestCase):
         with self._settings(P7_MUSIC_CLIENT_ROOT=""):
             response = self.client.get(self._url())
         self.assertContains(response, "Logisk sti")
-        self.assertContains(response, "Ingen klient-/Windows-sti er konfigurert")
+        self.assertContains(
+            response, "Ingen klient-/Windows-sti er konfigurert"
+        )
         self.assertNotContains(response, "Kopier mappesti")
         self.assertNotContains(response, str(self.root))

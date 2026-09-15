@@ -10,166 +10,308 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('catalogue', '0002_remove_recording_recording_nonempty_title_and_more'),
-        ('parties', '0003_alter_artistidentity_options_alter_party_options_and_more'),
+        (
+            "catalogue",
+            "0002_remove_recording_recording_nonempty_title_and_more",
+        ),
+        (
+            "parties",
+            "0003_alter_artistidentity_options_alter_party_options_and_more",
+        ),
     ]
 
     operations = [
         migrations.AlterModelOptions(
-            name='externalidentifier',
-            options={'ordering': ('scheme', 'normalized_value'), 'verbose_name': 'ekstern identifikator', 'verbose_name_plural': 'eksterne identifikatorer'},
+            name="externalidentifier",
+            options={
+                "ordering": ("scheme", "normalized_value"),
+                "verbose_name": "ekstern identifikator",
+                "verbose_name_plural": "eksterne identifikatorer",
+            },
         ),
         migrations.AlterModelOptions(
-            name='recording',
-            options={'ordering': ('title', 'id'), 'verbose_name': 'innspilling', 'verbose_name_plural': 'innspillinger'},
+            name="recording",
+            options={
+                "ordering": ("title", "id"),
+                "verbose_name": "innspilling",
+                "verbose_name_plural": "innspillinger",
+            },
         ),
         migrations.AlterModelOptions(
-            name='recordingcontribution',
-            options={'ordering': ('display_order', 'id'), 'verbose_name': 'medvirkende', 'verbose_name_plural': 'medvirkende'},
+            name="recordingcontribution",
+            options={
+                "ordering": ("display_order", "id"),
+                "verbose_name": "medvirkende",
+                "verbose_name_plural": "medvirkende",
+            },
         ),
         migrations.AlterField(
-            model_name='externalidentifier',
-            name='created_at',
-            field=models.DateTimeField(auto_now_add=True, verbose_name='opprettet'),
+            model_name="externalidentifier",
+            name="created_at",
+            field=models.DateTimeField(
+                auto_now_add=True, verbose_name="opprettet"
+            ),
         ),
         migrations.AlterField(
-            model_name='externalidentifier',
-            name='id',
-            field=models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False, verbose_name='permanent UUID'),
+            model_name="externalidentifier",
+            name="id",
+            field=models.UUIDField(
+                default=uuid.uuid4,
+                editable=False,
+                primary_key=True,
+                serialize=False,
+                verbose_name="permanent UUID",
+            ),
         ),
         migrations.AlterField(
-            model_name='externalidentifier',
-            name='namespace',
-            field=models.CharField(blank=True, default='', help_text='ISRC er global: la feltet stå tomt. Feltet er reservert for senere identifikatortyper.', max_length=100, verbose_name='navnerom'),
+            model_name="externalidentifier",
+            name="namespace",
+            field=models.CharField(
+                blank=True,
+                default="",
+                help_text="ISRC er global: la feltet stå tomt. Feltet er reservert for senere identifikatortyper.",
+                max_length=100,
+                verbose_name="navnerom",
+            ),
         ),
         migrations.AlterField(
-            model_name='externalidentifier',
-            name='normalized_value',
-            field=models.CharField(editable=False, max_length=255, verbose_name='normalisert verdi'),
+            model_name="externalidentifier",
+            name="normalized_value",
+            field=models.CharField(
+                editable=False,
+                max_length=255,
+                verbose_name="normalisert verdi",
+            ),
         ),
         migrations.AlterField(
-            model_name='externalidentifier',
-            name='recording',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='identifiers', to='catalogue.recording', verbose_name='innspilling'),
+            model_name="externalidentifier",
+            name="recording",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="identifiers",
+                to="catalogue.recording",
+                verbose_name="innspilling",
+            ),
         ),
         migrations.AlterField(
-            model_name='externalidentifier',
-            name='revision',
-            field=models.PositiveBigIntegerField(default=1, editable=False, verbose_name='revisjon'),
+            model_name="externalidentifier",
+            name="revision",
+            field=models.PositiveBigIntegerField(
+                default=1, editable=False, verbose_name="revisjon"
+            ),
         ),
         migrations.AlterField(
-            model_name='externalidentifier',
-            name='scheme',
-            field=models.CharField(choices=[('ISRC', 'ISRC')], default='ISRC', max_length=30, verbose_name='type'),
+            model_name="externalidentifier",
+            name="scheme",
+            field=models.CharField(
+                choices=[("ISRC", "ISRC")],
+                default="ISRC",
+                max_length=30,
+                verbose_name="type",
+            ),
         ),
         migrations.AlterField(
-            model_name='externalidentifier',
-            name='updated_at',
-            field=models.DateTimeField(auto_now=True, verbose_name='sist endret'),
+            model_name="externalidentifier",
+            name="updated_at",
+            field=models.DateTimeField(
+                auto_now=True, verbose_name="sist endret"
+            ),
         ),
         migrations.AlterField(
-            model_name='externalidentifier',
-            name='value',
-            field=models.CharField(help_text='Den innskrevne verdien beholdes. Normalisering skjer automatisk.', max_length=255, verbose_name='verdi'),
+            model_name="externalidentifier",
+            name="value",
+            field=models.CharField(
+                help_text="Den innskrevne verdien beholdes. Normalisering skjer automatisk.",
+                max_length=255,
+                verbose_name="verdi",
+            ),
         ),
         migrations.AlterField(
-            model_name='recording',
-            name='created_at',
-            field=models.DateTimeField(auto_now_add=True, verbose_name='opprettet'),
+            model_name="recording",
+            name="created_at",
+            field=models.DateTimeField(
+                auto_now_add=True, verbose_name="opprettet"
+            ),
         ),
         migrations.AlterField(
-            model_name='recording',
-            name='duration_ms',
-            field=models.PositiveBigIntegerField(blank=True, null=True, verbose_name='varighet (millisekunder)'),
+            model_name="recording",
+            name="duration_ms",
+            field=models.PositiveBigIntegerField(
+                blank=True, null=True, verbose_name="varighet (millisekunder)"
+            ),
         ),
         migrations.AlterField(
-            model_name='recording',
-            name='id',
-            field=models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False, verbose_name='permanent UUID'),
+            model_name="recording",
+            name="id",
+            field=models.UUIDField(
+                default=uuid.uuid4,
+                editable=False,
+                primary_key=True,
+                serialize=False,
+                verbose_name="permanent UUID",
+            ),
         ),
         migrations.AlterField(
-            model_name='recording',
-            name='language',
-            field=models.CharField(blank=True, help_text='Valgfri språkkode, for eksempel nb eller en.', max_length=64, validators=[catalogue.validators.validate_language], verbose_name='språk'),
+            model_name="recording",
+            name="language",
+            field=models.CharField(
+                blank=True,
+                help_text="Valgfri språkkode, for eksempel nb eller en.",
+                max_length=64,
+                validators=[catalogue.validators.validate_language],
+                verbose_name="språk",
+            ),
         ),
         migrations.AlterField(
-            model_name='recording',
-            name='metadata_status',
-            field=models.CharField(choices=[('draft', 'Utkast'), ('reviewed', 'Metadata kontrollert')], default='draft', help_text='Beskriver bare metadata og dokumenterer ikke rettigheter eller klarering.', max_length=20, verbose_name='metadatastatus'),
+            model_name="recording",
+            name="metadata_status",
+            field=models.CharField(
+                choices=[
+                    ("draft", "Utkast"),
+                    ("reviewed", "Metadata kontrollert"),
+                ],
+                default="draft",
+                help_text="Beskriver bare metadata og dokumenterer ikke rettigheter eller klarering.",
+                max_length=20,
+                verbose_name="metadatastatus",
+            ),
         ),
         migrations.AlterField(
-            model_name='recording',
-            name='recording_kind',
-            field=models.CharField(blank=True, choices=[('sound', 'Lydinnspilling'), ('video', 'Musikkvideoinnspilling')], max_length=20, verbose_name='innspillingstype'),
+            model_name="recording",
+            name="recording_kind",
+            field=models.CharField(
+                blank=True,
+                choices=[
+                    ("sound", "Lydinnspilling"),
+                    ("video", "Musikkvideoinnspilling"),
+                ],
+                max_length=20,
+                verbose_name="innspillingstype",
+            ),
         ),
         migrations.AlterField(
-            model_name='recording',
-            name='revision',
-            field=models.PositiveBigIntegerField(default=1, editable=False, verbose_name='revisjon'),
+            model_name="recording",
+            name="revision",
+            field=models.PositiveBigIntegerField(
+                default=1, editable=False, verbose_name="revisjon"
+            ),
         ),
         migrations.AlterField(
-            model_name='recording',
-            name='title',
-            field=models.CharField(max_length=500, validators=[rights_core.models.validate_not_blank], verbose_name='tittel'),
+            model_name="recording",
+            name="title",
+            field=models.CharField(
+                max_length=500,
+                validators=[rights_core.models.validate_not_blank],
+                verbose_name="tittel",
+            ),
         ),
         migrations.AlterField(
-            model_name='recording',
-            name='updated_at',
-            field=models.DateTimeField(auto_now=True, verbose_name='sist endret'),
+            model_name="recording",
+            name="updated_at",
+            field=models.DateTimeField(
+                auto_now=True, verbose_name="sist endret"
+            ),
         ),
         migrations.AlterField(
-            model_name='recording',
-            name='version_designation',
-            field=models.CharField(blank=True, max_length=255, verbose_name='versjonsbetegnelse'),
+            model_name="recording",
+            name="version_designation",
+            field=models.CharField(
+                blank=True, max_length=255, verbose_name="versjonsbetegnelse"
+            ),
         ),
         migrations.AlterField(
-            model_name='recordingcontribution',
-            name='artist_identity',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='parties.artistidentity', verbose_name='artistidentitet'),
+            model_name="recordingcontribution",
+            name="artist_identity",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                to="parties.artistidentity",
+                verbose_name="artistidentitet",
+            ),
         ),
         migrations.AlterField(
-            model_name='recordingcontribution',
-            name='created_at',
-            field=models.DateTimeField(auto_now_add=True, verbose_name='opprettet'),
+            model_name="recordingcontribution",
+            name="created_at",
+            field=models.DateTimeField(
+                auto_now_add=True, verbose_name="opprettet"
+            ),
         ),
         migrations.AlterField(
-            model_name='recordingcontribution',
-            name='credited_as',
-            field=models.CharField(blank=True, max_length=255, verbose_name='kreditert som'),
+            model_name="recordingcontribution",
+            name="credited_as",
+            field=models.CharField(
+                blank=True, max_length=255, verbose_name="kreditert som"
+            ),
         ),
         migrations.AlterField(
-            model_name='recordingcontribution',
-            name='display_order',
-            field=models.PositiveIntegerField(default=0, verbose_name='visningsrekkefølge'),
+            model_name="recordingcontribution",
+            name="display_order",
+            field=models.PositiveIntegerField(
+                default=0, verbose_name="visningsrekkefølge"
+            ),
         ),
         migrations.AlterField(
-            model_name='recordingcontribution',
-            name='id',
-            field=models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False, verbose_name='permanent UUID'),
+            model_name="recordingcontribution",
+            name="id",
+            field=models.UUIDField(
+                default=uuid.uuid4,
+                editable=False,
+                primary_key=True,
+                serialize=False,
+                verbose_name="permanent UUID",
+            ),
         ),
         migrations.AlterField(
-            model_name='recordingcontribution',
-            name='party',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='recording_contributions', to='parties.party', verbose_name='person/organisasjon'),
+            model_name="recordingcontribution",
+            name="party",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name="recording_contributions",
+                to="parties.party",
+                verbose_name="person/organisasjon",
+            ),
         ),
         migrations.AlterField(
-            model_name='recordingcontribution',
-            name='recording',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='contributions', to='catalogue.recording', verbose_name='innspilling'),
+            model_name="recordingcontribution",
+            name="recording",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="contributions",
+                to="catalogue.recording",
+                verbose_name="innspilling",
+            ),
         ),
         migrations.AlterField(
-            model_name='recordingcontribution',
-            name='revision',
-            field=models.PositiveBigIntegerField(default=1, editable=False, verbose_name='revisjon'),
+            model_name="recordingcontribution",
+            name="revision",
+            field=models.PositiveBigIntegerField(
+                default=1, editable=False, verbose_name="revisjon"
+            ),
         ),
         migrations.AlterField(
-            model_name='recordingcontribution',
-            name='role',
-            field=models.CharField(choices=[('primary_artist', 'Hovedartist'), ('featured_artist', 'Medvirkende artist'), ('musician', 'Musiker'), ('vocalist', 'Vokalist'), ('producer', 'Produsent'), ('engineer', 'Lydtekniker'), ('conductor', 'Dirigent'), ('choir', 'Kor')], max_length=30, verbose_name='rolle'),
+            model_name="recordingcontribution",
+            name="role",
+            field=models.CharField(
+                choices=[
+                    ("primary_artist", "Hovedartist"),
+                    ("featured_artist", "Medvirkende artist"),
+                    ("musician", "Musiker"),
+                    ("vocalist", "Vokalist"),
+                    ("producer", "Produsent"),
+                    ("engineer", "Lydtekniker"),
+                    ("conductor", "Dirigent"),
+                    ("choir", "Kor"),
+                ],
+                max_length=30,
+                verbose_name="rolle",
+            ),
         ),
         migrations.AlterField(
-            model_name='recordingcontribution',
-            name='updated_at',
-            field=models.DateTimeField(auto_now=True, verbose_name='sist endret'),
+            model_name="recordingcontribution",
+            name="updated_at",
+            field=models.DateTimeField(
+                auto_now=True, verbose_name="sist endret"
+            ),
         ),
     ]

@@ -64,7 +64,9 @@ class MissingMetadataFilter(admin.SimpleListFilter):
 
     def queryset(self, request, queryset):
         if self.value() == "isrc":
-            return queryset.exclude(identifiers__scheme=ExternalIdentifier.Scheme.ISRC)
+            return queryset.exclude(
+                identifiers__scheme=ExternalIdentifier.Scheme.ISRC
+            )
         if self.value() == "artist":
             return queryset.filter(contributions__isnull=True)
         if self.value() == "release":
@@ -146,7 +148,9 @@ class ContributionAdmin(CanonicalAdmin):
     autocomplete_fields = ("recording", "party", "artist_identity")
 
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related("recording", "party")
+        return (
+            super().get_queryset(request).select_related("recording", "party")
+        )
 
 
 class ReleaseTrackInline(admin.TabularInline):
@@ -196,7 +200,12 @@ class ReleaseAdmin(CanonicalAdmin):
         "track_count",
         "id",
     )
-    list_filter = ("release_type", "verification_status", "release_year", "label")
+    list_filter = (
+        "release_type",
+        "verification_status",
+        "release_year",
+        "label",
+    )
     search_fields = (
         "title",
         "catalogue_number",
@@ -235,14 +244,17 @@ class ReleaseAdmin(CanonicalAdmin):
         if not self.has_change_permission(request, release):
             raise PermissionDenied
         next_sequence = (
-            release.tracks.aggregate(value=Max("sequence_number"))["value"] or 0
+            release.tracks.aggregate(value=Max("sequence_number"))["value"]
+            or 0
         ) + 1
         form = TrackCreationForm(
             request.POST or None, initial={"sequence_number": next_sequence}
         )
         if request.method == "POST" and form.is_valid():
             try:
-                track = create_release_track(release=release, **form.cleaned_data)
+                track = create_release_track(
+                    release=release, **form.cleaned_data
+                )
             except ValueError as error:
                 form.add_error(None, str(error))
             else:
@@ -253,10 +265,15 @@ class ReleaseAdmin(CanonicalAdmin):
                 )
                 if "save_and_continue" in request.POST:
                     return redirect(
-                        reverse("admin:catalogue_release_add_track", args=(release.pk,))
+                        reverse(
+                            "admin:catalogue_release_add_track",
+                            args=(release.pk,),
+                        )
                     )
                 return redirect(
-                    reverse("admin:catalogue_release_change", args=(release.pk,))
+                    reverse(
+                        "admin:catalogue_release_change", args=(release.pk,)
+                    )
                 )
         context = {
             **self.admin_site.each_context(request),
@@ -293,13 +310,22 @@ class ReleaseTrackAdmin(CanonicalAdmin):
     autocomplete_fields = ("release", "recording")
 
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related("release", "recording")
+        return (
+            super()
+            .get_queryset(request)
+            .select_related("release", "recording")
+        )
 
 
 @admin.register(ExternalIdentifier)
 class IdentifierAdmin(CanonicalAdmin):
     list_display = ("scheme", "normalized_value", "target", "namespace", "id")
-    search_fields = ("value", "normalized_value", "recording__title", "release__title")
+    search_fields = (
+        "value",
+        "normalized_value",
+        "recording__title",
+        "release__title",
+    )
     list_filter = ("scheme",)
     autocomplete_fields = ("recording", "release")
     readonly_fields = (*CanonicalAdmin.readonly_fields, "normalized_value")
@@ -309,7 +335,11 @@ class IdentifierAdmin(CanonicalAdmin):
         return obj.recording or obj.release
 
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related("recording", "release")
+        return (
+            super()
+            .get_queryset(request)
+            .select_related("recording", "release")
+        )
 
 
 @admin.action(description="Avvis valgte som dubletter")
@@ -321,7 +351,13 @@ def dismiss_duplicates(modeladmin, request, queryset):
 
 @admin.register(DuplicateCandidate)
 class DuplicateCandidateAdmin(CanonicalAdmin):
-    list_display = ("recording_a", "recording_b", "score", "signal_summary", "status")
+    list_display = (
+        "recording_a",
+        "recording_b",
+        "score",
+        "signal_summary",
+        "status",
+    )
     list_filter = ("status", "score")
     search_fields = (
         "recording_a__title",
@@ -339,5 +375,7 @@ class DuplicateCandidateAdmin(CanonicalAdmin):
 
     def get_queryset(self, request):
         return (
-            super().get_queryset(request).select_related("recording_a", "recording_b")
+            super()
+            .get_queryset(request)
+            .select_related("recording_a", "recording_b")
         )

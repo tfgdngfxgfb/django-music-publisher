@@ -69,19 +69,25 @@ class SourceRecordAdmin(CanonicalAdmin):
 @admin.action(description="Bekreft valgte påstander")
 def confirm_assertions(modeladmin, request, queryset):
     for assertion in queryset:
-        decide_assertion(assertion, VerificationStatus.CONFIRMED, user=request.user)
+        decide_assertion(
+            assertion, VerificationStatus.CONFIRMED, user=request.user
+        )
 
 
 @admin.action(description="Marker valgte påstander som bestridt")
 def dispute_assertions(modeladmin, request, queryset):
     for assertion in queryset:
-        decide_assertion(assertion, VerificationStatus.DISPUTED, user=request.user)
+        decide_assertion(
+            assertion, VerificationStatus.DISPUTED, user=request.user
+        )
 
 
 @admin.action(description="Avvis valgte påstander")
 def reject_assertions(modeladmin, request, queryset):
     for assertion in queryset:
-        decide_assertion(assertion, VerificationStatus.REJECTED, user=request.user)
+        decide_assertion(
+            assertion, VerificationStatus.REJECTED, user=request.user
+        )
 
 
 @admin.register(MetadataAssertion)
@@ -123,7 +129,9 @@ class MetadataAssertionAdmin(CanonicalAdmin):
 
     def get_queryset(self, request):
         return (
-            super().get_queryset(request).select_related("source_record__source_system")
+            super()
+            .get_queryset(request)
+            .select_related("source_record__source_system")
         )
 
     def save_model(self, request, obj, form, change):
@@ -155,7 +163,11 @@ class AssertionDecisionAdmin(CanonicalAdmin):
         return False
 
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related("assertion", "decided_by")
+        return (
+            super()
+            .get_queryset(request)
+            .select_related("assertion", "decided_by")
+        )
 
 
 @admin.register(AppliedMetadataChange)
@@ -182,4 +194,8 @@ class AppliedMetadataChangeAdmin(CanonicalAdmin):
         return False
 
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related("assertion", "changed_by")
+        return (
+            super()
+            .get_queryset(request)
+            .select_related("assertion", "changed_by")
+        )

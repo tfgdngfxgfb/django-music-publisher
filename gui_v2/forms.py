@@ -11,6 +11,7 @@ from .presentation import observed_genres, radio_language_name
 from django.conf import settings
 from media_assets.storage import MUSIC_LIBRARY_ROOT
 
+
 class MasterRegistrationForm(forms.Form):
     root_key = forms.ChoiceField(label="Lagringsrot", choices=())
     relative_path = forms.CharField(
@@ -29,17 +30,25 @@ class MasterRegistrationForm(forms.Form):
                 choices.append((key, key.replace("_", " ").title()))
         self.fields["root_key"].choices = choices
 
+
 class MusicLibraryFilterForm(forms.Form):
     MATCH_CHOICES = (("any", "Minst én valgt"), ("all", "Alle valgte"))
 
     q = forms.CharField(required=False, label="Søk")
-    genre = forms.ChoiceField(required=False, choices=(("", "Alle"),), label="Radiosjanger")
-    language = forms.ChoiceField(required=False, choices=(("", "Alle"),), label="Radiospråk")
+    genre = forms.ChoiceField(
+        required=False, choices=(("", "Alle"),), label="Radiosjanger"
+    )
+    language = forms.ChoiceField(
+        required=False, choices=(("", "Alle"),), label="Radiospråk"
+    )
     energy = forms.TypedChoiceField(
         required=False,
         coerce=int,
         empty_value=None,
-        choices=(("", "Alle"), *((value, str(value)) for value in range(1, 6))),
+        choices=(
+            ("", "Alle"),
+            *((value, str(value)) for value in range(1, 6)),
+        ),
         label="Energy",
     )
     gender = forms.ChoiceField(
@@ -73,7 +82,11 @@ class MusicLibraryFilterForm(forms.Form):
     )
     follow_up = forms.ChoiceField(
         required=False,
-        choices=(("", "Alle"), ("yes", "Krever oppfølging"), ("no", "Ingen kjent oppfølging")),
+        choices=(
+            ("", "Alle"),
+            ("yes", "Krever oppfølging"),
+            ("no", "Ingen kjent oppfølging"),
+        ),
         label="Oppfølging",
     )
     isrc_file_collision = forms.BooleanField(
@@ -83,27 +96,47 @@ class MusicLibraryFilterForm(forms.Form):
     ordering = forms.ChoiceField(
         required=False,
         choices=(
-            ("title", "Tittel A–Å"), ("-title", "Tittel Å–A"),
-            ("artist", "Artist A–Å"), ("-artist", "Artist Å–A"),
-            ("isrc", "ISRC stigende"), ("-isrc", "ISRC synkende"),
-            ("duration", "Kortest varighet"), ("-duration", "Lengst varighet"),
-            ("genre", "Sjanger A–Å"), ("-genre", "Sjanger Å–A"),
-            ("language", "Språk A–Å"), ("-language", "Språk Å–A"),
-            ("energy", "Lavest Energy"), ("-energy", "Høyest Energy"),
-            ("rotation", "Rotasjon stigende"), ("-rotation", "Rotasjon synkende"),
-            ("channels", "Kanal A–Å"), ("-channels", "Kanal Å–A"),
-            ("targets", "Målgruppe A–Å"), ("-targets", "Målgruppe Å–A"),
-            ("file_status", "Filstatus stigende"), ("-file_status", "Filstatus synkende"),
-            ("managed", "Ikke forvaltet først"), ("-managed", "Forvaltet først"),
-            ("follow_up", "Uten oppfølging først"), ("-follow_up", "Oppfølging først"),
-            ("-updated", "Sist endret først"), ("updated", "Eldst endret først"),
+            ("title", "Tittel A–Å"),
+            ("-title", "Tittel Å–A"),
+            ("artist", "Artist A–Å"),
+            ("-artist", "Artist Å–A"),
+            ("isrc", "ISRC stigende"),
+            ("-isrc", "ISRC synkende"),
+            ("duration", "Kortest varighet"),
+            ("-duration", "Lengst varighet"),
+            ("genre", "Sjanger A–Å"),
+            ("-genre", "Sjanger Å–A"),
+            ("language", "Språk A–Å"),
+            ("-language", "Språk Å–A"),
+            ("energy", "Lavest Energy"),
+            ("-energy", "Høyest Energy"),
+            ("rotation", "Rotasjon stigende"),
+            ("-rotation", "Rotasjon synkende"),
+            ("channels", "Kanal A–Å"),
+            ("-channels", "Kanal Å–A"),
+            ("targets", "Målgruppe A–Å"),
+            ("-targets", "Målgruppe Å–A"),
+            ("file_status", "Filstatus stigende"),
+            ("-file_status", "Filstatus synkende"),
+            ("managed", "Ikke forvaltet først"),
+            ("-managed", "Forvaltet først"),
+            ("follow_up", "Uten oppfølging først"),
+            ("-follow_up", "Oppfølging først"),
+            ("-updated", "Sist endret først"),
+            ("updated", "Eldst endret først"),
         ),
         initial="title",
         label="Sortering",
     )
     per_page = forms.ChoiceField(
         required=False,
-        choices=(("40", "40"), ("100", "100"), ("250", "250"), ("500", "500"), ("all", "Alle")),
+        choices=(
+            ("40", "40"),
+            ("100", "100"),
+            ("250", "250"),
+            ("500", "500"),
+            ("all", "Alle"),
+        ),
         initial="40",
         label="Rader per side",
     )
@@ -123,18 +156,26 @@ class MusicLibraryFilterForm(forms.Form):
         label="Målgrupper",
     )
     target_mode = forms.ChoiceField(
-        required=False, choices=MATCH_CHOICES, initial="any", label="Målgruppevalg"
+        required=False,
+        choices=MATCH_CHOICES,
+        initial="any",
+        label="Målgruppevalg",
     )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["q"].widget.attrs.update({
-            "placeholder": "Tittel, artist eller ISRC",
-            "data-library-search": "",
-            "autocomplete": "off",
-        })
+        self.fields["q"].widget.attrs.update(
+            {
+                "placeholder": "Tittel, artist eller ISRC",
+                "data-library-search": "",
+                "autocomplete": "off",
+            }
+        )
         genres = observed_genres(
-            MusicLibraryEntry.objects.exclude(genre="").order_by().values_list("genre", flat=True).distinct()
+            MusicLibraryEntry.objects.exclude(genre="")
+            .order_by()
+            .values_list("genre", flat=True)
+            .distinct()
         )
         languages = list(
             MusicLibraryEntry.objects.exclude(language="")
@@ -142,10 +183,19 @@ class MusicLibraryFilterForm(forms.Form):
             .values_list("language", flat=True)
             .distinct()
         )
-        self.fields["genre"].choices = (("", "Alle"), *((value, value) for value in genres))
+        self.fields["genre"].choices = (
+            ("", "Alle"),
+            *((value, value) for value in genres),
+        )
         self.fields["language"].choices = (
             ("", "Alle"),
-            *((value, radio_language_name(value)) for value in sorted(languages, key=lambda item: radio_language_name(item).casefold())),
+            *(
+                (value, radio_language_name(value))
+                for value in sorted(
+                    languages,
+                    key=lambda item: radio_language_name(item).casefold(),
+                )
+            ),
         )
 
 
@@ -200,7 +250,9 @@ class ReleaseMetadataForm(forms.ModelForm):
             14: ExternalIdentifier.Scheme.GTIN,
         }.get(len(digits))
         if not scheme:
-            raise forms.ValidationError("Strekkoden må ha 8, 12, 13 eller 14 sifre.")
+            raise forms.ValidationError(
+                "Strekkoden må ha 8, 12, 13 eller 14 sifre."
+            )
         normalized = normalize_trade_item_number(digits, scheme)
         conflict_query = ExternalIdentifier.objects.filter(
             scheme=scheme, namespace="", normalized_value=normalized
@@ -209,7 +261,9 @@ class ReleaseMetadataForm(forms.ModelForm):
             conflict_query = conflict_query.exclude(release=self.instance)
         conflict = conflict_query.exists()
         if conflict:
-            raise forms.ValidationError("Strekkoden er allerede knyttet til en annen utgivelse.")
+            raise forms.ValidationError(
+                "Strekkoden er allerede knyttet til en annen utgivelse."
+            )
         self.barcode_scheme = scheme
         self.normalized_barcode = normalized
         return value
@@ -227,7 +281,9 @@ class ReleaseMetadataForm(forms.ModelForm):
             return
         identifier = identifiers.filter(scheme=self.barcode_scheme).first()
         if identifier is None:
-            identifier = identifiers.first() or ExternalIdentifier(release=self.instance)
+            identifier = identifiers.first() or ExternalIdentifier(
+                release=self.instance
+            )
         identifier.scheme = self.barcode_scheme
         identifier.value = self.cleaned_data["barcode"]
         identifier.full_clean()
@@ -253,15 +309,31 @@ class TrackRowForm(forms.Form):
     track_id = forms.UUIDField(required=False, widget=forms.HiddenInput)
     recording_id = forms.UUIDField(required=False, widget=forms.HiddenInput)
     sequence_number = forms.IntegerField(min_value=1, label="Rekkefølge")
-    disc_number = forms.IntegerField(min_value=1, required=False, label="Plate")
+    disc_number = forms.IntegerField(
+        min_value=1, required=False, label="Plate"
+    )
     side = forms.CharField(max_length=10, required=False, label="Side")
-    track_number = forms.IntegerField(min_value=1, required=False, label="Spor")
-    title_override = forms.CharField(max_length=500, required=False, label="Sportittel")
-    recording_title = forms.CharField(max_length=500, required=False, label="Innspilling")
-    artists = forms.CharField(max_length=1000, required=False, label="Artister")
-    composers = forms.CharField(max_length=1000, required=False, label="Komponister")
-    lyricists = forms.CharField(max_length=1000, required=False, label="Tekstforfattere")
-    arrangers = forms.CharField(max_length=1000, required=False, label="Arrangører")
+    track_number = forms.IntegerField(
+        min_value=1, required=False, label="Spor"
+    )
+    title_override = forms.CharField(
+        max_length=500, required=False, label="Sportittel"
+    )
+    recording_title = forms.CharField(
+        max_length=500, required=False, label="Innspilling"
+    )
+    artists = forms.CharField(
+        max_length=1000, required=False, label="Artister"
+    )
+    composers = forms.CharField(
+        max_length=1000, required=False, label="Komponister"
+    )
+    lyricists = forms.CharField(
+        max_length=1000, required=False, label="Tekstforfattere"
+    )
+    arrangers = forms.CharField(
+        max_length=1000, required=False, label="Arrangører"
+    )
     duration = forms.CharField(max_length=12, required=False, label="Varighet")
     isrc = forms.CharField(max_length=30, required=False, label="ISRC")
     force_create = forms.BooleanField(required=False, widget=forms.HiddenInput)
@@ -281,7 +353,9 @@ class TrackRowForm(forms.Form):
     def clean_recording_id(self):
         value = self.cleaned_data.get("recording_id")
         if value and not Recording.objects.filter(pk=value).exists():
-            raise forms.ValidationError("Den valgte innspillingen finnes ikke.")
+            raise forms.ValidationError(
+                "Den valgte innspillingen finnes ikke."
+            )
         return value
 
     def clean_isrc(self):
@@ -300,7 +374,10 @@ class TrackRowForm(forms.Form):
         title = (data.get("recording_title") or "").strip()
         recording_id = data.get("recording_id")
         if not recording_id and not title:
-            self.add_error("recording_title", "Velg en innspilling eller skriv inn en ny tittel.")
+            self.add_error(
+                "recording_title",
+                "Velg en innspilling eller skriv inn en ny tittel.",
+            )
             return data
         data["duration_ms"] = self.cleaned_data.get("duration_ms")
         if not recording_id and title and not data.get("force_create"):

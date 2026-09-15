@@ -31,11 +31,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "created_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="opprettet"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="opprettet"
+                    ),
                 ),
                 (
                     "updated_at",
-                    models.DateTimeField(auto_now=True, verbose_name="sist endret"),
+                    models.DateTimeField(
+                        auto_now=True, verbose_name="sist endret"
+                    ),
                 ),
                 (
                     "revision",
@@ -46,14 +50,21 @@ class Migration(migrations.Migration):
                 (
                     "external_batch_id",
                     models.CharField(
-                        blank=True, max_length=255, verbose_name="ekstern batch-ID"
+                        blank=True,
+                        max_length=255,
+                        verbose_name="ekstern batch-ID",
                     ),
                 ),
                 (
                     "imported_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="importert"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="importert"
+                    ),
                 ),
-                ("notes", models.TextField(blank=True, verbose_name="merknader")),
+                (
+                    "notes",
+                    models.TextField(blank=True, verbose_name="merknader"),
+                ),
             ],
             options={
                 "verbose_name": "importbatch",
@@ -76,11 +87,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "created_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="opprettet"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="opprettet"
+                    ),
                 ),
                 (
                     "updated_at",
-                    models.DateTimeField(auto_now=True, verbose_name="sist endret"),
+                    models.DateTimeField(
+                        auto_now=True, verbose_name="sist endret"
+                    ),
                 ),
                 (
                     "revision",
@@ -108,7 +123,9 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "entity_uuid",
-                    models.UUIDField(db_index=True, verbose_name="objektets UUID"),
+                    models.UUIDField(
+                        db_index=True, verbose_name="objektets UUID"
+                    ),
                 ),
                 (
                     "field_name",
@@ -118,7 +135,10 @@ class Migration(migrations.Migration):
                         verbose_name="feltnavn",
                     ),
                 ),
-                ("raw_value", models.TextField(verbose_name="original kildeverdi")),
+                (
+                    "raw_value",
+                    models.TextField(verbose_name="original kildeverdi"),
+                ),
                 (
                     "normalized_value",
                     models.JSONField(
@@ -179,11 +199,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "created_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="opprettet"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="opprettet"
+                    ),
                 ),
                 (
                     "updated_at",
-                    models.DateTimeField(auto_now=True, verbose_name="sist endret"),
+                    models.DateTimeField(
+                        auto_now=True, verbose_name="sist endret"
+                    ),
                 ),
                 (
                     "revision",
@@ -204,7 +228,10 @@ class Migration(migrations.Migration):
                         verbose_name="avgjørelse",
                     ),
                 ),
-                ("note", models.TextField(blank=True, verbose_name="begrunnelse")),
+                (
+                    "note",
+                    models.TextField(blank=True, verbose_name="begrunnelse"),
+                ),
                 (
                     "decided_by",
                     models.ForeignKey(
@@ -247,11 +274,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "created_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="opprettet"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="opprettet"
+                    ),
                 ),
                 (
                     "updated_at",
-                    models.DateTimeField(auto_now=True, verbose_name="sist endret"),
+                    models.DateTimeField(
+                        auto_now=True, verbose_name="sist endret"
+                    ),
                 ),
                 (
                     "revision",
@@ -262,7 +293,9 @@ class Migration(migrations.Migration):
                 (
                     "external_record_id",
                     models.CharField(
-                        blank=True, max_length=255, verbose_name="ekstern post-ID"
+                        blank=True,
+                        max_length=255,
+                        verbose_name="ekstern post-ID",
                     ),
                 ),
                 (
@@ -326,11 +359,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "created_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="opprettet"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="opprettet"
+                    ),
                 ),
                 (
                     "updated_at",
-                    models.DateTimeField(auto_now=True, verbose_name="sist endret"),
+                    models.DateTimeField(
+                        auto_now=True, verbose_name="sist endret"
+                    ),
                 ),
                 (
                     "revision",

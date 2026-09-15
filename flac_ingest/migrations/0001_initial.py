@@ -37,11 +37,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "created_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="opprettet"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="opprettet"
+                    ),
                 ),
                 (
                     "updated_at",
-                    models.DateTimeField(auto_now=True, verbose_name="sist endret"),
+                    models.DateTimeField(
+                        auto_now=True, verbose_name="sist endret"
+                    ),
                 ),
                 (
                     "revision",
@@ -101,7 +105,10 @@ class Migration(migrations.Migration):
                 "verbose_name_plural": "FLAC-innlesinger",
                 "ordering": ("-created_at", "id"),
                 "permissions": (
-                    ("apply_flacingestbatch", "Kan bruke FLAC-forhåndsvisning"),
+                    (
+                        "apply_flacingestbatch",
+                        "Kan bruke FLAC-forhåndsvisning",
+                    ),
                 ),
             },
         ),
@@ -120,11 +127,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "created_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="opprettet"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="opprettet"
+                    ),
                 ),
                 (
                     "updated_at",
-                    models.DateTimeField(auto_now=True, verbose_name="sist endret"),
+                    models.DateTimeField(
+                        auto_now=True, verbose_name="sist endret"
+                    ),
                 ),
                 (
                     "revision",
@@ -148,13 +159,17 @@ class Migration(migrations.Migration):
                 (
                     "written_tags",
                     models.JSONField(
-                        blank=True, default=dict, verbose_name="skrevne katalogtags"
+                        blank=True,
+                        default=dict,
+                        verbose_name="skrevne katalogtags",
                     ),
                 ),
                 (
                     "protected_tags",
                     models.JSONField(
-                        blank=True, default=dict, verbose_name="bevarte radiotags"
+                        blank=True,
+                        default=dict,
+                        verbose_name="bevarte radiotags",
                     ),
                 ),
                 ("error", models.TextField(blank=True, verbose_name="feil")),
@@ -189,11 +204,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "created_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="opprettet"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="opprettet"
+                    ),
                 ),
                 (
                     "updated_at",
-                    models.DateTimeField(auto_now=True, verbose_name="sist endret"),
+                    models.DateTimeField(
+                        auto_now=True, verbose_name="sist endret"
+                    ),
                 ),
                 (
                     "revision",
@@ -238,7 +257,9 @@ class Migration(migrations.Migration):
                 (
                     "parsed_metadata",
                     models.JSONField(
-                        blank=True, default=dict, verbose_name="tolkede metadata"
+                        blank=True,
+                        default=dict,
+                        verbose_name="tolkede metadata",
                     ),
                 ),
                 (
@@ -263,7 +284,9 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "sha256",
-                    models.CharField(blank=True, max_length=64, verbose_name="SHA-256"),
+                    models.CharField(
+                        blank=True, max_length=64, verbose_name="SHA-256"
+                    ),
                 ),
                 (
                     "candidates",
@@ -274,12 +297,16 @@ class Migration(migrations.Migration):
                 (
                     "messages",
                     models.JSONField(
-                        blank=True, default=list, verbose_name="kontrollmeldinger"
+                        blank=True,
+                        default=list,
+                        verbose_name="kontrollmeldinger",
                     ),
                 ),
                 (
                     "applied_at",
-                    models.DateTimeField(blank=True, null=True, verbose_name="brukt"),
+                    models.DateTimeField(
+                        blank=True, null=True, verbose_name="brukt"
+                    ),
                 ),
                 (
                     "batch",
@@ -347,7 +374,8 @@ class Migration(migrations.Migration):
                 "ordering": ("relative_path", "id"),
                 "constraints": [
                     models.UniqueConstraint(
-                        fields=("batch", "relative_path"), name="flac_batch_unique_path"
+                        fields=("batch", "relative_path"),
+                        name="flac_batch_unique_path",
                     )
                 ],
             },

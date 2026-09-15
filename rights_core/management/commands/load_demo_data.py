@@ -61,7 +61,9 @@ def demo_uuid(number):
 
 
 class Command(BaseCommand):
-    help = "Opprett et fast, fiktivt demosett i den valgte utviklingsdatabasen."
+    help = (
+        "Opprett et fast, fiktivt demosett i den valgte utviklingsdatabasen."
+    )
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -81,11 +83,17 @@ class Command(BaseCommand):
 
         person, _ = Party.objects.get_or_create(
             pk=demo_uuid(1),
-            defaults={"name": "Ingrid Solberg (demo)", "kind": Party.Kind.PERSON},
+            defaults={
+                "name": "Ingrid Solberg (demo)",
+                "kind": Party.Kind.PERSON,
+            },
         )
         group, _ = Party.objects.get_or_create(
             pk=demo_uuid(2),
-            defaults={"name": "Nordlys Ensemble (demo)", "kind": Party.Kind.GROUP},
+            defaults={
+                "name": "Nordlys Ensemble (demo)",
+                "kind": Party.Kind.GROUP,
+            },
         )
         organization, _ = Party.objects.get_or_create(
             pk=demo_uuid(3),
@@ -137,7 +145,12 @@ class Command(BaseCommand):
             (30, "Nordlys over byen (demo)", 213000, "nb"),
             (31, "Stille vann (demo)", 187000, "nb"),
             (32, "Morning Light (demo)", 201000, "en"),
-            (33, "Nordlys over byen – alternativ metadata (demo)", 214000, "nb"),
+            (
+                33,
+                "Nordlys over byen – alternativ metadata (demo)",
+                214000,
+                "nb",
+            ),
             (34, "Ukjent opptak fra kassett (demo)", None, ""),
         )
         for number, title, duration, language in recording_specs:
@@ -267,14 +280,18 @@ class Command(BaseCommand):
                 MusicLibraryChannel.objects.create(
                     library_entry=entry, channel=channels[channel_name]
                 )
-            MusicLibraryTargetAudience.objects.filter(library_entry=entry).delete()
+            MusicLibraryTargetAudience.objects.filter(
+                library_entry=entry
+            ).delete()
             if channel_names:
                 for audience in audiences.values():
                     MusicLibraryTargetAudience.objects.create(
                         library_entry=entry, target_audience=audience
                     )
             library_entries.append(entry)
-        entries_by_recording = {entry.recording_id: entry for entry in library_entries}
+        entries_by_recording = {
+            entry.recording_id: entry for entry in library_entries
+        }
         for offset, recording in enumerate(recordings):
             ManagedRecording.objects.get_or_create(
                 pk=demo_uuid(90 + offset),
@@ -287,7 +304,10 @@ class Command(BaseCommand):
 
         physical, _ = SourceSystem.objects.get_or_create(
             pk=demo_uuid(100),
-            defaults={"name": "Demo: CD-omslag", "kind": SourceSystem.Kind.PHYSICAL},
+            defaults={
+                "name": "Demo: CD-omslag",
+                "kind": SourceSystem.Kind.PHYSICAL,
+            },
         )
         imported, _ = SourceSystem.objects.get_or_create(
             pk=demo_uuid(101),
@@ -301,7 +321,10 @@ class Command(BaseCommand):
             defaults={
                 "source_system": physical,
                 "source_locator": "Lys over fjorden, omslagets bakside",
-                "raw_payload": {"title": "Nordlys over byen", "language": "Norsk"},
+                "raw_payload": {
+                    "title": "Nordlys over byen",
+                    "language": "Norsk",
+                },
             },
         )
         import_source, _ = SourceRecord.objects.get_or_create(
@@ -329,10 +352,16 @@ class Command(BaseCommand):
             "Nordlys i byen",
         )
         self._decision(
-            130, confirmed, VerificationStatus.CONFIRMED, "Kontrollert mot omslaget"
+            130,
+            confirmed,
+            VerificationStatus.CONFIRMED,
+            "Kontrollert mot omslaget",
         )
         self._decision(
-            131, disputed, VerificationStatus.DISPUTED, "Avviker fra fysisk omslag"
+            131,
+            disputed,
+            VerificationStatus.DISPUTED,
+            "Avviker fra fysisk omslag",
         )
 
         DuplicateCandidate.objects.get_or_create(
@@ -356,9 +385,13 @@ class Command(BaseCommand):
             import_source,
             reviewer,
         )
-        self.stdout.write(self.style.SUCCESS("Det faste demo-datasettet er klart."))
+        self.stdout.write(
+            self.style.SUCCESS("Det faste demo-datasettet er klart.")
+        )
         self.stdout.write(f"Demofiler: {root}")
-        self.stdout.write("Kjør samme kommando igjen uten å opprette duplikater.")
+        self.stdout.write(
+            "Kjør samme kommando igjen uten å opprette duplikater."
+        )
 
     def _identifier(self, number, recording, release, scheme, value):
         ExternalIdentifier.objects.get_or_create(
@@ -388,7 +421,11 @@ class Command(BaseCommand):
     def _decision(self, number, assertion, decision, note):
         _, created = AssertionDecision.objects.get_or_create(
             pk=demo_uuid(number),
-            defaults={"assertion": assertion, "decision": decision, "note": note},
+            defaults={
+                "assertion": assertion,
+                "decision": decision,
+                "note": note,
+            },
         )
         if created and assertion.status != decision:
             assertion.status = decision
@@ -398,8 +435,16 @@ class Command(BaseCommand):
         folders = {
             "cover": root / "P7-Demo" / "Aurora" / "P7-DEMO-001" / "Cover",
             "audio": root / "P7-Demo" / "Aurora" / "P7-DEMO-001" / "Audio",
-            "metadata": root / "P7-Demo" / "Aurora" / "P7-DEMO-001" / "Metadata",
-            "documents": root / "P7-Demo" / "Aurora" / "P7-DEMO-001" / "Documents",
+            "metadata": root
+            / "P7-Demo"
+            / "Aurora"
+            / "P7-DEMO-001"
+            / "Metadata",
+            "documents": root
+            / "P7-Demo"
+            / "Aurora"
+            / "P7-DEMO-001"
+            / "Documents",
         }
         for folder in folders.values():
             folder.mkdir(parents=True, exist_ok=True)
@@ -407,7 +452,11 @@ class Command(BaseCommand):
         cover = folders["cover"] / "p7-demo-cover.png"
         image = Image.new("RGB", (1200, 1200), "#082f3b")
         draw = ImageDraw.Draw(image)
-        for radius, color in ((420, "#087f83"), (300, "#30b8ad"), (170, "#d9f4ef")):
+        for radius, color in (
+            (420, "#087f83"),
+            (300, "#30b8ad"),
+            (170, "#d9f4ef"),
+        ):
             box = (600 - radius, 600 - radius, 600 + radius, 600 + radius)
             draw.ellipse(box, outline=color, width=24)
         draw.text((72, 72), "P7 DEMO", fill="white", stroke_width=1)
@@ -422,14 +471,19 @@ class Command(BaseCommand):
             for index in range(sample_rate * 2):
                 fade = min(index / 2205, (sample_rate * 2 - index) / 2205, 1)
                 value = int(
-                    6000 * fade * math.sin(2 * math.pi * 440 * index / sample_rate)
+                    6000
+                    * fade
+                    * math.sin(2 * math.pi * 440 * index / sample_rate)
                 )
                 frames.extend(struct.pack("<h", value))
             output.writeframes(frames)
 
         radio_flac = folders["audio"] / "nordlys-radio-demo.flac"
         shutil.copyfile(
-            Path(settings.BASE_DIR) / "flac_ingest" / "test_fixtures" / "silence.flac",
+            Path(settings.BASE_DIR)
+            / "flac_ingest"
+            / "test_fixtures"
+            / "silence.flac",
             radio_flac,
         )
         flac = FLAC(radio_flac)
@@ -529,7 +583,14 @@ class Command(BaseCommand):
                 FileAsset.Role.DOCUMENT,
                 "application/json",
             ),
-            (153, None, release, paths["csv"], FileAsset.Role.DOCUMENT, "text/csv"),
+            (
+                153,
+                None,
+                release,
+                paths["csv"],
+                FileAsset.Role.DOCUMENT,
+                "text/csv",
+            ),
             (
                 154,
                 None,
@@ -547,7 +608,14 @@ class Command(BaseCommand):
                 "audio/flac",
             ),
         )
-        for offset, recording_target, release_target, path, role, mime in assets:
+        for (
+            offset,
+            recording_target,
+            release_target,
+            path,
+            role,
+            mime,
+        ) in assets:
             digest = hashlib.sha256(path.read_bytes()).hexdigest()
             asset, _ = FileAsset.objects.get_or_create(
                 pk=demo_uuid(offset),
@@ -560,7 +628,11 @@ class Command(BaseCommand):
                     "sha256": digest,
                     "role": role,
                     "technical_metadata": (
-                        {"sample_rate": 44100, "bits_per_sample": 16, "demo_tone": True}
+                        {
+                            "sample_rate": 44100,
+                            "bits_per_sample": 16,
+                            "demo_tone": True,
+                        }
                         if mime == "audio/wav"
                         else (
                             {
@@ -718,7 +790,10 @@ class Command(BaseCommand):
             decision=VerificationStatus.DISPUTED,
             reviewer=reviewer,
         )
-        for number, managed_recording in ((236, recordings[3]), (237, recordings[4])):
+        for number, managed_recording in (
+            (236, recordings[3]),
+            (237, recordings[4]),
+        ):
             self._claim(
                 number,
                 managed_recording,

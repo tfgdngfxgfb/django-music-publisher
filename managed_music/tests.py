@@ -35,12 +35,16 @@ class ManagedMusicTests(TestCase):
 
     def test_adding_existing_recording_creates_library_membership(self):
         recording = Recording.objects.create(title="Eksisterende")
-        self.assertFalse(MusicLibraryEntry.objects.filter(recording=recording).exists())
+        self.assertFalse(
+            MusicLibraryEntry.objects.filter(recording=recording).exists()
+        )
         create_managed_recording(
             recording=recording,
             relationship_type=RightsClaim.RightType.DISTRIBUTION,
         )
-        self.assertTrue(MusicLibraryEntry.objects.filter(recording=recording).exists())
+        self.assertTrue(
+            MusicLibraryEntry.objects.filter(recording=recording).exists()
+        )
 
     def test_music_library_never_automatically_becomes_managed(self):
         first = Recording.objects.create(title="Første")
@@ -51,7 +55,9 @@ class ManagedMusicTests(TestCase):
             relationship_type=RightsClaim.RightType.ADMINISTRATION,
         )
         self.assertEqual(ManagedRecording.objects.count(), 1)
-        self.assertFalse(hasattr(second.music_library_entry, "managed_recording"))
+        self.assertFalse(
+            hasattr(second.music_library_entry, "managed_recording")
+        )
 
     def test_new_recording_created_through_managed_is_in_both_bases(self):
         managed = create_managed_recording(
@@ -89,11 +95,15 @@ class ManagedMusicTests(TestCase):
 
 class ManagedMusicAdminTests(TestCase):
     def setUp(self):
-        self.admin = get_user_model().objects.create_superuser("admin", password="test")
+        self.admin = get_user_model().objects.create_superuser(
+            "admin", password="test"
+        )
         local_organization = Party.objects.create(
             name="Lokal testorganisasjon", kind=Party.Kind.ORGANIZATION
         )
-        RightsConfiguration.objects.create(local_organization=local_organization)
+        RightsConfiguration.objects.create(
+            local_organization=local_organization
+        )
         self.client.force_login(self.admin)
 
     def test_explicit_admin_workflow(self):
@@ -109,7 +119,9 @@ class ManagedMusicAdminTests(TestCase):
         managed = ManagedRecording.objects.get()
         self.assertEqual(managed.recording.title, "Administrert master")
         self.assertTrue(
-            MusicLibraryEntry.objects.filter(recording=managed.recording).exists()
+            MusicLibraryEntry.objects.filter(
+                recording=managed.recording
+            ).exists()
         )
         self.assertTrue(
             RightsClaim.objects.filter(

@@ -68,11 +68,17 @@ class ReleaseRightsClaimForm(RightsClaimForm):
 
 class RightsDecisionForm(forms.Form):
     action = forms.ChoiceField(
-        choices=(("confirm", "Bekreft"), ("dispute", "Bestrid"), ("reject", "Avvis")),
+        choices=(
+            ("confirm", "Bekreft"),
+            ("dispute", "Bestrid"),
+            ("reject", "Avvis"),
+        ),
         widget=forms.HiddenInput,
     )
     note = forms.CharField(
-        label="Begrunnelse", required=False, widget=forms.Textarea(attrs={"rows": 2})
+        label="Begrunnelse",
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 2}),
     )
 
 
@@ -115,5 +121,7 @@ class AgreementDocumentForm(forms.ModelForm):
 class ClaimAgreementForm(forms.Form):
     agreement = forms.ModelChoiceField(Agreement.objects.all(), label="Avtale")
     note = forms.CharField(
-        label="Begrunnelse", required=False, widget=forms.Textarea(attrs={"rows": 2})
+        label="Begrunnelse",
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 2}),
     )

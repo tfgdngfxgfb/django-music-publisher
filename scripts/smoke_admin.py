@@ -96,7 +96,9 @@ def main():
                     )
                     req = urllib.request.Request(base + path, data=payload)
                     with opener.open(req, timeout=15) as response:
-                        require(response.status == 200, f"HTTP {response.status}")
+                        require(
+                            response.status == 200, f"HTTP {response.status}"
+                        )
                         return response.read().decode("utf-8"), response.url
 
                 for _ in range(60):
@@ -114,7 +116,8 @@ def main():
                 parsed = urllib.parse.urlparse(url)
                 require(
                     parsed.path == "/admin/login/"
-                    and urllib.parse.parse_qs(parsed.query).get("next") == ["/"],
+                    and urllib.parse.parse_qs(parsed.query).get("next")
+                    == ["/"],
                     "Startadressen videresendte ikke til innlogging med riktig returadresse",
                 )
 
@@ -164,7 +167,9 @@ def main():
                     "Utgivelseslisten er ikke tilgjengelig",
                 )
                 html, _ = request("/admin/")
-                require("Katalog" in html, "Administrasjonen er ikke tilgjengelig")
+                require(
+                    "Katalog" in html, "Administrasjonen er ikke tilgjengelig"
+                )
                 html, _ = request("/admin/catalogue/recording/add/")
                 require(
                     'name="work"' not in html,
@@ -192,7 +197,9 @@ def main():
                 )
                 require(match, "Saved recording missing from list")
                 recording_id = match.group(1)
-                change_url = f"/admin/catalogue/recording/{recording_id}/change/"
+                change_url = (
+                    f"/admin/catalogue/recording/{recording_id}/change/"
+                )
                 html, _ = request(change_url)
                 require(
                     "Example recording" in html and recording_id in html,
@@ -211,14 +218,20 @@ def main():
                 require(url.endswith("/admin/catalogue/recording/"), html)
                 html, _ = request(change_url)
                 require(
-                    "NOABC2600001" in html and "Blåbær / 東京 — edited" in html,
+                    "NOABC2600001" in html
+                    and "Blåbær / 東京 — edited" in html,
                     "Edited recording metadata was not persisted",
                 )
-                require(recording_id in html, "Recording UUID changed after edit")
+                require(
+                    recording_id in html, "Recording UUID changed after edit"
+                )
                 manage("create_phase2_smoke_data")
                 searches = (
                     ("/admin/catalogue/release/?q=LYNOR123", "Operativ LP"),
-                    ("/admin/catalogue/recording/?q=NOP7A2600001", "Operativ master"),
+                    (
+                        "/admin/catalogue/recording/?q=NOP7A2600001",
+                        "Operativ master",
+                    ),
                     (
                         "/admin/music_library/musiclibraryentry/?q=Kun+i+Musikkarkivet",
                         "Kun i Musikkarkivet",
@@ -228,12 +241,21 @@ def main():
                         "Operativ master",
                     ),
                     ("/admin/provenance/metadataassertion/?q=1979", "1979"),
-                    ("/admin/media_assets/fileasset/?q=track01.flac", "track01.flac"),
-                    ("/admin/catalogue/duplicatecandidate/", "Operativ master"),
+                    (
+                        "/admin/media_assets/fileasset/?q=track01.flac",
+                        "track01.flac",
+                    ),
+                    (
+                        "/admin/catalogue/duplicatecandidate/",
+                        "Operativ master",
+                    ),
                 )
                 for path, expected in searches:
                     result_html, _ = request(path)
-                    require(expected in result_html, f"Admin-søk fant ikke {expected}")
+                    require(
+                        expected in result_html,
+                        f"Admin-søk fant ikke {expected}",
+                    )
                 html, _ = request("/admin/music_publisher/work/")
                 require(
                     "Musikalsk verk" in html or "Musikalske verk" in html,

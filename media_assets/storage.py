@@ -15,7 +15,6 @@ from typing import BinaryIO
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 
-
 MUSIC_LIBRARY_ROOT = "music_library"
 
 
@@ -91,7 +90,9 @@ def get_storage_root(root_key=MUSIC_LIBRARY_ROOT, *, require_directory=False):
         )
     server_root = Path(configured).expanduser().resolve(strict=False)
     if require_directory and not server_root.is_dir():
-        raise ImproperlyConfigured("Den konfigurerte storage-roten finnes ikke.")
+        raise ImproperlyConfigured(
+            "Den konfigurerte storage-roten finnes ikke."
+        )
     client_root = str(values["client_root"] or "").strip() or None
     if client_root and not PureWindowsPath(client_root).is_absolute():
         raise ImproperlyConfigured(
@@ -165,7 +166,9 @@ def resolve_location(location, *, require_root=False):
 
 def location_exists(location):
     try:
-        return resolve_location(location, require_root=True).server_path.is_file()
+        return resolve_location(
+            location, require_root=True
+        ).server_path.is_file()
     except (ImproperlyConfigured, StoragePathError, OSError):
         return False
 
@@ -210,7 +213,9 @@ def open_for_read(location_or_resolution) -> BinaryIO:
     try:
         return resolved.server_path.open("rb")
     except OSError as error:
-        raise StorageFileUnavailable("Den registrerte filen kunne ikke åpnes.") from error
+        raise StorageFileUnavailable(
+            "Den registrerte filen kunne ikke åpnes."
+        ) from error
 
 
 def get_client_path(location):

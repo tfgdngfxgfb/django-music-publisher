@@ -5,7 +5,10 @@ from pathlib import PurePosixPath
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 
 from media_assets.models import FileAsset, FileLocation
-from media_assets.playback import RadioPlaybackStatus, resolve_current_radio_asset
+from media_assets.playback import (
+    RadioPlaybackStatus,
+    resolve_current_radio_asset,
+)
 from media_assets.storage import (
     get_client_folder,
     get_client_path,
@@ -14,6 +17,7 @@ from media_assets.storage import (
 
 from django.core.exceptions import ObjectDoesNotExist
 from media_assets.models import MediaAssetEvent, RadioFlacGeneration
+
 
 def _duration(value):
     if value is None:
@@ -88,9 +92,12 @@ def _location_data(location):
         "status": location.get_status_display(),
         "status_kind": (
             "ok"
-            if location.status == FileLocation.Status.ACTIVE and location.is_current
+            if location.status == FileLocation.Status.ACTIVE
+            and location.is_current
             else (
-                "error" if location.status == FileLocation.Status.MISSING else "neutral"
+                "error"
+                if location.status == FileLocation.Status.MISSING
+                else "neutral"
             )
         ),
     }

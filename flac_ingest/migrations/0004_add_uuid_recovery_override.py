@@ -6,13 +6,17 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('flac_ingest', '0003_alter_flacingestitem_action'),
+        ("flac_ingest", "0003_alter_flacingestitem_action"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='flacingestbatch',
-            name='allow_uuid_recovery',
-            field=models.BooleanField(default=False, help_text='Eksplisitt administratoroverstyring for test, regenerering eller kontrollert reimport. Skal vurderes før operativ produksjonsbruk.', verbose_name='tillat gjenoppretting fra P7UUID'),
+            model_name="flacingestbatch",
+            name="allow_uuid_recovery",
+            field=models.BooleanField(
+                default=False,
+                help_text="Eksplisitt administratoroverstyring for test, regenerering eller kontrollert reimport. Skal vurderes før operativ produksjonsbruk.",
+                verbose_name="tillat gjenoppretting fra P7UUID",
+            ),
         ),
     ]

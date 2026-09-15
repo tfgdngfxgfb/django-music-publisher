@@ -10,34 +10,141 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('flac_ingest', '0004_add_uuid_recovery_override'),
+        ("flac_ingest", "0004_add_uuid_recovery_override"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='FlacMaintenanceJob',
+            name="FlacMaintenanceJob",
             fields=[
-                ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False, verbose_name='permanent UUID')),
-                ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='opprettet')),
-                ('updated_at', models.DateTimeField(auto_now=True, verbose_name='sist endret')),
-                ('revision', models.PositiveBigIntegerField(default=1, editable=False, verbose_name='revisjon')),
-                ('kind', models.CharField(choices=[('cleanup', 'Rydd Musikkarkiv'), ('rebuild', 'Bygg uforvaltet Musikkarkiv på nytt')], max_length=20, verbose_name='vedlikeholdstype')),
-                ('status', models.CharField(choices=[('preview', 'Forhåndsvisning klar'), ('running', 'Kjører'), ('partial', 'Delvis fullført'), ('completed', 'Fullført'), ('failed', 'Feilet')], default='preview', max_length=20, verbose_name='status')),
-                ('relative_root', models.CharField(default='.', max_length=1000, validators=[media_assets.models.validate_logical_path], verbose_name='avgrenset mappe')),
-                ('plan', models.JSONField(blank=True, default=dict, verbose_name='forhåndsvist plan')),
-                ('result', models.JSONField(blank=True, default=dict, verbose_name='resultat')),
-                ('error', models.TextField(blank=True, verbose_name='feil')),
-                ('started_at', models.DateTimeField(blank=True, null=True, verbose_name='startet')),
-                ('completed_at', models.DateTimeField(blank=True, null=True, verbose_name='avsluttet')),
-                ('created_by', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='flac_maintenance_jobs', to=settings.AUTH_USER_MODEL, verbose_name='analysert av')),
-                ('executed_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='executed_flac_maintenance_jobs', to=settings.AUTH_USER_MODEL, verbose_name='utført av')),
+                (
+                    "id",
+                    models.UUIDField(
+                        default=uuid.uuid4,
+                        editable=False,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="permanent UUID",
+                    ),
+                ),
+                (
+                    "created_at",
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="opprettet"
+                    ),
+                ),
+                (
+                    "updated_at",
+                    models.DateTimeField(
+                        auto_now=True, verbose_name="sist endret"
+                    ),
+                ),
+                (
+                    "revision",
+                    models.PositiveBigIntegerField(
+                        default=1, editable=False, verbose_name="revisjon"
+                    ),
+                ),
+                (
+                    "kind",
+                    models.CharField(
+                        choices=[
+                            ("cleanup", "Rydd Musikkarkiv"),
+                            ("rebuild", "Bygg uforvaltet Musikkarkiv på nytt"),
+                        ],
+                        max_length=20,
+                        verbose_name="vedlikeholdstype",
+                    ),
+                ),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("preview", "Forhåndsvisning klar"),
+                            ("running", "Kjører"),
+                            ("partial", "Delvis fullført"),
+                            ("completed", "Fullført"),
+                            ("failed", "Feilet"),
+                        ],
+                        default="preview",
+                        max_length=20,
+                        verbose_name="status",
+                    ),
+                ),
+                (
+                    "relative_root",
+                    models.CharField(
+                        default=".",
+                        max_length=1000,
+                        validators=[media_assets.models.validate_logical_path],
+                        verbose_name="avgrenset mappe",
+                    ),
+                ),
+                (
+                    "plan",
+                    models.JSONField(
+                        blank=True,
+                        default=dict,
+                        verbose_name="forhåndsvist plan",
+                    ),
+                ),
+                (
+                    "result",
+                    models.JSONField(
+                        blank=True, default=dict, verbose_name="resultat"
+                    ),
+                ),
+                ("error", models.TextField(blank=True, verbose_name="feil")),
+                (
+                    "started_at",
+                    models.DateTimeField(
+                        blank=True, null=True, verbose_name="startet"
+                    ),
+                ),
+                (
+                    "completed_at",
+                    models.DateTimeField(
+                        blank=True, null=True, verbose_name="avsluttet"
+                    ),
+                ),
+                (
+                    "created_by",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="flac_maintenance_jobs",
+                        to=settings.AUTH_USER_MODEL,
+                        verbose_name="analysert av",
+                    ),
+                ),
+                (
+                    "executed_by",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name="executed_flac_maintenance_jobs",
+                        to=settings.AUTH_USER_MODEL,
+                        verbose_name="utført av",
+                    ),
+                ),
             ],
             options={
-                'verbose_name': 'vedlikehold av Musikkarkiv',
-                'verbose_name_plural': 'vedlikehold av Musikkarkiv',
-                'ordering': ('-created_at', 'id'),
-                'permissions': (('preview_library_cleanup', 'Kan se forhåndsvisning av opprydding'), ('run_library_cleanup', 'Kan utføre opprydding'), ('preview_library_rebuild', 'Kan se forhåndsvisning av rebuild'), ('run_library_rebuild', 'Kan starte rebuild')),
+                "verbose_name": "vedlikehold av Musikkarkiv",
+                "verbose_name_plural": "vedlikehold av Musikkarkiv",
+                "ordering": ("-created_at", "id"),
+                "permissions": (
+                    (
+                        "preview_library_cleanup",
+                        "Kan se forhåndsvisning av opprydding",
+                    ),
+                    ("run_library_cleanup", "Kan utføre opprydding"),
+                    (
+                        "preview_library_rebuild",
+                        "Kan se forhåndsvisning av rebuild",
+                    ),
+                    ("run_library_rebuild", "Kan starte rebuild"),
+                ),
             },
         ),
     ]

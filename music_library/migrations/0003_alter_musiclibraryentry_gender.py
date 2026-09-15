@@ -6,13 +6,25 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('music_library', '0002_channel_musiclibrarychannel_and_more'),
+        ("music_library", "0002_channel_musiclibrarychannel_and_more"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='musiclibraryentry',
-            name='gender',
-            field=models.CharField(blank=True, choices=[('female', 'Kvinne'), ('male', 'Mann'), ('mixed', 'Blandet'), ('group', 'Gruppe'), ('instrumental', 'Instrumental'), ('other', 'Annet / ikke relevant')], max_length=20, verbose_name='kjønn'),
+            model_name="musiclibraryentry",
+            name="gender",
+            field=models.CharField(
+                blank=True,
+                choices=[
+                    ("female", "Kvinne"),
+                    ("male", "Mann"),
+                    ("mixed", "Blandet"),
+                    ("group", "Gruppe"),
+                    ("instrumental", "Instrumental"),
+                    ("other", "Annet / ikke relevant"),
+                ],
+                max_length=20,
+                verbose_name="kjønn",
+            ),
         ),
     ]

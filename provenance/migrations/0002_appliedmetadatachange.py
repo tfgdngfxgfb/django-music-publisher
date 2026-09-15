@@ -29,11 +29,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "created_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="opprettet"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="opprettet"
+                    ),
                 ),
                 (
                     "updated_at",
-                    models.DateTimeField(auto_now=True, verbose_name="sist endret"),
+                    models.DateTimeField(
+                        auto_now=True, verbose_name="sist endret"
+                    ),
                 ),
                 (
                     "revision",
@@ -61,7 +65,9 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "entity_uuid",
-                    models.UUIDField(db_index=True, verbose_name="objektets UUID"),
+                    models.UUIDField(
+                        db_index=True, verbose_name="objektets UUID"
+                    ),
                 ),
                 (
                     "field_name",
@@ -75,11 +81,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "after_value",
-                    models.JSONField(blank=True, null=True, verbose_name="ny verdi"),
+                    models.JSONField(
+                        blank=True, null=True, verbose_name="ny verdi"
+                    ),
                 ),
                 (
                     "base_revision",
-                    models.PositiveBigIntegerField(verbose_name="forventet revisjon"),
+                    models.PositiveBigIntegerField(
+                        verbose_name="forventet revisjon"
+                    ),
                 ),
                 (
                     "result_revision",

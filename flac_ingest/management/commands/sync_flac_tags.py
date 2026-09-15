@@ -23,7 +23,9 @@ class Command(BaseCommand):
             )
         statuses = [FileAsset.SyncStatus.PENDING]
         if options["all_failed"]:
-            statuses.extend((FileAsset.SyncStatus.MISSING, FileAsset.SyncStatus.FAILED))
+            statuses.extend(
+                (FileAsset.SyncStatus.MISSING, FileAsset.SyncStatus.FAILED)
+            )
         assets = FileAsset.objects.filter(
             role=FileAsset.Role.RADIO_FLAC,
             recording__isnull=False,

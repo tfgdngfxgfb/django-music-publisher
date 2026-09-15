@@ -71,7 +71,11 @@ class FileAssetTests(TestCase):
         asset = FileAsset.objects.create(
             filename="track.wav", role=FileAsset.Role.OTHER
         )
-        for path in ("C:\\Music\\track.wav", "/music/track.wav", "../track.wav"):
+        for path in (
+            "C:\\Music\\track.wav",
+            "/music/track.wav",
+            "../track.wav",
+        ):
             with self.subTest(path=path), self.assertRaises(ValidationError):
                 FileLocation.objects.create(
                     asset=asset,
@@ -138,8 +142,14 @@ class ReadOnlyStorageTests(TestCase):
 
     def test_traversal_and_absolute_paths_are_rejected(self):
         with self._settings():
-            for value in ("../outside.flac", "/outside.flac", "C:/outside.flac"):
-                with self.subTest(value=value), self.assertRaises(StoragePathError):
+            for value in (
+                "../outside.flac",
+                "/outside.flac",
+                "C:/outside.flac",
+            ):
+                with self.subTest(value=value), self.assertRaises(
+                    StoragePathError
+                ):
                     resolve_storage_path(value)
 
     def test_canonical_path_cannot_escape_through_symlink_when_supported(self):
@@ -150,7 +160,9 @@ class ReadOnlyStorageTests(TestCase):
         try:
             link.symlink_to(outside, target_is_directory=True)
         except OSError:
-            self.skipTest("Symlink-oppretting er ikke tilgjengelig i dette miljøet.")
+            self.skipTest(
+                "Symlink-oppretting er ikke tilgjengelig i dette miljøet."
+            )
         with self._settings(), self.assertRaises(StoragePathError):
             resolve_storage_path("escape/secret.flac")
 
@@ -170,12 +182,16 @@ class ReadOnlyStorageTests(TestCase):
                 resolved.client_path,
                 r"\\P7-CLIENT\Music\Artist\Album\track.flac",
             )
-            self.assertEqual(get_client_path(self.location), resolved.client_path)
+            self.assertEqual(
+                get_client_path(self.location), resolved.client_path
+            )
             self.assertEqual(
                 get_client_folder(self.location),
                 r"\\P7-CLIENT\Music\Artist\Album",
             )
-            self.assertNotEqual(str(resolved.server_path), resolved.client_path)
+            self.assertNotEqual(
+                str(resolved.server_path), resolved.client_path
+            )
         with self._settings():
             self.assertIsNone(get_client_path(self.location))
             self.assertIsNone(get_client_folder(self.location))
@@ -183,7 +199,9 @@ class ReadOnlyStorageTests(TestCase):
     def test_stat_and_open_are_read_only(self):
         before = self.path.stat()
         with self._settings():
-            self.assertEqual(stat_location(self.location).st_size, len(self.payload))
+            self.assertEqual(
+                stat_location(self.location).st_size, len(self.payload)
+            )
             self.assertTrue(location_exists(self.location))
             self.assertTrue(location_is_readable(self.location))
             with open_for_read(self.location) as handle:
@@ -229,7 +247,9 @@ class ReadOnlyStorageTests(TestCase):
             resolved = resolve_location(self.location)
         self.assertTrue(root.read_only)
         self.assertEqual(resolved.server_path, self.path.resolve())
-        self.assertEqual(resolved.client_path, r"Z:\Radio\Artist\Album\track.flac")
+        self.assertEqual(
+            resolved.client_path, r"Z:\Radio\Artist\Album\track.flac"
+        )
 
     def test_location_can_map_to_an_explicit_approved_root_key(self):
         configured = {
@@ -247,9 +267,9 @@ class ReadOnlyStorageTests(TestCase):
         self.assertEqual(resolved.server_path, self.path.resolve())
 
     def test_relative_client_root_is_rejected(self):
-        with self._settings(P7_MUSIC_CLIENT_ROOT="relative/client"), self.assertRaises(
-            ImproperlyConfigured
-        ):
+        with self._settings(
+            P7_MUSIC_CLIENT_ROOT="relative/client"
+        ), self.assertRaises(ImproperlyConfigured):
             get_storage_root()
 
     def test_unknown_root_is_not_approved(self):

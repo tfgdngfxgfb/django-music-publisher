@@ -3,7 +3,11 @@ from django.apps import apps
 from django.core.exceptions import ValidationError
 from django.db import models
 
-from rights_core.models import CanonicalModel, VerificationStatus, validate_not_blank
+from rights_core.models import (
+    CanonicalModel,
+    VerificationStatus,
+    validate_not_blank,
+)
 
 
 class SourceSystem(CanonicalModel):
@@ -14,7 +18,9 @@ class SourceSystem(CanonicalModel):
         API = "api", "Eksternt system/API"
         OTHER = "other", "Annen"
 
-    name = models.CharField("navn", max_length=255, validators=[validate_not_blank])
+    name = models.CharField(
+        "navn", max_length=255, validators=[validate_not_blank]
+    )
     kind = models.CharField("kildetype", max_length=20, choices=Kind.choices)
     description = models.TextField("beskrivelse", blank=True)
 
@@ -23,7 +29,9 @@ class SourceSystem(CanonicalModel):
         verbose_name_plural = "kildesystemer"
         ordering = ("name", "id")
         constraints = [
-            models.UniqueConstraint(fields=("name",), name="source_system_unique_name"),
+            models.UniqueConstraint(
+                fields=("name",), name="source_system_unique_name"
+            ),
             models.CheckConstraint(
                 condition=models.Q(name__regex=r".*\S.*"),
                 name="source_system_nonblank_name",
@@ -41,7 +49,9 @@ class ImportBatch(CanonicalModel):
         on_delete=models.PROTECT,
         related_name="import_batches",
     )
-    external_batch_id = models.CharField("ekstern batch-ID", max_length=255, blank=True)
+    external_batch_id = models.CharField(
+        "ekstern batch-ID", max_length=255, blank=True
+    )
     imported_at = models.DateTimeField("importert", auto_now_add=True)
     notes = models.TextField("merknader", blank=True)
 
@@ -76,7 +86,9 @@ class SourceRecord(CanonicalModel):
         null=True,
         blank=True,
     )
-    external_record_id = models.CharField("ekstern post-ID", max_length=255, blank=True)
+    external_record_id = models.CharField(
+        "ekstern post-ID", max_length=255, blank=True
+    )
     source_locator = models.CharField(
         "kildehenvisning",
         max_length=500,
@@ -109,7 +121,9 @@ class SourceRecord(CanonicalModel):
             and self.import_batch.source_system_id != self.source_system_id
         ):
             raise ValidationError(
-                {"import_batch": "Importbatch og kildepost må bruke samme kildesystem."}
+                {
+                    "import_batch": "Importbatch og kildepost må bruke samme kildesystem."
+                }
             )
         if not self._state.adding:
             original = type(self).objects.get(pk=self.pk)
@@ -121,7 +135,8 @@ class SourceRecord(CanonicalModel):
                 "raw_payload",
             )
             if any(
-                getattr(original, field) != getattr(self, field) for field in immutable
+                getattr(original, field) != getattr(self, field)
+                for field in immutable
             ):
                 raise ValidationError(
                     "Originale kildedata kan ikke overskrives. Opprett en ny kildepost."
@@ -159,7 +174,9 @@ class MetadataAssertion(CanonicalModel):
         help_text="Stabilt teknisk feltnavn, for eksempel release_year.",
     )
     raw_value = models.TextField("original kildeverdi")
-    normalized_value = models.JSONField("normalisert verdi", null=True, blank=True)
+    normalized_value = models.JSONField(
+        "normalisert verdi", null=True, blank=True
+    )
     status = models.CharField(
         "status",
         max_length=20,
@@ -178,7 +195,13 @@ class MetadataAssertion(CanonicalModel):
     class Meta:
         verbose_name = "metadatapåstand"
         verbose_name_plural = "metadatapåstander"
-        ordering = ("status", "entity_type", "entity_uuid", "field_name", "-created_at")
+        ordering = (
+            "status",
+            "entity_type",
+            "entity_uuid",
+            "field_name",
+            "-created_at",
+        )
         indexes = [
             models.Index(
                 fields=("entity_type", "entity_uuid", "field_name"),
@@ -202,8 +225,14 @@ class MetadataAssertion(CanonicalModel):
             self.EntityType.PARTY: ("parties", "Party"),
             self.EntityType.ARTIST_IDENTITY: ("parties", "ArtistIdentity"),
             self.EntityType.LABEL: ("catalogue", "Label"),
-            self.EntityType.MUSIC_LIBRARY_ENTRY: ("music_library", "MusicLibraryEntry"),
-            self.EntityType.MANAGED_RECORDING: ("managed_music", "ManagedRecording"),
+            self.EntityType.MUSIC_LIBRARY_ENTRY: (
+                "music_library",
+                "MusicLibraryEntry",
+            ),
+            self.EntityType.MANAGED_RECORDING: (
+                "managed_music",
+                "ManagedRecording",
+            ),
             self.EntityType.FILE_ASSET: ("media_assets", "FileAsset"),
         }
         target = targets.get(self.entity_type)
@@ -228,7 +257,9 @@ class MetadataAssertion(CanonicalModel):
                 or previous.field_name != self.field_name
             ):
                 raise ValidationError(
-                    {"supersedes": "Erstattet påstand må gjelde samme objekt og felt."}
+                    {
+                        "supersedes": "Erstattet påstand må gjelde samme objekt og felt."
+                    }
                 )
         if not self._state.adding:
             original = type(self).objects.get(pk=self.pk)
@@ -241,7 +272,8 @@ class MetadataAssertion(CanonicalModel):
                 "supersedes_id",
             )
             if any(
-                getattr(original, field) != getattr(self, field) for field in immutable
+                getattr(original, field) != getattr(self, field)
+                for field in immutable
             ):
                 raise ValidationError(
                     "Kildepåstanden kan ikke overskrives. Opprett en ny påstand som erstatter den gamle."
@@ -264,7 +296,9 @@ class AssertionDecision(CanonicalModel):
         on_delete=models.PROTECT,
         related_name="decisions",
     )
-    decision = models.CharField("avgjørelse", max_length=20, choices=Decision.choices)
+    decision = models.CharField(
+        "avgjørelse", max_length=20, choices=Decision.choices
+    )
     decided_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         verbose_name="avgjort av",
@@ -301,7 +335,9 @@ class AppliedMetadataChange(CanonicalModel):
         related_name="applied_changes",
     )
     entity_type = models.CharField(
-        "objekttype", max_length=40, choices=MetadataAssertion.EntityType.choices
+        "objekttype",
+        max_length=40,
+        choices=MetadataAssertion.EntityType.choices,
     )
     entity_uuid = models.UUIDField("objektets UUID", db_index=True)
     field_name = models.CharField("feltnavn", max_length=100)
@@ -330,7 +366,9 @@ class AppliedMetadataChange(CanonicalModel):
     def clean(self):
         super().clean()
         if not self._state.adding:
-            raise ValidationError("Loggen over anvendte kildeverdier kan ikke endres.")
+            raise ValidationError(
+                "Loggen over anvendte kildeverdier kan ikke endres."
+            )
         if self.assertion_id and (
             self.entity_type != self.assertion.entity_type
             or self.entity_uuid != self.assertion.entity_uuid

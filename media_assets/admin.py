@@ -4,7 +4,13 @@ from rights_core.admin import CanonicalAdmin
 
 from .models import FileAsset, FileChecksum, FileLocation
 
-from .models import FileDerivation, MediaAssetEvent, RadioFlacGeneration, RecordingMediaSelection
+from .models import (
+    FileDerivation,
+    MediaAssetEvent,
+    RadioFlacGeneration,
+    RecordingMediaSelection,
+)
+
 
 class FileLocationInline(admin.TabularInline):
     model = FileLocation
@@ -91,6 +97,8 @@ class FileChecksumAdmin(CanonicalAdmin):
     search_fields = ("asset__filename", "sha256")
     autocomplete_fields = ("asset",)
     readonly_fields = ("asset", "sha256", "reason", "observed_at")
+
+
 @admin.register(RecordingMediaSelection)
 class RecordingMediaSelectionAdmin(CanonicalAdmin):
     list_display = (
@@ -107,6 +115,7 @@ class RecordingMediaSelectionAdmin(CanonicalAdmin):
         "current_radio_by",
     )
 
+
 @admin.register(FileDerivation)
 class FileDerivationAdmin(CanonicalAdmin):
     list_display = (
@@ -116,6 +125,7 @@ class FileDerivationAdmin(CanonicalAdmin):
         "created_at",
     )
     autocomplete_fields = ("source_asset", "derived_asset", "created_by")
+
 
 @admin.register(RadioFlacGeneration)
 class RadioFlacGenerationAdmin(CanonicalAdmin):
@@ -135,6 +145,7 @@ class RadioFlacGenerationAdmin(CanonicalAdmin):
         "created_by",
         "activated_by",
     )
+
 
 @admin.register(MediaAssetEvent)
 class MediaAssetEventAdmin(CanonicalAdmin):

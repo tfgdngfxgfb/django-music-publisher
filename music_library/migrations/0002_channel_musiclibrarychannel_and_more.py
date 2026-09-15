@@ -45,7 +45,9 @@ def migrate_radio_fields(apps, schema_editor):
 
     for entry in Entry.objects.all().iterator():
         if entry.channel:
-            channel = Channel.objects.filter(name__iexact=entry.channel).first()
+            channel = Channel.objects.filter(
+                name__iexact=entry.channel
+            ).first()
             if channel is None:
                 channel = Channel.objects.create(
                     id=_uuid("channel", entry.channel.casefold()),
@@ -55,26 +57,31 @@ def migrate_radio_fields(apps, schema_editor):
             ChannelLink.objects.get_or_create(
                 library_entry_id=entry.pk,
                 channel_id=channel.pk,
-                defaults={"id": _uuid("channel-link", f"{entry.pk}:{channel.pk}")},
+                defaults={
+                    "id": _uuid("channel-link", f"{entry.pk}:{channel.pk}")
+                },
             )
         if entry.target:
             target_name = TARGET_NAMES.get(entry.target, entry.target)
             target, _ = Target.objects.get_or_create(
                 code=_code(entry.target),
-                defaults={"id": _uuid("target", entry.target), "name": target_name},
+                defaults={
+                    "id": _uuid("target", entry.target),
+                    "name": target_name,
+                },
             )
             TargetLink.objects.get_or_create(
                 library_entry_id=entry.pk,
                 target_audience_id=target.pk,
-                defaults={"id": _uuid("target-link", f"{entry.pk}:{target.pk}")},
+                defaults={
+                    "id": _uuid("target-link", f"{entry.pk}:{target.pk}")
+                },
             )
         if entry.rating is not None:
             if entry.energy is None:
                 entry.energy = entry.rating
             elif entry.energy != entry.rating:
-                audit_note = (
-                    f"Historisk fase-2-rating før Energy-migrasjon: {entry.rating}."
-                )
+                audit_note = f"Historisk fase-2-rating før Energy-migrasjon: {entry.rating}."
                 entry.notes = f"{entry.notes.rstrip()}\n{audit_note}".strip()
             entry.save(update_fields=("energy", "notes"))
 
@@ -82,7 +89,11 @@ def migrate_radio_fields(apps, schema_editor):
 def reverse_radio_fields(apps, schema_editor):
     Entry = apps.get_model("music_library", "MusicLibraryEntry")
     for entry in Entry.objects.all().iterator():
-        channel = entry.channels.order_by("name").values_list("name", flat=True).first()
+        channel = (
+            entry.channels.order_by("name")
+            .values_list("name", flat=True)
+            .first()
+        )
         target = (
             entry.target_audiences.order_by("code")
             .values_list("code", flat=True)
@@ -116,11 +127,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "created_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="opprettet"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="opprettet"
+                    ),
                 ),
                 (
                     "updated_at",
-                    models.DateTimeField(auto_now=True, verbose_name="sist endret"),
+                    models.DateTimeField(
+                        auto_now=True, verbose_name="sist endret"
+                    ),
                 ),
                 (
                     "revision",
@@ -144,9 +159,14 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "name",
-                    models.CharField(max_length=100, unique=True, verbose_name="navn"),
+                    models.CharField(
+                        max_length=100, unique=True, verbose_name="navn"
+                    ),
                 ),
-                ("is_active", models.BooleanField(default=True, verbose_name="aktiv")),
+                (
+                    "is_active",
+                    models.BooleanField(default=True, verbose_name="aktiv"),
+                ),
             ],
             options={
                 "verbose_name": "kanal",
@@ -169,11 +189,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "created_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="opprettet"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="opprettet"
+                    ),
                 ),
                 (
                     "updated_at",
-                    models.DateTimeField(auto_now=True, verbose_name="sist endret"),
+                    models.DateTimeField(
+                        auto_now=True, verbose_name="sist endret"
+                    ),
                 ),
                 (
                     "revision",
@@ -202,11 +226,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "created_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="opprettet"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="opprettet"
+                    ),
                 ),
                 (
                     "updated_at",
-                    models.DateTimeField(auto_now=True, verbose_name="sist endret"),
+                    models.DateTimeField(
+                        auto_now=True, verbose_name="sist endret"
+                    ),
                 ),
                 (
                     "revision",
@@ -235,11 +263,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "created_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="opprettet"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="opprettet"
+                    ),
                 ),
                 (
                     "updated_at",
-                    models.DateTimeField(auto_now=True, verbose_name="sist endret"),
+                    models.DateTimeField(
+                        auto_now=True, verbose_name="sist endret"
+                    ),
                 ),
                 (
                     "revision",
@@ -263,9 +295,14 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "name",
-                    models.CharField(max_length=100, unique=True, verbose_name="navn"),
+                    models.CharField(
+                        max_length=100, unique=True, verbose_name="navn"
+                    ),
                 ),
-                ("is_active", models.BooleanField(default=True, verbose_name="aktiv")),
+                (
+                    "is_active",
+                    models.BooleanField(default=True, verbose_name="aktiv"),
+                ),
             ],
             options={
                 "verbose_name": "målgruppe",
@@ -344,7 +381,8 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="musiclibrarychannel",
             constraint=models.UniqueConstraint(
-                fields=("library_entry", "channel"), name="library_unique_channel"
+                fields=("library_entry", "channel"),
+                name="library_unique_channel",
             ),
         ),
         migrations.AddConstraint(

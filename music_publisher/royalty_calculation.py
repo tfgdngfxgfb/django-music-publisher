@@ -131,7 +131,9 @@ class RoyaltyCalculationForm(forms.Form):
                 self.fields["right_type_column"].choices = list(
                     self.fields["right_type_column"].choices
                 )
-                self.fields["right_type_column"].choices.append((str(i), field))
+                self.fields["right_type_column"].choices.append(
+                    (str(i), field)
+                )
                 self.fields["amount_column"].choices.append((str(i), field))
             valid = super().is_valid()
         except Exception:  # to match user stupidity
@@ -232,8 +234,12 @@ class RoyaltyCalculation(object):
             qs = qs.filter(work__recordings__isrc__in=work_ids)
             qs = qs.extra(select={"query_id": "isrc"})
         else:
-            qs = qs.filter(work__workacknowledgement__society_code=self.work_id_source)
-            qs = qs.filter(work__workacknowledgement__remote_work_id__in=work_ids)
+            qs = qs.filter(
+                work__workacknowledgement__society_code=self.work_id_source
+            )
+            qs = qs.filter(
+                work__workacknowledgement__remote_work_id__in=work_ids
+            )
             qs = qs.extra(
                 select={
                     "query_id": "music_publisher_workacknowledgement.remote_work_id"
@@ -274,7 +280,9 @@ class RoyaltyCalculation(object):
                     writer.last_name, writer.first_name, writer.ipi_name or ""
                 )
             else:
-                name = "{} [{}]".format(writer.last_name, writer.ipi_name or "")
+                name = "{} [{}]".format(
+                    writer.last_name, writer.ipi_name or ""
+                )
 
             self.writers[writer.id] = {
                 "name": name,
@@ -360,7 +368,9 @@ class RoyaltyCalculation(object):
 
             if self.algo == "fee":
                 out_row.append("{0:.4f}".format(relative_share))
-                share = (relative_share / controlled).quantize(Decimal(".000001"))
+                share = (relative_share / controlled).quantize(
+                    Decimal(".000001")
+                )
                 if amount is not None:
                     amount_before_fee = amount * share
                 else:

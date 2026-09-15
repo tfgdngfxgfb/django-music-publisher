@@ -9,7 +9,11 @@ from catalogue.models import Recording
 from media_assets.models import FileAsset
 from parties.models import Party
 from provenance.models import SourceRecord
-from rights_core.models import CanonicalModel, VerificationStatus, validate_not_blank
+from rights_core.models import (
+    CanonicalModel,
+    VerificationStatus,
+    validate_not_blank,
+)
 
 from .help_content import RIGHTS_HELP
 
@@ -34,7 +38,9 @@ class Territory(CanonicalModel):
         self.code = self.code.strip().upper()
         territory = IndustryTerritory.get(self.code)
         if not territory or not territory.is_country or len(self.code) != 2:
-            raise ValidationError({"code": "Bruk en gyldig ISO alfa-2-landkode."})
+            raise ValidationError(
+                {"code": "Bruk en gyldig ISO alfa-2-landkode."}
+            )
         super().clean_fields(exclude=exclude)
 
     def __str__(self):
@@ -55,11 +61,15 @@ class Agreement(CanonicalModel):
         EXPIRED = "expired", "Utløpt"
         TERMINATED = "terminated", "Avsluttet"
 
-    title = models.CharField("tittel", max_length=500, validators=[validate_not_blank])
+    title = models.CharField(
+        "tittel", max_length=500, validators=[validate_not_blank]
+    )
     internal_reference = models.CharField(
         "intern referanse", max_length=100, blank=True
     )
-    agreement_type = models.CharField("avtaletype", max_length=30, choices=Type.choices)
+    agreement_type = models.CharField(
+        "avtaletype", max_length=30, choices=Type.choices
+    )
     effective_date = models.DateField("virkningsdato", null=True, blank=True)
     expiry_date = models.DateField("utløpsdato", null=True, blank=True)
     status = models.CharField(
@@ -70,7 +80,9 @@ class Agreement(CanonicalModel):
         Party, through="AgreementParty", related_name="rights_agreements"
     )
     documents = models.ManyToManyField(
-        FileAsset, through="AgreementDocument", related_name="rights_agreements"
+        FileAsset,
+        through="AgreementDocument",
+        related_name="rights_agreements",
     )
 
     class Meta:
@@ -174,7 +186,10 @@ class AgreementDocument(CanonicalModel):
 
     def clean(self):
         super().clean()
-        if self.file_asset_id and self.file_asset.role != FileAsset.Role.DOCUMENT:
+        if (
+            self.file_asset_id
+            and self.file_asset.role != FileAsset.Role.DOCUMENT
+        ):
             raise ValidationError(
                 {
                     "file_asset": "Avtalegrunnlag må være registrert med filrollen Dokument."
@@ -227,7 +242,11 @@ class RightsClaim(CanonicalModel):
         blank=True,
     )
     share = models.DecimalField(
-        "andel i prosent", max_digits=5, decimal_places=2, null=True, blank=True
+        "andel i prosent",
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
     )
     territory_mode = models.CharField(
         "territorieomfang",
@@ -236,7 +255,10 @@ class RightsClaim(CanonicalModel):
         default=TerritoryMode.WORLD,
     )
     territories = models.ManyToManyField(
-        Territory, through="ClaimTerritory", related_name="rights_claims", blank=True
+        Territory,
+        through="ClaimTerritory",
+        related_name="rights_claims",
+        blank=True,
     )
     valid_from = models.DateField("gyldig fra", null=True, blank=True)
     valid_until = models.DateField("gyldig til", null=True, blank=True)
@@ -291,10 +313,12 @@ class RightsClaim(CanonicalModel):
                 name="rights_claim_summary_idx",
             ),
             models.Index(
-                fields=("rights_holder", "right_type"), name="rights_claim_holder_idx"
+                fields=("rights_holder", "right_type"),
+                name="rights_claim_holder_idx",
             ),
             models.Index(
-                fields=("valid_from", "valid_until"), name="rights_claim_period_idx"
+                fields=("valid_from", "valid_until"),
+                name="rights_claim_period_idx",
             ),
         ]
         constraints = [
@@ -313,7 +337,11 @@ class RightsClaim(CanonicalModel):
 
     def clean(self):
         super().clean()
-        if self.valid_from and self.valid_until and self.valid_until < self.valid_from:
+        if (
+            self.valid_from
+            and self.valid_until
+            and self.valid_until < self.valid_from
+        ):
             raise ValidationError(
                 {"valid_until": "Sluttdato kan ikke være før startdato."}
             )
@@ -347,8 +375,10 @@ class RightsClaim(CanonicalModel):
                 )
                 .first()
             )
-            if original and original["status"] != self.status and not getattr(
-                self, "_allow_status_transition", False
+            if (
+                original
+                and original["status"] != self.status
+                and not getattr(self, "_allow_status_transition", False)
             ):
                 raise ValidationError(
                     {
@@ -371,7 +401,10 @@ class RightsClaim(CanonicalModel):
             )
             if (
                 original
-                and any(original[field] != getattr(self, field) for field in protected_fields)
+                and any(
+                    original[field] != getattr(self, field)
+                    for field in protected_fields
+                )
                 and not getattr(self, "_allow_claim_update", False)
             ):
                 raise ValidationError(
@@ -382,9 +415,12 @@ class RightsClaim(CanonicalModel):
     def territory_display(self):
         if self.territory_mode == self.TerritoryMode.WORLD:
             return "Hele verden"
-        cached = getattr(self, "_prefetched_objects_cache", {}).get("territories")
+        cached = getattr(self, "_prefetched_objects_cache", {}).get(
+            "territories"
+        )
         names = ", ".join(
-            territory.name_nb for territory in (cached or self.territories.all())
+            territory.name_nb
+            for territory in (cached or self.territories.all())
         )
         prefix = (
             "Bare "
@@ -394,9 +430,7 @@ class RightsClaim(CanonicalModel):
         return prefix + names
 
     def __str__(self):
-        return (
-            f"{self.get_right_type_display()}: {self.rights_holder} — {self.recording}"
-        )
+        return f"{self.get_right_type_display()}: {self.rights_holder} — {self.recording}"
 
 
 class ClaimTerritory(CanonicalModel):
@@ -418,7 +452,8 @@ class ClaimTerritory(CanonicalModel):
         verbose_name_plural = "kravterritorier"
         constraints = [
             models.UniqueConstraint(
-                fields=("claim", "territory"), name="rights_claim_unique_territory"
+                fields=("claim", "territory"),
+                name="rights_claim_unique_territory",
             )
         ]
 
@@ -429,7 +464,9 @@ class ClaimTerritory(CanonicalModel):
             and self.claim.territory_mode == RightsClaim.TerritoryMode.WORLD
         ):
             raise ValidationError(
-                {"claim": "Et verdensomspennende krav skal ikke ha territorieliste."}
+                {
+                    "claim": "Et verdensomspennende krav skal ikke ha territorieliste."
+                }
             )
 
 
@@ -447,7 +484,9 @@ class RightsDecision(CanonicalModel):
         related_name="decisions",
         verbose_name="rettighetskrav",
     )
-    decision = models.CharField("beslutning", max_length=20, choices=Decision.choices)
+    decision = models.CharField(
+        "beslutning", max_length=20, choices=Decision.choices
+    )
     decided_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,

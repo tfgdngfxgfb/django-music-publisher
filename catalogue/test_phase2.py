@@ -31,10 +31,18 @@ class ReleaseCatalogueTests(TestCase):
         lp = Release.objects.create(title="LP", release_type=Release.Type.LP)
         cd = Release.objects.create(title="CD", release_type=Release.Type.CD)
         a = ReleaseTrack.objects.create(
-            release=lp, recording=recording, side="A", track_number=1, sequence_number=1
+            release=lp,
+            recording=recording,
+            side="A",
+            track_number=1,
+            sequence_number=1,
         )
         b = ReleaseTrack.objects.create(
-            release=lp, recording=recording, side="B", track_number=2, sequence_number=2
+            release=lp,
+            recording=recording,
+            side="B",
+            track_number=2,
+            sequence_number=2,
         )
         disc = ReleaseTrack.objects.create(
             release=cd,
@@ -49,7 +57,9 @@ class ReleaseCatalogueTests(TestCase):
 
     def test_new_recording_and_track_are_atomic(self):
         release = Release.objects.create(title="Testutgivelse")
-        with patch.object(ReleaseTrack.objects, "create", side_effect=IntegrityError):
+        with patch.object(
+            ReleaseTrack.objects, "create", side_effect=IntegrityError
+        ):
             with self.assertRaises(IntegrityError):
                 create_release_track(
                     release=release,
@@ -57,7 +67,9 @@ class ReleaseCatalogueTests(TestCase):
                     new_recording_title="Skal rulles tilbake",
                     new_isrc="NO-ABC-26-12345",
                 )
-        self.assertFalse(Recording.objects.filter(title="Skal rulles tilbake").exists())
+        self.assertFalse(
+            Recording.objects.filter(title="Skal rulles tilbake").exists()
+        )
 
     def test_existing_recording_is_reused(self):
         release = Release.objects.create(title="Testutgivelse")
@@ -69,9 +81,13 @@ class ReleaseCatalogueTests(TestCase):
         self.assertEqual(Recording.objects.count(), 1)
 
     def test_possible_duplicate_is_never_automatically_merged(self):
-        existing = Recording.objects.create(title="Nordlys", duration_ms=180000)
+        existing = Recording.objects.create(
+            title="Nordlys", duration_ms=180000
+        )
         release = Release.objects.create(title="Testutgivelse")
-        matches = find_recording_candidates(title="nordlys", duration_ms=181000)
+        matches = find_recording_candidates(
+            title="nordlys", duration_ms=181000
+        )
         self.assertEqual(matches[0].recording, existing)
         with self.assertRaisesMessage(ValueError, "Mulig eksisterende"):
             create_release_track(
@@ -89,11 +105,19 @@ class ReleaseCatalogueTests(TestCase):
             force_create=True,
         )
         self.assertNotEqual(track.recording_id, existing.pk)
-        self.assertEqual(DuplicateCandidate.objects.filter(status="open").count(), 1)
+        self.assertEqual(
+            DuplicateCandidate.objects.filter(status="open").count(), 1
+        )
 
-    def test_artist_strengthens_candidate_and_is_credited_on_new_recording(self):
-        party = Party.objects.create(name="Kari Nordmann", kind=Party.Kind.PERSON)
-        artist = ArtistIdentity.objects.create(party=party, display_name="KARI N")
+    def test_artist_strengthens_candidate_and_is_credited_on_new_recording(
+        self,
+    ):
+        party = Party.objects.create(
+            name="Kari Nordmann", kind=Party.Kind.PERSON
+        )
+        artist = ArtistIdentity.objects.create(
+            party=party, display_name="KARI N"
+        )
         release = Release.objects.create(title="Single")
         track = create_release_track(
             release=release,
@@ -101,7 +125,9 @@ class ReleaseCatalogueTests(TestCase):
             new_recording_title="Nordlys",
             artist_identity=artist,
         )
-        self.assertEqual(track.recording.contributions.get().artist_identity, artist)
+        self.assertEqual(
+            track.recording.contributions.get().artist_identity, artist
+        )
 
     def test_isrc_and_release_barcodes_are_normalized_and_unique(self):
         recording = Recording.objects.create(title="Spor")
@@ -124,7 +150,9 @@ class ReleaseCatalogueTests(TestCase):
 
     def test_conflicting_isrc_cannot_be_assigned_to_forced_duplicate(self):
         original = Recording.objects.create(title="Original")
-        ExternalIdentifier.objects.create(recording=original, value="NOABC2600001")
+        ExternalIdentifier.objects.create(
+            recording=original, value="NOABC2600001"
+        )
         release = Release.objects.create(title="Utgivelse")
         with self.assertRaisesMessage(ValueError, "ISRC finnes allerede"):
             create_release_track(
@@ -174,12 +202,14 @@ class OperationalCatalogueAdminTests(TestCase):
             },
         )
         self.assertRedirects(
-            response, reverse("admin:catalogue_release_change", args=(release.pk,))
+            response,
+            reverse("admin:catalogue_release_change", args=(release.pk,)),
         )
         recording = Recording.objects.get(title="Blåbær 東京")
         self.assertEqual(release.tracks.get().recording, recording)
         response = self.client.get(
-            reverse("admin:catalogue_recording_changelist"), {"q": "NOABC2600001"}
+            reverse("admin:catalogue_recording_changelist"),
+            {"q": "NOABC2600001"},
         )
         self.assertContains(response, "Blåbær 東京")
 

@@ -10,7 +10,10 @@ from django.urls import reverse
 
 from catalogue.models import Recording, Release, ReleaseTrack
 from media_assets.models import FileAsset, FileLocation
-from media_assets.playback import RadioPlaybackStatus, resolve_current_radio_asset
+from media_assets.playback import (
+    RadioPlaybackStatus,
+    resolve_current_radio_asset,
+)
 from music_library.models import MusicLibraryEntry
 
 
@@ -43,7 +46,11 @@ class RadioPlaybackTests(TestCase):
         )
         self.user.user_permissions.add(
             *Permission.objects.filter(
-                content_type__app_label__in={"catalogue", "media_assets", "music_library"},
+                content_type__app_label__in={
+                    "catalogue",
+                    "media_assets",
+                    "music_library",
+                },
                 codename__in={
                     "view_recording",
                     "view_release",
@@ -109,7 +116,9 @@ class RadioPlaybackTests(TestCase):
     def test_missing_physical_file_is_unavailable_when_play_is_attempted(self):
         self.path.unlink()
         with override_settings(P7_MUSIC_ROOT=self.root, P7_NAS_ROOT=self.root):
-            result = resolve_current_radio_asset(self.recording, verify_file=True)
+            result = resolve_current_radio_asset(
+                self.recording, verify_file=True
+            )
         self.assertEqual(result.status, RadioPlaybackStatus.FILE_UNAVAILABLE)
         response = self._get()
         self.assertEqual(response.status_code, 404)
@@ -119,7 +128,9 @@ class RadioPlaybackTests(TestCase):
             status_code=404,
         )
 
-    def test_full_get_streams_inline_without_loading_response_body_eagerly(self):
+    def test_full_get_streams_inline_without_loading_response_body_eagerly(
+        self,
+    ):
         response = self._get()
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.streaming)
@@ -132,20 +143,31 @@ class RadioPlaybackTests(TestCase):
     def test_range_get_returns_correct_partial_content(self):
         response = self._get(HTTP_RANGE="bytes=4-19")
         self.assertEqual(response.status_code, 206)
-        self.assertEqual(response["Content-Range"], f"bytes 4-19/{len(self.payload)}")
+        self.assertEqual(
+            response["Content-Range"], f"bytes 4-19/{len(self.payload)}"
+        )
         self.assertEqual(response["Content-Length"], "16")
-        self.assertEqual(b"".join(response.streaming_content), self.payload[4:20])
+        self.assertEqual(
+            b"".join(response.streaming_content), self.payload[4:20]
+        )
 
         suffix = self._get(HTTP_RANGE="bytes=-8")
         self.assertEqual(suffix.status_code, 206)
         self.assertEqual(b"".join(suffix.streaming_content), self.payload[-8:])
 
     def test_invalid_or_multiple_range_is_rejected(self):
-        for value in ("bytes=99999-", "bytes=20-10", "bytes=0-1,4-5", "items=0-2"):
+        for value in (
+            "bytes=99999-",
+            "bytes=20-10",
+            "bytes=0-1,4-5",
+            "items=0-2",
+        ):
             with self.subTest(value=value):
                 response = self._get(HTTP_RANGE=value)
                 self.assertEqual(response.status_code, 416)
-                self.assertEqual(response["Content-Range"], f"bytes */{len(self.payload)}")
+                self.assertEqual(
+                    response["Content-Range"], f"bytes */{len(self.payload)}"
+                )
 
     def test_path_traversal_in_persisted_location_cannot_escape_root(self):
         # Simulate legacy/corrupt persisted data; normal model writes reject this.
@@ -164,7 +186,9 @@ class RadioPlaybackTests(TestCase):
         )
         with override_settings(P7_MUSIC_ROOT=self.root, P7_NAS_ROOT=self.root):
             self.assertEqual(self.client.get(unknown).status_code, 404)
-        denied = get_user_model().objects.create_user(username="denied", password="x")
+        denied = get_user_model().objects.create_user(
+            username="denied", password="x"
+        )
         self.client.force_login(denied)
         with override_settings(P7_MUSIC_ROOT=self.root, P7_NAS_ROOT=self.root):
             self.assertEqual(self.client.get(self.url).status_code, 403)
@@ -176,11 +200,15 @@ class RadioPlaybackTests(TestCase):
         asset_updated = self.asset.updated_at
         location_updated = self.location.updated_at
         response = self._get(HTTP_RANGE="bytes=0-31")
-        self.assertEqual(b"".join(response.streaming_content), self.payload[:32])
+        self.assertEqual(
+            b"".join(response.streaming_content), self.payload[:32]
+        )
         self.recording.refresh_from_db()
         self.asset.refresh_from_db()
         self.location.refresh_from_db()
-        self.assertEqual(hashlib.sha256(self.path.read_bytes()).hexdigest(), before_hash)
+        self.assertEqual(
+            hashlib.sha256(self.path.read_bytes()).hexdigest(), before_hash
+        )
         self.assertEqual(self.path.stat().st_mtime_ns, before_mtime)
         self.assertEqual(self.recording.updated_at, recording_updated)
         self.assertEqual(self.asset.updated_at, asset_updated)
@@ -197,7 +225,8 @@ class RadioPlaybackTests(TestCase):
             reverse("gui_v2:recording_detail", args=[self.recording.pk])
         )
         release_page = self.client.get(
-            reverse("gui_v2:release_detail", args=[release.pk]), {"track": track.pk}
+            reverse("gui_v2:release_detail", args=[release.pk]),
+            {"track": track.pk},
         )
         for response in (library, overview, release_page):
             self.assertEqual(response.status_code, 200)

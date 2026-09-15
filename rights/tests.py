@@ -38,15 +38,21 @@ from rights.summaries import (
 class RightsDomainTests(TestCase):
     def setUp(self):
         self.recording = Recording.objects.create(title="Testmaster")
-        self.owner_a = Party.objects.create(name="Eier A", kind=Party.Kind.ORGANIZATION)
-        self.owner_b = Party.objects.create(name="Eier B", kind=Party.Kind.PERSON)
+        self.owner_a = Party.objects.create(
+            name="Eier A", kind=Party.Kind.ORGANIZATION
+        )
+        self.owner_b = Party.objects.create(
+            name="Eier B", kind=Party.Kind.PERSON
+        )
         self.local_organization = Party.objects.create(
             name="Lokal organisasjon", kind=Party.Kind.ORGANIZATION
         )
         RightsConfiguration.objects.create(
             local_organization=self.local_organization
         )
-        self.user = get_user_model().objects.create_user(username="rights-reviewer")
+        self.user = get_user_model().objects.create_user(
+            username="rights-reviewer"
+        )
 
     def claim(self, **overrides):
         values = {
@@ -68,13 +74,17 @@ class RightsDomainTests(TestCase):
 
     def test_share_range_and_incomplete_dates_are_validated(self):
         self.claim(share=Decimal("0"), valid_from=None, valid_until=None)
-        self.claim(share=Decimal("100"), valid_from=date(2020, 1, 1), valid_until=None)
+        self.claim(
+            share=Decimal("100"), valid_from=date(2020, 1, 1), valid_until=None
+        )
         with self.assertRaises(ValidationError):
             self.claim(share=Decimal("100.01"))
         with self.assertRaises(ValidationError):
             self.claim(share=Decimal("-0.01"))
         with self.assertRaises(ValidationError):
-            self.claim(valid_from=date(2025, 1, 1), valid_until=date(2024, 1, 1))
+            self.claim(
+                valid_from=date(2025, 1, 1), valid_until=date(2024, 1, 1)
+            )
 
     def test_right_types_remain_independent(self):
         for right_type in RightsClaim.RightType.values:
@@ -121,7 +131,10 @@ class RightsDomainTests(TestCase):
         claim = self.claim(source_record=source)
         self.assertEqual(claim.status, VerificationStatus.UNVERIFIED)
         decide_rights_claim(
-            claim, VerificationStatus.CONFIRMED, user=self.user, note="Dokumentert"
+            claim,
+            VerificationStatus.CONFIRMED,
+            user=self.user,
+            note="Dokumentert",
         )
         claim.refresh_from_db()
         self.assertEqual(claim.status, VerificationStatus.CONFIRMED)
@@ -145,7 +158,9 @@ class RightsDomainTests(TestCase):
 
     def test_rejection_and_superseding_preserve_claims(self):
         rejected = self.claim()
-        decide_rights_claim(rejected, VerificationStatus.REJECTED, user=self.user)
+        decide_rights_claim(
+            rejected, VerificationStatus.REJECTED, user=self.user
+        )
         previous = self.claim(share=Decimal("40"))
         replacement = supersede_rights_claim(
             previous,
@@ -165,9 +180,13 @@ class RightsDomainTests(TestCase):
     def test_confirmed_overlapping_exact_scope_cannot_exceed_100(self):
         first = self.claim(share=Decimal("60"))
         second = self.claim(rights_holder=self.owner_b, share=Decimal("50"))
-        decide_rights_claim(first, VerificationStatus.CONFIRMED, user=self.user)
+        decide_rights_claim(
+            first, VerificationStatus.CONFIRMED, user=self.user
+        )
         with self.assertRaises(ValidationError):
-            decide_rights_claim(second, VerificationStatus.CONFIRMED, user=self.user)
+            decide_rights_claim(
+                second, VerificationStatus.CONFIRMED, user=self.user
+            )
         second.refresh_from_db()
         self.assertEqual(second.status, VerificationStatus.UNVERIFIED)
         self.assertFalse(second.decisions.exists())
@@ -214,7 +233,9 @@ class RightsDomainTests(TestCase):
             ).exists()
         )
         claim = self.claim()
-        decide_rights_claim(claim, VerificationStatus.CONFIRMED, user=self.user)
+        decide_rights_claim(
+            claim, VerificationStatus.CONFIRMED, user=self.user
+        )
         self.assertTrue(
             managed.recording.rights_claims.filter(
                 status=VerificationStatus.CONFIRMED
@@ -228,7 +249,9 @@ class RightsDomainTests(TestCase):
             claim.save()
 
     def test_evidence_strength_is_separate_and_immutable(self):
-        claim = self.claim(evidence_strength=RightsClaim.EvidenceStrength.STRONG)
+        claim = self.claim(
+            evidence_strength=RightsClaim.EvidenceStrength.STRONG
+        )
         self.assertEqual(claim.status, VerificationStatus.UNVERIFIED)
         self.assertEqual(
             claim.evidence_strength, RightsClaim.EvidenceStrength.STRONG
@@ -242,7 +265,9 @@ class RightsDomainTests(TestCase):
             classify_ownership([], self.owner_a).category,
             OwnershipCategory.UNRESOLVED,
         )
-        unverified = self.claim(rights_holder=self.owner_b, share=Decimal("100"))
+        unverified = self.claim(
+            rights_holder=self.owner_b, share=Decimal("100")
+        )
         self.assertEqual(
             classify_ownership([unverified], self.owner_a).category,
             OwnershipCategory.UNRESOLVED,
@@ -267,7 +292,9 @@ class RightsDomainTests(TestCase):
 
         partial_recording = Recording.objects.create(title="Deleid")
         partial = self.claim(recording=partial_recording, share=Decimal("40"))
-        decide_rights_claim(partial, VerificationStatus.CONFIRMED, user=self.user)
+        decide_rights_claim(
+            partial, VerificationStatus.CONFIRMED, user=self.user
+        )
         partial.refresh_from_db()
         self.assertEqual(
             classify_ownership([partial], self.owner_a).category,
@@ -276,15 +303,21 @@ class RightsDomainTests(TestCase):
 
         unknown_recording = Recording.objects.create(title="Ukjent andel")
         unknown = self.claim(recording=unknown_recording, share=None)
-        decide_rights_claim(unknown, VerificationStatus.CONFIRMED, user=self.user)
+        decide_rights_claim(
+            unknown, VerificationStatus.CONFIRMED, user=self.user
+        )
         unknown.refresh_from_db()
         summary = classify_ownership([unknown], self.owner_a)
         self.assertEqual(summary.category, OwnershipCategory.PARTIAL)
         self.assertTrue(summary.has_unknown_local_share)
 
-    def test_disputed_claim_wins_and_other_right_types_do_not_imply_ownership(self):
+    def test_disputed_claim_wins_and_other_right_types_do_not_imply_ownership(
+        self,
+    ):
         disputed = self.claim(rights_holder=self.owner_b)
-        decide_rights_claim(disputed, VerificationStatus.DISPUTED, user=self.user)
+        decide_rights_claim(
+            disputed, VerificationStatus.DISPUTED, user=self.user
+        )
         disputed.refresh_from_db()
         self.assertEqual(
             classify_ownership([disputed], self.owner_a).category,
@@ -325,17 +358,23 @@ class RightsDomainTests(TestCase):
             title="Masterlisens", agreement_type=Agreement.Type.LICENSE
         )
         AgreementParty.objects.create(
-            agreement=agreement, party=self.owner_a, role=AgreementParty.Role.LICENSOR
+            agreement=agreement,
+            party=self.owner_a,
+            role=AgreementParty.Role.LICENSOR,
         )
         AgreementParty.objects.create(
-            agreement=agreement, party=self.owner_b, role=AgreementParty.Role.LICENSEE
+            agreement=agreement,
+            party=self.owner_b,
+            role=AgreementParty.Role.LICENSEE,
         )
         document = FileAsset.objects.create(
             filename="avtale.pdf",
             mime_type="application/pdf",
             role=FileAsset.Role.DOCUMENT,
         )
-        AgreementDocument.objects.create(agreement=agreement, file_asset=document)
+        AgreementDocument.objects.create(
+            agreement=agreement, file_asset=document
+        )
         claim = self.claim()
         link_claim_agreement(claim, agreement, user=self.user)
         claim.refresh_from_db()

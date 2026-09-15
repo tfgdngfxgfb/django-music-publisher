@@ -7,13 +7,20 @@ from django.db import models, transaction
 from catalogue.models import Recording
 from rights_core.models import VerificationStatus
 
-from .models import ClaimTerritory, RightsClaim, RightsConfiguration, RightsDecision
+from .models import (
+    ClaimTerritory,
+    RightsClaim,
+    RightsConfiguration,
+    RightsDecision,
+)
 
 
 def _validate_territory_scope(mode, territories):
     territories = tuple(territories)
     if mode == RightsClaim.TerritoryMode.WORLD and territories:
-        raise ValidationError("Hele verden kan ikke kombineres med en territorieliste.")
+        raise ValidationError(
+            "Hele verden kan ikke kombineres med en territorieliste."
+        )
     if mode != RightsClaim.TerritoryMode.WORLD and not territories:
         raise ValidationError("Velg minst ett territorium for dette omfanget.")
     return territories
@@ -26,7 +33,10 @@ def _territory_signature(claim):
 
 
 def validate_confirmed_ownership_total(claim):
-    if claim.right_type != RightsClaim.RightType.OWNERSHIP or claim.share is None:
+    if (
+        claim.right_type != RightsClaim.RightType.OWNERSHIP
+        or claim.share is None
+    ):
         return
     total = Decimal(claim.share)
     signature = _territory_signature(claim)
@@ -53,9 +63,12 @@ def validate_confirmed_ownership_total(claim):
 def create_rights_claim(*, territories=(), **values):
     values.pop("status", None)
     selected = _validate_territory_scope(
-        values.get("territory_mode", RightsClaim.TerritoryMode.WORLD), territories
+        values.get("territory_mode", RightsClaim.TerritoryMode.WORLD),
+        territories,
     )
-    claim = RightsClaim.objects.create(status=VerificationStatus.UNVERIFIED, **values)
+    claim = RightsClaim.objects.create(
+        status=VerificationStatus.UNVERIFIED, **values
+    )
     for territory in selected:
         ClaimTerritory.objects.create(claim=claim, territory=territory)
     claim.full_clean()
@@ -119,7 +132,9 @@ def decide_rights_claim(claim, decision, *, user, note=""):
 
 
 @transaction.atomic
-def supersede_rights_claim(previous, *, user, territories=(), note="", **values):
+def supersede_rights_claim(
+    previous, *, user, territories=(), note="", **values
+):
     previous = RightsClaim.objects.select_for_update().get(pk=previous.pk)
     values.update(
         recording=previous.recording,
@@ -146,9 +161,7 @@ def link_claim_agreement(claim, agreement, *, user, note=""):
     claim.agreement = agreement
     claim._allow_claim_update = True
     claim.save(update_fields=("agreement",))
-    history_note = (
-        f"Avtale endret fra {previous_agreement or 'ingen avtale'} til {agreement}."
-    )
+    history_note = f"Avtale endret fra {previous_agreement or 'ingen avtale'} til {agreement}."
     if note:
         history_note += f" {note}"
     RightsDecision.objects.create(
@@ -185,7 +198,9 @@ def create_release_rights_claims(
         )
     )
     if release_recording_ids != recording_ids:
-        raise ValidationError("Alle valgte innspillinger må tilhøre utgivelsen.")
+        raise ValidationError(
+            "Alle valgte innspillinger må tilhøre utgivelsen."
+        )
 
     configuration = RightsConfiguration.objects.select_related(
         "local_organization"

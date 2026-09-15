@@ -6,13 +6,25 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('flac_ingest', '0002_flacingestitem_review_note_and_more'),
+        ("flac_ingest", "0002_flacingestitem_review_note_and_more"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='flacingestitem',
-            name='action',
-            field=models.CharField(choices=[('new', 'Ny innspilling'), ('matched', 'Eksisterende treff'), ('updated', 'Endret fil'), ('unchanged', 'Uendret fil'), ('retry', 'Prøv igjen'), ('conflict', 'Må kontrolleres'), ('invalid', 'Kan ikke leses')], max_length=20, verbose_name='forslag'),
+            model_name="flacingestitem",
+            name="action",
+            field=models.CharField(
+                choices=[
+                    ("new", "Ny innspilling"),
+                    ("matched", "Eksisterende treff"),
+                    ("updated", "Endret fil"),
+                    ("unchanged", "Uendret fil"),
+                    ("retry", "Prøv igjen"),
+                    ("conflict", "Må kontrolleres"),
+                    ("invalid", "Kan ikke leses"),
+                ],
+                max_length=20,
+                verbose_name="forslag",
+            ),
         ),
     ]

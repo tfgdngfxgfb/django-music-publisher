@@ -48,7 +48,9 @@ class FlacIngestBatch(CanonicalModel):
         verbose_name = "FLAC-innlesing"
         verbose_name_plural = "FLAC-innlesinger"
         ordering = ("-created_at", "id")
-        permissions = (("apply_flacingestbatch", "Kan bruke FLAC-forhåndsvisning"),)
+        permissions = (
+            ("apply_flacingestbatch", "Kan bruke FLAC-forhåndsvisning"),
+        )
 
     def __str__(self):
         return f"{self.relative_root} – {self.created_at:%Y-%m-%d %H:%M}"
@@ -76,12 +78,18 @@ class FlacIngestItem(CanonicalModel):
     action = models.CharField("forslag", max_length=20, choices=Action.choices)
     match_method = models.CharField("treffgrunnlag", max_length=50, blank=True)
     raw_tags = models.JSONField("alle råtags", default=dict, blank=True)
-    parsed_metadata = models.JSONField("tolkede metadata", default=dict, blank=True)
+    parsed_metadata = models.JSONField(
+        "tolkede metadata", default=dict, blank=True
+    )
     technical_metadata = models.JSONField(
         "tekniske lydopplysninger", default=dict, blank=True
     )
-    file_size = models.PositiveBigIntegerField("filstørrelse", null=True, blank=True)
-    source_modified_at = models.DateTimeField("fil endret", null=True, blank=True)
+    file_size = models.PositiveBigIntegerField(
+        "filstørrelse", null=True, blank=True
+    )
+    source_modified_at = models.DateTimeField(
+        "fil endret", null=True, blank=True
+    )
     sha256 = models.CharField("SHA-256", max_length=64, blank=True)
     candidates = models.JSONField("mulige treff", default=list, blank=True)
     messages = models.JSONField("kontrollmeldinger", default=list, blank=True)
@@ -138,7 +146,8 @@ class FlacIngestItem(CanonicalModel):
         ordering = ("relative_path", "id")
         constraints = [
             models.UniqueConstraint(
-                fields=("batch", "relative_path"), name="flac_batch_unique_path"
+                fields=("batch", "relative_path"),
+                name="flac_batch_unique_path",
             )
         ]
 
@@ -171,9 +180,15 @@ class FlacSyncLog(CanonicalModel):
         related_name="sync_logs",
         verbose_name="radio-FLAC",
     )
-    result = models.CharField("resultat", max_length=20, choices=Result.choices)
-    written_tags = models.JSONField("skrevne katalogtags", default=dict, blank=True)
-    protected_tags = models.JSONField("bevarte radiotags", default=dict, blank=True)
+    result = models.CharField(
+        "resultat", max_length=20, choices=Result.choices
+    )
+    written_tags = models.JSONField(
+        "skrevne katalogtags", default=dict, blank=True
+    )
+    protected_tags = models.JSONField(
+        "bevarte radiotags", default=dict, blank=True
+    )
     error = models.TextField("feil", blank=True)
 
     class Meta:
@@ -197,7 +212,9 @@ class FlacMaintenanceJob(CanonicalModel):
         COMPLETED = "completed", "Fullført"
         FAILED = "failed", "Feilet"
 
-    kind = models.CharField("vedlikeholdstype", max_length=20, choices=Kind.choices)
+    kind = models.CharField(
+        "vedlikeholdstype", max_length=20, choices=Kind.choices
+    )
     status = models.CharField(
         "status", max_length=20, choices=Status.choices, default=Status.PREVIEW
     )
@@ -232,7 +249,10 @@ class FlacMaintenanceJob(CanonicalModel):
         verbose_name_plural = "vedlikehold av Musikkarkiv"
         ordering = ("-created_at", "id")
         permissions = (
-            ("preview_library_cleanup", "Kan se forhåndsvisning av opprydding"),
+            (
+                "preview_library_cleanup",
+                "Kan se forhåndsvisning av opprydding",
+            ),
             ("run_library_cleanup", "Kan utføre opprydding"),
             ("preview_library_rebuild", "Kan se forhåndsvisning av rebuild"),
             ("run_library_rebuild", "Kan starte rebuild"),

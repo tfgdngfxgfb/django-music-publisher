@@ -151,13 +151,17 @@ class RadioMetadataForm(forms.ModelForm):
         Channel.objects.filter(is_active=True),
         label="Kanaler",
         required=False,
-        widget=forms.CheckboxSelectMultiple(attrs={"class": "radio-choice-grid"}),
+        widget=forms.CheckboxSelectMultiple(
+            attrs={"class": "radio-choice-grid"}
+        ),
     )
     target_audiences = forms.ModelMultipleChoiceField(
         TargetAudience.objects.filter(is_active=True),
         label="Målgrupper",
         required=False,
-        widget=forms.CheckboxSelectMultiple(attrs={"class": "radio-choice-grid"}),
+        widget=forms.CheckboxSelectMultiple(
+            attrs={"class": "radio-choice-grid"}
+        ),
     )
 
     class Meta:
@@ -187,7 +191,9 @@ class RadioMetadataForm(forms.ModelForm):
         entry = self.instance
         MusicLibraryChannel.objects.filter(library_entry=entry).delete()
         for channel in self.cleaned_data["channels"]:
-            MusicLibraryChannel.objects.create(library_entry=entry, channel=channel)
+            MusicLibraryChannel.objects.create(
+                library_entry=entry, channel=channel
+            )
         MusicLibraryTargetAudience.objects.filter(library_entry=entry).delete()
         for target in self.cleaned_data["target_audiences"]:
             MusicLibraryTargetAudience.objects.create(
@@ -196,7 +202,9 @@ class RadioMetadataForm(forms.ModelForm):
 
 
 class FlacScanForm(forms.Form):
-    relative_root = forms.ChoiceField(label="Mappe i musikkarkivet", choices=())
+    relative_root = forms.ChoiceField(
+        label="Mappe i musikkarkivet", choices=()
+    )
     recursive = forms.BooleanField(
         label="Ta med undermapper", required=False, initial=True
     )
@@ -220,7 +228,9 @@ class FlacScanForm(forms.Form):
             choices.append((".", "Hele musikkarkivet"))
             choices.extend(
                 (path.name, path.name)
-                for path in sorted(root.iterdir(), key=lambda item: item.name.casefold())
+                for path in sorted(
+                    root.iterdir(), key=lambda item: item.name.casefold()
+                )
                 if path.is_dir()
             )
         except (ImproperlyConfigured, OSError):
@@ -239,7 +249,9 @@ class FlacScanForm(forms.Form):
 
 
 class LibraryMaintenanceScopeForm(forms.Form):
-    relative_root = forms.ChoiceField(label="Område i musikkarkivet", choices=())
+    relative_root = forms.ChoiceField(
+        label="Område i musikkarkivet", choices=()
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -249,7 +261,9 @@ class LibraryMaintenanceScopeForm(forms.Form):
             choices.append((".", "Hele musikkarkivet"))
             choices.extend(
                 (path.name, path.name)
-                for path in sorted(root.iterdir(), key=lambda item: item.name.casefold())
+                for path in sorted(
+                    root.iterdir(), key=lambda item: item.name.casefold()
+                )
                 if path.is_dir()
             )
         except (ImproperlyConfigured, OSError):
@@ -275,8 +289,12 @@ class FlacIngestReviewForm(forms.Form):
         required=False,
         help_text="Kan korrigeres eller tømmes. Råverdien fra filen bevares uansett.",
     )
-    genre = forms.CharField(label="Radiosjanger", max_length=100, required=False)
-    language = forms.CharField(label="Radiospråk", max_length=64, required=False)
+    genre = forms.CharField(
+        label="Radiosjanger", max_length=100, required=False
+    )
+    language = forms.CharField(
+        label="Radiospråk", max_length=64, required=False
+    )
     energy = forms.TypedChoiceField(
         label="Energy",
         required=False,
@@ -288,7 +306,9 @@ class FlacIngestReviewForm(forms.Form):
         ),
     )
     channels = forms.CharField(
-        label="Kanaler", required=False, help_text="Skill flere verdier med semikolon."
+        label="Kanaler",
+        required=False,
+        help_text="Skill flere verdier med semikolon.",
     )
     target_audiences = forms.CharField(
         label="Målgrupper",
@@ -321,7 +341,9 @@ class FlacIngestReviewForm(forms.Form):
         seen = set()
         if item.recording_id:
             value = f"recording:{item.recording_id}"
-            choices.insert(0, (value, f"Bruk foreslått: {item.recording.title}"))
+            choices.insert(
+                0, (value, f"Bruk foreslått: {item.recording.title}")
+            )
             seen.add(str(item.recording_id))
         for candidate in item.candidates:
             candidate_id = candidate.get("recording_uuid")
@@ -342,7 +364,9 @@ class FlacIngestReviewForm(forms.Form):
         self.initial.update(
             {
                 "resolution": (
-                    f"recording:{item.recording_id}" if item.recording_id else "new"
+                    f"recording:{item.recording_id}"
+                    if item.recording_id
+                    else "new"
                 ),
                 "title": parsed.get("title", ""),
                 "artists": "; ".join(parsed.get("artists", [])),
@@ -352,7 +376,9 @@ class FlacIngestReviewForm(forms.Form):
                 "language": parsed.get("language", ""),
                 "energy": energy,
                 "channels": "; ".join(parsed.get("channels", [])),
-                "target_audiences": "; ".join(parsed.get("target_audiences", [])),
+                "target_audiences": "; ".join(
+                    parsed.get("target_audiences", [])
+                ),
                 "gender": parsed.get("gender", ""),
                 "rotation_suitability": parsed.get("rotation_suitability", ""),
             }
@@ -373,7 +399,9 @@ class FlacIngestReviewForm(forms.Form):
     @staticmethod
     def _values(value):
         return [
-            part.strip() for part in value.replace("\n", ";").split(";") if part.strip()
+            part.strip()
+            for part in value.replace("\n", ";").split(";")
+            if part.strip()
         ]
 
     def interpreted_metadata(self):
@@ -384,7 +412,9 @@ class FlacIngestReviewForm(forms.Form):
             "genre": self.cleaned_data["genre"].strip(),
             "language": self.cleaned_data["language"],
             "channels": self._values(self.cleaned_data["channels"]),
-            "target_audiences": self._values(self.cleaned_data["target_audiences"]),
+            "target_audiences": self._values(
+                self.cleaned_data["target_audiences"]
+            ),
             "gender": self.cleaned_data["gender"],
             "rotation_suitability": self.cleaned_data["rotation_suitability"],
         }
@@ -462,7 +492,9 @@ class FileLocationForm(forms.ModelForm):
             "google_drive_id",
             "google_drive_url",
         )
-        widgets = {"ended_at": forms.DateTimeInput(attrs={"type": "datetime-local"})}
+        widgets = {
+            "ended_at": forms.DateTimeInput(attrs={"type": "datetime-local"})
+        }
 
 
 class LibraryMembershipForm(forms.Form):
@@ -504,9 +536,15 @@ class WorkbenchTrackCreationForm(TrackCreationForm):
         )
         self.fields["duration_ms"].widget = forms.HiddenInput()
         field_attributes = {
-            "disc_number": {"placeholder": "1", "data-track-field": "disc_number"},
+            "disc_number": {
+                "placeholder": "1",
+                "data-track-field": "disc_number",
+            },
             "side": {"placeholder": "A", "data-track-field": "side"},
-            "track_number": {"placeholder": "1", "data-track-field": "track_number"},
+            "track_number": {
+                "placeholder": "1",
+                "data-track-field": "track_number",
+            },
             "sequence_number": {
                 "placeholder": "Rekkefølge",
                 "data-track-field": "sequence_number",
@@ -601,7 +639,13 @@ class ReleaseIdentifierForm(forms.ModelForm):
 class ContributionForm(forms.ModelForm):
     class Meta:
         model = RecordingContribution
-        fields = ("party", "role", "artist_identity", "credited_as", "display_order")
+        fields = (
+            "party",
+            "role",
+            "artist_identity",
+            "credited_as",
+            "display_order",
+        )
 
 
 class AssertionActionForm(forms.Form):
@@ -616,14 +660,18 @@ class AssertionActionForm(forms.Form):
         ),
         widget=forms.HiddenInput,
     )
-    expected_revision = forms.IntegerField(widget=forms.HiddenInput, required=False)
+    expected_revision = forms.IntegerField(
+        widget=forms.HiddenInput, required=False
+    )
     correction = forms.CharField(
         label="Korrigert kildeverdi",
         required=False,
         widget=forms.Textarea(attrs={"rows": 2}),
     )
     note = forms.CharField(
-        label="Begrunnelse", required=False, widget=forms.Textarea(attrs={"rows": 2})
+        label="Begrunnelse",
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 2}),
     )
 
     def clean(self):
@@ -632,7 +680,9 @@ class AssertionActionForm(forms.Form):
             data.get("action") == "correct"
             and not (data.get("correction") or "").strip()
         ):
-            self.add_error("correction", "Skriv inn den korrigerte kildeverdien.")
+            self.add_error(
+                "correction", "Skriv inn den korrigerte kildeverdien."
+            )
         return data
 
 

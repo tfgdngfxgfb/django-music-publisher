@@ -30,11 +30,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "created_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="opprettet"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="opprettet"
+                    ),
                 ),
                 (
                     "updated_at",
-                    models.DateTimeField(auto_now=True, verbose_name="sist endret"),
+                    models.DateTimeField(
+                        auto_now=True, verbose_name="sist endret"
+                    ),
                 ),
                 (
                     "revision",
@@ -55,7 +59,10 @@ class Migration(migrations.Migration):
                         verbose_name="forvaltningsstatus",
                     ),
                 ),
-                ("notes", models.TextField(blank=True, verbose_name="merknader")),
+                (
+                    "notes",
+                    models.TextField(blank=True, verbose_name="merknader"),
+                ),
                 (
                     "library_entry",
                     models.OneToOneField(
@@ -82,7 +89,9 @@ class Migration(migrations.Migration):
                 "verbose_name": "forvaltet innspilling",
                 "verbose_name_plural": "forvaltet musikk",
                 "ordering": ("library_entry__recording__title", "id"),
-                "indexes": [models.Index(fields=["status"], name="managed_status_idx")],
+                "indexes": [
+                    models.Index(fields=["status"], name="managed_status_idx")
+                ],
             },
         ),
     ]

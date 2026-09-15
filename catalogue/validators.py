@@ -31,5 +31,7 @@ def normalize_trade_item_number(value, scheme):
 
 def validate_language(value):
     # Syntax only, not a registry assertion. Accept language-script-region tags.
-    if value and not re.fullmatch(r"[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*", value):
+    if value and not re.fullmatch(
+        r"[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*", value
+    ):
         raise ValidationError("Bruk en språkkode som nb, en eller zh-Hant.")

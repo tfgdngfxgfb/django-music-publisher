@@ -32,8 +32,12 @@ class Command(BaseCommand):
             raise CommandError(
                 "Smoke-data kan bare opprettes av den isolerte testkjøringen."
             )
-        party = Party.objects.create(name="Kari Nordmann", kind=Party.Kind.PERSON)
-        artist = ArtistIdentity.objects.create(party=party, display_name="KARI N")
+        party = Party.objects.create(
+            name="Kari Nordmann", kind=Party.Kind.PERSON
+        )
+        artist = ArtistIdentity.objects.create(
+            party=party, display_name="KARI N"
+        )
         label = Label.objects.create(name="Lynor", party=None)
         first_release = Release.objects.create(
             title="Operativ LP",
@@ -76,7 +80,9 @@ class Command(BaseCommand):
             verification_status=VerificationStatus.CONFIRMED,
         )
         channel = Channel.objects.create(code="p7_riks", name="P7 Riks")
-        audience = TargetAudience.objects.create(code="familie", name="Familie")
+        audience = TargetAudience.objects.create(
+            code="familie", name="Familie"
+        )
         MusicLibraryChannel.objects.create(
             library_entry=library_entry, channel=channel
         )
@@ -91,14 +97,18 @@ class Command(BaseCommand):
             name="P7 smoke-organisasjon",
             kind=Party.Kind.ORGANIZATION,
         )
-        RightsConfiguration.objects.create(local_organization=local_organization)
+        RightsConfiguration.objects.create(
+            local_organization=local_organization
+        )
         managed = create_managed_recording(
             recording=first_track.recording,
             relationship_type=RightsClaim.RightType.ADMINISTRATION,
             notes="Uttrykkelig adminhandling",
         )
         if managed.library_entry_id != library_entry.pk:
-            raise RuntimeError("Forvaltet musikk gjenbrukte ikke Musikkarkivet")
+            raise RuntimeError(
+                "Forvaltet musikk gjenbrukte ikke Musikkarkivet"
+            )
         if hasattr(archive_only.music_library_entry, "managed_recording"):
             raise RuntimeError("Arkivpost ble feilaktig forvaltet")
 
@@ -135,7 +145,9 @@ class Command(BaseCommand):
             normalized_value=1979,
         )
         decide_assertion(
-            confirmed, VerificationStatus.CONFIRMED, note="Kontrollert mot cover"
+            confirmed,
+            VerificationStatus.CONFIRMED,
+            note="Kontrollert mot cover",
         )
         decide_assertion(
             disputed, VerificationStatus.DISPUTED, note="Avviker fra cover"

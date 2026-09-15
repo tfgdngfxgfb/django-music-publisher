@@ -31,11 +31,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "created_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="opprettet"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="opprettet"
+                    ),
                 ),
                 (
                     "updated_at",
-                    models.DateTimeField(auto_now=True, verbose_name="sist endret"),
+                    models.DateTimeField(
+                        auto_now=True, verbose_name="sist endret"
+                    ),
                 ),
                 (
                     "revision",
@@ -43,7 +47,10 @@ class Migration(migrations.Migration):
                         default=1, editable=False, verbose_name="revisjon"
                     ),
                 ),
-                ("sha256", models.CharField(max_length=64, verbose_name="SHA-256")),
+                (
+                    "sha256",
+                    models.CharField(max_length=64, verbose_name="SHA-256"),
+                ),
                 (
                     "reason",
                     models.CharField(
@@ -58,7 +65,9 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "observed_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="observert"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="observert"
+                    ),
                 ),
             ],
             options={
@@ -109,7 +118,9 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="fileasset",
             name="sync_error",
-            field=models.TextField(blank=True, verbose_name="synkroniseringsfeil"),
+            field=models.TextField(
+                blank=True, verbose_name="synkroniseringsfeil"
+            ),
         ),
         migrations.AddField(
             model_name="fileasset",
@@ -147,7 +158,9 @@ class Migration(migrations.Migration):
             constraint=models.CheckConstraint(
                 condition=models.Q(
                     ("release_track__isnull", True),
-                    models.Q(("recording__isnull", False), ("release__isnull", True)),
+                    models.Q(
+                        ("recording__isnull", False), ("release__isnull", True)
+                    ),
                     _connector="OR",
                 ),
                 name="file_track_requires_recording",

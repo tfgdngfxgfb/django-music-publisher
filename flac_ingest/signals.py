@@ -14,7 +14,6 @@ from catalogue.models import (
 from managed_music.models import ManagedRecording
 from rights.models import RightsClaim, RightsDecision
 
-
 _automatic_sync_suppressed = ContextVar(
     "automatic_flac_sync_suppressed", default=False
 )
@@ -57,7 +56,9 @@ def identifier_changed(sender, instance, **kwargs):
 @receiver(post_save, sender=Release)
 def release_changed(sender, instance, created, **kwargs):
     if not created:
-        for recording_id in instance.tracks.values_list("recording_id", flat=True):
+        for recording_id in instance.tracks.values_list(
+            "recording_id", flat=True
+        ):
             _mark(recording_id)
 
 

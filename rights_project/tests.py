@@ -28,7 +28,9 @@ class IntegratedHomeTests(TestCase):
             **extra,
         )
 
-    def test_anonymous_start_redirects_to_login_and_preserves_destination(self):
+    def test_anonymous_start_redirects_to_login_and_preserves_destination(
+        self,
+    ):
         response = self.client.get(reverse("home"))
 
         self.assertEqual(response.status_code, 302)
@@ -37,7 +39,9 @@ class IntegratedHomeTests(TestCase):
         self.assertEqual(parse_qs(parsed.query)["next"], [reverse("home")])
 
     def test_logged_in_administrator_sees_integrated_navigation(self):
-        user = self.create_user("administrator", is_staff=True, is_superuser=True)
+        user = self.create_user(
+            "administrator", is_staff=True, is_superuser=True
+        )
         self.client.force_login(user)
 
         response = self.client.get(reverse("home"))
@@ -68,7 +72,9 @@ class IntegratedHomeTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Utgivelser")
         self.assertContains(response, "Hjelp")
-        self.assertNotContains(response, "Radiometadata, innspillinger og radiofiler")
+        self.assertNotContains(
+            response, "Radiometadata, innspillinger og radiofiler"
+        )
         self.assertNotContains(response, "Katalogtilhørighet og dokumentasjon")
         self.assertNotContains(response, "Mulige dubletter")
         self.assertNotContains(response, "Kilder og verifikasjon")
@@ -83,9 +89,13 @@ class IntegratedHomeTests(TestCase):
         self.assertEqual(urlparse(response.url).path, reverse("admin:login"))
 
     def test_login_returns_user_to_requested_record(self):
-        user = self.create_user("deep-link-admin", is_staff=True, is_superuser=True)
+        user = self.create_user(
+            "deep-link-admin", is_staff=True, is_superuser=True
+        )
         release = Release.objects.create(title="Direkte utgivelse")
-        change_url = reverse("admin:catalogue_release_change", args=(release.pk,))
+        change_url = reverse(
+            "admin:catalogue_release_change", args=(release.pk,)
+        )
 
         response = self.client.get(change_url)
         parsed = urlparse(response.url)
@@ -100,7 +110,9 @@ class IntegratedHomeTests(TestCase):
                 "next": change_url,
             },
         )
-        self.assertRedirects(response, change_url, fetch_redirect_response=False)
+        self.assertRedirects(
+            response, change_url, fetch_redirect_response=False
+        )
         response = self.client.get(change_url)
         self.assertContains(response, "Direkte utgivelse")
 
@@ -110,14 +122,18 @@ class DownloadCompatibilityTests(SimpleTestCase):
         with TemporaryDirectory() as directory:
             path = Path(directory) / "royalties.csv"
             path.write_bytes(b"amount\n1.00\n")
-            result = SimpleNamespace(out_file_path=str(path), filename="royalties.csv")
+            result = SimpleNamespace(
+                out_file_path=str(path), filename="royalties.csv"
+            )
             with patch(
                 "music_publisher.royalty_calculation.RoyaltyCalculation",
                 return_value=result,
             ):
                 response = RoyaltyCalculationView().form_valid(None)
             self.assertTrue(path.exists())
-            self.assertEqual(b"".join(response.streaming_content), b"amount\n1.00\n")
+            self.assertEqual(
+                b"".join(response.streaming_content), b"amount\n1.00\n"
+            )
             response.close()
             self.assertFalse(path.exists())
             response.close()
@@ -163,15 +179,23 @@ class RoyaltyCalculationSafetyTests(SimpleTestCase):
                 }
             ]
         }
-        calculation.writers = {1: {"name": "Writer", "account_number": "", "fee": None}}
+        calculation.writers = {
+            1: {"name": "Writer", "account_number": "", "fee": None}
+        }
         return calculation
 
     def test_invalid_amount_is_reported_instead_of_crashing(self):
         rows = list(
-            self.calculation("100").process_row(["T-123.456.789-4", "not-a-number"])
+            self.calculation("100").process_row(
+                ["T-123.456.789-4", "not-a-number"]
+            )
         )
         self.assertEqual(rows[0][-1], "ERROR: Invalid amount")
 
-    def test_zero_controlled_share_is_reported_instead_of_dividing_by_zero(self):
-        rows = list(self.calculation("0").process_row(["T-123.456.789-4", "100"]))
+    def test_zero_controlled_share_is_reported_instead_of_dividing_by_zero(
+        self,
+    ):
+        rows = list(
+            self.calculation("0").process_row(["T-123.456.789-4", "100"])
+        )
         self.assertEqual(rows[0][-1], "ERROR: Controlled share is zero")

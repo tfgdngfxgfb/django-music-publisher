@@ -24,7 +24,9 @@ class Party(CanonicalModel):
         ordering = ("name", "id")
         constraints = [
             models.CheckConstraint(
-                condition=models.Q(kind__in=["person", "organization", "group"]),
+                condition=models.Q(
+                    kind__in=["person", "organization", "group"]
+                ),
                 name="party_valid_kind",
             ),
             models.CheckConstraint(

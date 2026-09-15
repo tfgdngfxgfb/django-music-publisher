@@ -52,7 +52,9 @@ class CatalogueTests(TransactionTestCase):
     def test_contribution_added_without_ownership(self):
         recording = Recording.objects.create(title="Test")
         party = Party.objects.create(name="Artist", kind="person")
-        artist = ArtistIdentity.objects.create(party=party, display_name="Stage name")
+        artist = ArtistIdentity.objects.create(
+            party=party, display_name="Stage name"
+        )
         credit = RecordingContribution.objects.create(
             recording=recording,
             party=party,
@@ -62,7 +64,10 @@ class CatalogueTests(TransactionTestCase):
         self.assertEqual(credit.party, party)
         self.assertEqual(recording.contributions.count(), 1)
         self.assertFalse(
-            any("ownership" in name for name in connection.introspection.table_names())
+            any(
+                "ownership" in name
+                for name in connection.introspection.table_names()
+            )
         )
         self.assertEqual(Work.objects.count(), 0)
 
@@ -80,9 +85,9 @@ class CatalogueTests(TransactionTestCase):
             Party(name="  ", kind=Party.Kind.PERSON),
         )
         for instance in invalid_objects:
-            with self.subTest(model=type(instance).__name__), self.assertRaises(
-                ValidationError
-            ):
+            with self.subTest(
+                model=type(instance).__name__
+            ), self.assertRaises(ValidationError):
                 instance.save()
         party = Party.objects.create(name="Valid", kind=Party.Kind.PERSON)
         with self.assertRaises(ValidationError):
@@ -158,14 +163,20 @@ class CatalogueTests(TransactionTestCase):
         master = Recording.objects.create(title="Test")
         for value in ("", "123", "NO-ABC-26-0000X", "NO_ABC_26_00001"):
             with self.subTest(value=value), self.assertRaises(ValidationError):
-                ExternalIdentifier.objects.create(recording=master, value=value)
+                ExternalIdentifier.objects.create(
+                    recording=master, value=value
+                )
 
     def test_isrc_duplicate_rejected_after_normalization(self):
         first = Recording.objects.create(title="First")
         other = Recording.objects.create(title="Other")
-        ExternalIdentifier.objects.create(recording=first, value="NOABC2600001")
+        ExternalIdentifier.objects.create(
+            recording=first, value="NOABC2600001"
+        )
         with self.assertRaises(ValidationError):
-            ExternalIdentifier.objects.create(recording=other, value="no-abc-26-00001")
+            ExternalIdentifier.objects.create(
+                recording=other, value="no-abc-26-00001"
+            )
 
     def test_database_identifier_constraints(self):
         first = Recording.objects.create(title="First")
@@ -196,14 +207,20 @@ class CatalogueTests(TransactionTestCase):
                     "UPDATE catalogue_externalidentifier SET normalized_value = %s WHERE id = %s",
                     [
                         identifier.normalized_value,
-                        (other.pk.hex if connection.vendor == "sqlite" else other.pk),
+                        (
+                            other.pk.hex
+                            if connection.vendor == "sqlite"
+                            else other.pk
+                        ),
                     ],
                 )
 
     def test_unknown_scheme_and_namespace_rejected(self):
         recording = Recording.objects.create(title="Test")
         for kwargs in ({"scheme": "UPC"}, {"namespace": "local"}):
-            with self.subTest(kwargs=kwargs), self.assertRaises(ValidationError):
+            with self.subTest(kwargs=kwargs), self.assertRaises(
+                ValidationError
+            ):
                 ExternalIdentifier.objects.create(
                     recording=recording, value="NOABC2600001", **kwargs
                 )
@@ -299,10 +316,14 @@ class CatalogueAdminTests(TransactionTestCase):
             }
         )
         response = self.client.post(url, data)
-        self.assertEqual(response.status_code, 302, getattr(response, "context", None))
+        self.assertEqual(
+            response.status_code, 302, getattr(response, "context", None)
+        )
         recording.refresh_from_db()
         self.assertEqual(recording.title, "Blåbær edited")
-        self.assertEqual(recording.identifiers.get().normalized_value, "NOABC2600001")
+        self.assertEqual(
+            recording.identifiers.get().normalized_value, "NOABC2600001"
+        )
         self.assertContains(self.client.get(url), str(recording.pk))
         self.assertEqual(Work.objects.count(), 0)
 
@@ -315,7 +336,9 @@ class CatalogueAdminTests(TransactionTestCase):
                 "identifiers-0-value": "bad",
             }
         )
-        response = self.client.post(reverse("admin:catalogue_recording_add"), data)
+        response = self.client.post(
+            reverse("admin:catalogue_recording_add"), data
+        )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Skriv inn en ISRC med 12 tegn")
         self.assertEqual(Recording.objects.count(), 0)
@@ -335,7 +358,9 @@ class CatalogueAdminTests(TransactionTestCase):
         )
         self.client.logout()
         self.assertEqual(
-            self.client.get(reverse("admin:catalogue_recording_add")).status_code,
+            self.client.get(
+                reverse("admin:catalogue_recording_add")
+            ).status_code,
             302,
         )
         self.assertEqual(self.client.get("/admin/login/").status_code, 200)

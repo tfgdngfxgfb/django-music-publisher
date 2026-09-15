@@ -66,7 +66,9 @@ def find_recording_candidates(
     recordings = Recording.objects.in_bulk(scores)
     return sorted(
         (
-            RecordingMatch(recordings[key], tuple(signals[key]), min(score, 100))
+            RecordingMatch(
+                recordings[key], tuple(signals[key]), min(score, 100)
+            )
             for key, score in scores.items()
         ),
         key=lambda match: (
@@ -104,7 +106,9 @@ def resolve_release_track_recording(
             "Velg eksisterende innspilling eller opprett en ny, ikke begge."
         )
     if not recording and not new_recording_title.strip():
-        raise ValueError("Velg en innspilling eller skriv inn tittel for en ny.")
+        raise ValueError(
+            "Velg en innspilling eller skriv inn tittel for en ny."
+        )
     matches = []
     if not recording:
         matches = find_recording_candidates(
@@ -119,7 +123,9 @@ def resolve_release_track_recording(
                 for match in matches[:5]
             )
             raise ValueError(f"Mulig eksisterende innspilling: {names}")
-        if new_isrc and any("samme ISRC" in match.signals for match in matches):
+        if new_isrc and any(
+            "samme ISRC" in match.signals for match in matches
+        ):
             raise ValueError(
                 "ISRC finnes allerede. Opprett eventuelt den nye innspillingen uten ISRC, "
                 "og registrer kodekonflikten som en metadatapåstand."

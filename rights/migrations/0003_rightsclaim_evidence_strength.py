@@ -6,13 +6,25 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('rights', '0002_seed_common_territories'),
+        ("rights", "0002_seed_common_territories"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='rightsclaim',
-            name='evidence_strength',
-            field=models.CharField(choices=[('not_assessed', 'Ikke vurdert'), ('weak', 'Svak indikasjon'), ('probable', 'Sannsynlig'), ('strong', 'Sterkt underbygget'), ('documented', 'Dokumentert')], default='not_assessed', help_text='En menneskelig vurdering av hvor sterkt grunnlaget støtter kravet. Den er separat fra kravets status.', max_length=20, verbose_name='dokumentasjonsstyrke'),
+            model_name="rightsclaim",
+            name="evidence_strength",
+            field=models.CharField(
+                choices=[
+                    ("not_assessed", "Ikke vurdert"),
+                    ("weak", "Svak indikasjon"),
+                    ("probable", "Sannsynlig"),
+                    ("strong", "Sterkt underbygget"),
+                    ("documented", "Dokumentert"),
+                ],
+                default="not_assessed",
+                help_text="En menneskelig vurdering av hvor sterkt grunnlaget støtter kravet. Den er separat fra kravets status.",
+                max_length=20,
+                verbose_name="dokumentasjonsstyrke",
+            ),
         ),
     ]

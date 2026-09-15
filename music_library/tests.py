@@ -22,9 +22,15 @@ class MusicLibraryTests(TestCase):
             gender=MusicLibraryEntry.Gender.MIXED,
             energy=4,
         )
-        channel = Channel.objects.create(code="p7", name="P7 Kristen Riksradio")
-        audience = TargetAudience.objects.create(code="familie", name="Familie")
-        MusicLibraryChannel.objects.create(library_entry=entry, channel=channel)
+        channel = Channel.objects.create(
+            code="p7", name="P7 Kristen Riksradio"
+        )
+        audience = TargetAudience.objects.create(
+            code="familie", name="Familie"
+        )
+        MusicLibraryChannel.objects.create(
+            library_entry=entry, channel=channel
+        )
         MusicLibraryTargetAudience.objects.create(
             library_entry=entry, target_audience=audience
         )

@@ -20,7 +20,10 @@ def radio_language_name(value):
     if not value:
         return ""
     normalized = value.casefold().replace("_", "-")
-    return RADIO_LANGUAGE_NAMES.get(normalized, RADIO_LANGUAGE_NAMES.get(normalized.split("-", 1)[0], value))
+    return RADIO_LANGUAGE_NAMES.get(
+        normalized,
+        RADIO_LANGUAGE_NAMES.get(normalized.split("-", 1)[0], value),
+    )
 
 
 def observed_genres(values):

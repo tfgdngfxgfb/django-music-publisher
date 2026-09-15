@@ -6,7 +6,9 @@ from django.core.management.base import BaseCommand, CommandError
 
 
 class Command(BaseCommand):
-    help = "Create or update the explicitly configured local test administrator."
+    help = (
+        "Create or update the explicitly configured local test administrator."
+    )
 
     def handle(self, *args, **options):
         username = os.environ.get("P7_DEV_ADMIN_USERNAME")
@@ -17,7 +19,9 @@ class Command(BaseCommand):
         user_model = get_user_model()
         user = user_model.objects.filter(username=username).first()
         if user and not password:
-            self.stdout.write(self.style.SUCCESS("Lokal administrator er klar."))
+            self.stdout.write(
+                self.style.SUCCESS("Lokal administrator er klar.")
+            )
             return
 
         generated = not password
@@ -34,4 +38,6 @@ class Command(BaseCommand):
         )
         self.stdout.write(self.style.SUCCESS(message))
         if generated:
-            self.stdout.write(f"Midlertidig passord (vises bare nå): {password}")
+            self.stdout.write(
+                f"Midlertidig passord (vises bare nå): {password}"
+            )
