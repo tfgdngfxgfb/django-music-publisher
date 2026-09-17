@@ -71,6 +71,7 @@ from media_assets.playback import (
     iter_file_range,
     resolve_current_radio_asset,
 )
+from media_assets.pipeline_status import get_recording_media_pipeline_status
 from media_assets.storage import get_client_folder, open_for_read
 from music_library.models import (
     Channel,
@@ -1027,6 +1028,8 @@ def recording_files(request, recording_id):
             "return_label": return_label,
             "tab_urls": tab_urls,
             "writes_enabled": settings.GUI_V2_WRITES_ENABLED,
+            "can_select_master": settings.GUI_V2_WRITES_ENABLED
+            and request.user.has_perms(MASTER_CHANGE_PERMISSIONS),
         },
     )
 
@@ -1184,11 +1187,14 @@ def recording_generation_preview(request, recording_id):
         {
             "section": "music_library",
             "recording": recording,
+            "pipeline_status": get_recording_media_pipeline_status(recording),
             "preview": preview,
             "generation": generation,
             "error_message": error_message,
             "writes_enabled": settings.GUI_V2_WRITES_ENABLED,
             "file_writes_enabled": settings.P7_ALLOW_FILE_WRITES,
+            "can_generate": settings.GUI_V2_WRITES_ENABLED
+            and request.user.has_perms(GENERATION_CHANGE_PERMISSIONS),
             "return_url": _safe_return(
                 request,
                 reverse("gui_v2:recording_files", args=[recording.pk]),
@@ -1738,7 +1744,9 @@ def release_detail(request, release_id):
         prefix="release",
     )
     managed_release = ManagedRelease.objects.filter(release=release).first()
-    can_view_release_management = request.user.has_perm("catalogue.view_release")
+    can_view_release_management = request.user.has_perm(
+        "catalogue.view_release"
+    )
     managed_permission = (
         "managed_music.change_managedrelease"
         if managed_release

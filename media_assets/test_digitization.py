@@ -6,9 +6,11 @@ from unittest.mock import patch
 import numpy as np
 import soundfile as sf
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Permission
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
 from catalogue.models import Recording, Release, ReleaseTrack
@@ -28,7 +30,9 @@ from media_assets.models import (
     DigitizationFile,
     DigitizationPlan,
     FileAsset,
+    FileDerivation,
     MediaAssetEvent,
+    RadioFlacGeneration,
     RecordingMediaSelection,
 )
 
@@ -613,6 +617,205 @@ class DigitizationWorkflowTests(TestCase):
             self.client.get(reverse("gui_v2:digitization_index")).status_code,
             403,
         )
+
+    def test_release_matrix_keeps_selected_candidate_and_current_separate(
+        self,
+    ):
+        raw, masters = self.prepare()
+        tracks = self.link(masters)
+        masters[0].refresh_from_db()
+        self.apply(
+            "raw_link",
+            {"source": str(raw[0].pk), "assets": [str(masters[0].pk)]},
+        )
+        recording = tracks[0].recording
+        second = FileAsset.objects.create(
+            recording=recording,
+            filename="master-v2.wav",
+            role=FileAsset.Role.EDITED_WAV_MASTER,
+        )
+        current = FileAsset.objects.create(
+            recording=recording,
+            filename="radio-v1.flac",
+            role=FileAsset.Role.RADIO_FLAC,
+            lifecycle_status=FileAsset.LifecycleStatus.CURRENT,
+        )
+        candidate = FileAsset.objects.create(
+            recording=recording,
+            filename="radio-v2.flac",
+            role=FileAsset.Role.RADIO_FLAC,
+            lifecycle_status=FileAsset.LifecycleStatus.CANDIDATE,
+        )
+        RecordingMediaSelection.objects.create(
+            recording=recording,
+            selected_master=second,
+            current_radio=current,
+        )
+        for source, derived in ((masters[0], current), (second, candidate)):
+            FileDerivation.objects.create(
+                source_asset=source,
+                derived_asset=derived,
+                created_by=self.user,
+                tool_name="test",
+            )
+        generation = RadioFlacGeneration.objects.create(
+            recording=recording,
+            master_asset=second,
+            candidate_asset=candidate,
+            target_root_key="capture",
+            target_relative_path="radio/radio-v2.flac",
+            technical_plan={"format": "FLAC"},
+            expected_tags={"TITLE": [recording.title]},
+            metadata_diff=["test"],
+            status=RadioFlacGeneration.Status.VERIFIED,
+            created_by=self.user,
+        )
+        self.client.force_login(self.user)
+        url = reverse(
+            "gui_v2:digitization_release_matrix", args=[self.release.pk]
+        )
+        before = (
+            FileAsset.objects.count(),
+            RecordingMediaSelection.objects.count(),
+            RadioFlacGeneration.objects.count(),
+        )
+        with patch(
+            "media_assets.storage.location_exists",
+            side_effect=AssertionError("live lookup"),
+        ):
+            response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "komplett utgivelsesmatrise")
+        self.assertContains(response, "master-v2.wav")
+        self.assertContains(response, "radio-v2.flac")
+        self.assertContains(response, "radio-v1.flac")
+        self.assertContains(response, "Fra tidligere master")
+        self.assertContains(response, "Ny radiofil klar til aktivering")
+        self.assertContains(response, f"generation={generation.pk}")
+        self.assertContains(response, "data-matrix-row")
+        self.assertContains(
+            response, 'data-current-state="from_previous_master"'
+        )
+        self.assertContains(response, 'data-has-candidate="true"')
+        self.assertEqual(
+            response.context["workspace"]["rows"][0]["raw_sources"], [raw[0]]
+        )
+        self.assertEqual(
+            (
+                FileAsset.objects.count(),
+                RecordingMediaSelection.objects.count(),
+                RadioFlacGeneration.objects.count(),
+            ),
+            before,
+        )
+        dashboard = self.client.get(reverse("gui_v2:digitization_index"))
+        progress = list(dashboard.context["page"])[0].progress
+        self.assertEqual(
+            (
+                progress["total"],
+                progress["linked"],
+                progress["selected"],
+                progress["radio"],
+            ),
+            (3, 3, 1, 1),
+        )
+        batch_page = self.client.get(
+            reverse("gui_v2:digitization_detail", args=[self.batch.pk])
+        )
+        self.assertContains(batch_page, 'data-raw-detail="')
+        files_page = self.client.get(
+            reverse("gui_v2:recording_files", args=[recording.pk])
+        )
+        self.assertContains(files_page, "Master- og radiohistorikk")
+        self.assertContains(files_page, "Fra tidligere master")
+        preview = self.client.get(
+            reverse(
+                "gui_v2:recording_generation_preview", args=[recording.pk]
+            ),
+            {"generation": generation.pk},
+        )
+        self.assertContains(preview, "radio-v1.flac")
+        self.assertContains(preview, "radio-v2.flac")
+        read_only_user = get_user_model().objects.create_user("matrix-reader")
+        for app_label, codename in (
+            ("catalogue", "view_recording"),
+            ("media_assets", "view_fileasset"),
+            ("media_assets", "view_filelocation"),
+        ):
+            read_only_user.user_permissions.add(
+                Permission.objects.get(
+                    content_type__app_label=app_label, codename=codename
+                )
+            )
+        self.client.force_login(read_only_user)
+        read_only_page = self.client.get(
+            reverse(
+                "gui_v2:recording_generation_preview", args=[recording.pk]
+            ),
+            {"generation": generation.pk},
+        )
+        self.assertEqual(read_only_page.status_code, 200)
+        self.assertNotContains(
+            read_only_page, "Aktiver som gjeldende radiofil"
+        )
+        files_read_only = self.client.get(
+            reverse("gui_v2:recording_files", args=[recording.pk])
+        )
+        self.assertNotContains(files_read_only, "Velg som master")
+        viewer = get_user_model().objects.create_user("matrix-viewer")
+        self.client.force_login(viewer)
+        self.assertEqual(self.client.get(url).status_code, 403)
+
+    def test_release_matrix_unknown_lineage_is_not_a_generation_decision(self):
+        _, masters = self.prepare()
+        track = self.link(masters)[0]
+        masters[0].refresh_from_db()
+        current = FileAsset.objects.create(
+            recording=track.recording,
+            filename="legacy-current.flac",
+            role=FileAsset.Role.RADIO_FLAC,
+            lifecycle_status=FileAsset.LifecycleStatus.CURRENT,
+        )
+        RecordingMediaSelection.objects.create(
+            recording=track.recording,
+            selected_master=masters[0],
+            current_radio=current,
+        )
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse(
+                "gui_v2:digitization_release_matrix", args=[self.release.pk]
+            )
+        )
+        self.assertEqual(
+            response.context["workspace"]["rows"][0]["filter_key"],
+            "unknown_lineage",
+        )
+        self.assertContains(response, "masteropprinnelse er ikke dokumentert")
+
+    def test_release_matrix_does_not_query_per_track(self):
+        self.client.force_login(self.user)
+        url = reverse(
+            "gui_v2:digitization_release_matrix", args=[self.release.pk]
+        )
+        ReleaseTrack.objects.create(
+            release=self.release,
+            recording=Recording.objects.create(title="Spor 1"),
+            sequence_number=1,
+        )
+        with CaptureQueriesContext(connection) as baseline:
+            self.assertEqual(self.client.get(url).status_code, 200)
+        for sequence in range(2, 9):
+            ReleaseTrack.objects.create(
+                release=self.release,
+                recording=Recording.objects.create(title=f"Spor {sequence}"),
+                sequence_number=sequence,
+            )
+        with CaptureQueriesContext(connection) as expanded:
+            response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context["workspace"]["rows"]), 8)
+        self.assertLessEqual(len(expanded), len(baseline) + 2)
 
     def test_index_shows_and_filters_release_management(self):
         ManagedRelease.objects.create(

@@ -34,12 +34,33 @@
     bulkForm.addEventListener('submit', saveDraft);
   }
   const rows = [...workspace.querySelectorAll('[data-digitization-row]')];
+  const rawRows = [...workspace.querySelectorAll('[data-raw-row]')];
   const select = row => {
     rows.forEach(item => {const active = item === row; item.classList.toggle('selected', active); item.setAttribute('aria-selected', String(active)); item.tabIndex = active ? 0 : -1;});
+    rawRows.forEach(item => {item.classList.remove('selected'); item.setAttribute('aria-selected', 'false'); item.tabIndex = -1;});
+    workspace.querySelectorAll('[data-raw-detail]').forEach(panel => {panel.hidden = true;});
     workspace.querySelector('.digitization-empty-detail').hidden = true;
     workspace.querySelectorAll('[data-digitization-detail]').forEach(panel => {panel.hidden = panel.dataset.digitizationDetail !== row.dataset.digitizationRow;});
     sessionStorage.setItem(`digitization:${location.pathname}`, row.dataset.digitizationRow);
   };
+  const selectRaw = row => {
+    rows.forEach(item => {item.classList.remove('selected'); item.setAttribute('aria-selected', 'false'); item.tabIndex = -1;});
+    rawRows.forEach(item => {const active = item === row; item.classList.toggle('selected', active); item.setAttribute('aria-selected', String(active)); item.tabIndex = active ? 0 : -1;});
+    workspace.querySelector('.digitization-empty-detail').hidden = true;
+    workspace.querySelectorAll('[data-digitization-detail]').forEach(panel => {panel.hidden = true;});
+    workspace.querySelectorAll('[data-raw-detail]').forEach(panel => {panel.hidden = panel.dataset.rawDetail !== row.dataset.rawRow;});
+  };
+  rawRows.forEach(row => {
+    row.addEventListener('click', () => selectRaw(row));
+    row.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') {event.preventDefault(); selectRaw(row); return;}
+      if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const index = rawRows.indexOf(row);
+      const nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? rawRows.length - 1 : Math.max(0, Math.min(rawRows.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)));
+      const next = rawRows[nextIndex]; selectRaw(next); next.focus({preventScroll: true}); next.scrollIntoView({block: 'nearest'});
+    });
+  });
   rows.forEach(row => row.addEventListener('click', () => select(row)));
   workspace.addEventListener('keydown', event => {
     if (event.target.closest('input,select,textarea,button,a,summary')) return;
@@ -68,6 +89,7 @@
   const saved = sessionStorage.getItem(`digitization:${location.pathname}`);
   const initial = rows.find(row => row.dataset.digitizationRow === saved) || rows[0];
   if (initial) select(initial);
+  else if (rawRows.length) selectRaw(rawRows[0]);
   updateSelection();
   workspace.querySelectorAll('[data-recording-picker]').forEach(picker => {
     let serial = 0, timer;

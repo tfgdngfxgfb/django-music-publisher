@@ -3,12 +3,14 @@
 from pathlib import PurePosixPath
 
 from django.core.exceptions import ImproperlyConfigured, ValidationError
+from django.db.models import Q
 
 from media_assets.models import FileAsset, FileLocation
 from media_assets.playback import (
     RadioPlaybackStatus,
     resolve_current_radio_asset,
 )
+from media_assets.pipeline_status import get_recording_media_pipeline_status
 from media_assets.storage import (
     get_client_folder,
     get_client_path,
@@ -244,16 +246,29 @@ def build_recording_files(recording, *, selected_asset_id=None):
         _asset_data(asset, current_asset_id, selected_master_id)
         for asset in recording.file_assets.all()
     ]
+    generation_rows = list(
+        RadioFlacGeneration.objects.filter(recording=recording)
+        .select_related("master_asset", "candidate_asset")
+        .order_by("-created_at", "id")
+    )
     generations = {
         item.candidate_asset_id: item
-        for item in RadioFlacGeneration.objects.filter(
-            candidate_asset_id__in=[file["object"].pk for file in files]
-        )
+        for item in generation_rows
+        if item.candidate_asset_id
     }
     events = {}
-    for event in MediaAssetEvent.objects.filter(
-        asset_id__in=[file["object"].pk for file in files]
-    ):
+    timeline = list(
+        MediaAssetEvent.objects.filter(
+            Q(recording=recording)
+            | Q(asset_id__in=[file["object"].pk for file in files])
+            | Q(related_asset_id__in=[file["object"].pk for file in files])
+        ).select_related(
+            "actor", "asset", "related_asset", "digitization_batch"
+        )[
+            :50
+        ]
+    )
+    for event in timeline:
         events.setdefault(event.asset_id, []).append(event)
     role_order = {
         FileAsset.Role.RADIO_FLAC: 0,
@@ -345,4 +360,20 @@ def build_recording_files(recording, *, selected_asset_id=None):
         "radio_count": radio_count,
         "resolution": resolution,
         "selection": selection,
+        "pipeline_status": get_recording_media_pipeline_status(
+            recording,
+            selection=selection,
+            generations=generation_rows,
+        ),
+        "master_versions": [
+            item
+            for item in files
+            if item["object"].role == FileAsset.Role.EDITED_WAV_MASTER
+        ],
+        "radio_versions": [
+            item
+            for item in files
+            if item["object"].role == FileAsset.Role.RADIO_FLAC
+        ],
+        "timeline": timeline[:20],
     }

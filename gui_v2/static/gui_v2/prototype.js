@@ -402,6 +402,12 @@
       if (event.target.closest("a, button, input")) return;
       selectFile(row);
     }));
+    recordingFiles.querySelectorAll("[data-select-file]").forEach(button => {
+      button.addEventListener("click", () => {
+        const row = rows.find(item => item.dataset.fileRow === button.dataset.selectFile);
+        selectFile(row, true);
+      });
+    });
     recordingFiles.addEventListener("keydown", event => {
       const row = event.target.closest("[data-file-row]");
       if (!row || !["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;

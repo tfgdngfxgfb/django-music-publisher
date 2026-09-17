@@ -7,6 +7,11 @@ app_name = "gui_v2"
 urlpatterns = [
     path("digitalisering/", digitization.index, name="digitization_index"),
     path(
+        "digitalisering/utgivelser/<uuid:release_id>/matrise/",
+        digitization.release_matrix,
+        name="digitization_release_matrix",
+    ),
+    path(
         "digitalisering/<uuid:batch_id>/",
         digitization.detail,
         name="digitization_detail",

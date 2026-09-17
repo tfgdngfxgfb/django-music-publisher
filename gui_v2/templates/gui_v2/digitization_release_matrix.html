@@ -1,0 +1,86 @@
+{% extends "gui_v2/base.html" %}{% load static %}
+{% block title %}Digitaliseringsmatrise · {{ release.title }}{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{% static 'gui_v2/digitization.css' %}">
+<div class="digitization-page" data-release-matrix>
+  <header class="recording-object-header">
+    <a href="{% url 'gui_v2:release_detail' release.pk %}">← Utgivelse</a>
+    <div><span class="eyebrow">Digitalisering · komplett utgivelsesmatrise</span><h1>{{ release.title }}</h1>
+      <p>{{ release.catalogue_number }}{% if release.label %} · {{ release.label }}{% endif %}{% if release.release_year %} · {{ release.release_year }}{% endif %}</p>
+      <p>Alle batcher for denne utgivelsen. Mastervalg og gjeldende radiofil gjelder innspillingen globalt.</p>
+    </div>
+    <nav class="recording-tabs" aria-label="Digitalisering av utgivelsen">
+      <a href="{% url 'gui_v2:release_detail' release.pk %}">Utgivelse</a>
+      <a aria-current="page" href="{% url 'gui_v2:digitization_release_matrix' release.pk %}">Spor og status</a>
+      {% for batch in workspace.batches %}<a href="{% url 'gui_v2:digitization_detail' batch.pk %}">{{ batch.title }}</a>{% endfor %}
+    </nav>
+  </header>
+  <div class="digitization-summary" aria-label="Oppsummering">
+    <span><strong>{{ workspace.rows|length }}</strong> spor</span>
+    <span><strong>{{ workspace.batches|length }}</strong> digitaliseringsbatcher</span>
+    <span><strong>{{ workspace.raw_count }}</strong> råfiler</span>
+    <span><strong>{{ workspace.master_count }}</strong> redigerte mastere</span>
+    <span><strong>{{ workspace.issue_count }}</strong> spor med arbeid eller uavklart status</span>
+  </div>
+  <div class="digitization-layout">
+    <main class="digitization-main">
+      <section class="recording-card">
+        <header><h2>Spor gjennom digitaliseringskjeden</h2><span>RAW → master → Recording → valgt master → kandidat → current</span></header>
+        <div class="digitization-toolbar" role="group" aria-label="Filtrer spor">
+          <label>Søk i spor <input type="search" data-matrix-search placeholder="Tittel eller innspilling"></label>
+          <label>Vis <select data-matrix-filter>
+            <option value="all">Alle spor</option><option value="issues">Arbeid og uavklart</option>
+            <option value="missing_master">Mangler master i digitaliseringen</option>
+            <option value="missing_selected">Ingen valgt master</option>
+            <option value="no_radio">Ingen gjeldende radiofil</option>
+            <option value="previous_master">Current fra tidligere master</option>
+            <option value="unknown_lineage">Ukjent lineage</option>
+            <option value="candidate">Kandidat klar</option>
+            <option value="generation_failed">Generering feilet</option>
+          </select></label>
+          <span data-matrix-count aria-live="polite"></span>
+        </div>
+        <div class="digitization-table"><table><thead><tr><th>Spor</th><th>Tittel / Recording</th><th>RAW</th><th>Master</th><th>Valgt master</th><th>Kandidat</th><th>Current radio</th><th>Kontrollstatus</th></tr></thead><tbody>
+          {% for row in workspace.rows %}
+          <tr data-matrix-row="{{ row.track.pk }}" data-matrix-filter-key="{{ row.filter_key }}" data-has-batch-master="{{ row.has_batch_master|yesno:'true,false' }}" data-has-selected="{{ row.status.facts.selected_master|yesno:'true,false' }}" data-has-current="{{ row.status.facts.current_radio|yesno:'true,false' }}" data-has-candidate="{{ row.status.facts.candidate_asset|yesno:'true,false' }}" data-current-state="{{ row.status.facts.current_state }}" data-generation-state="{{ row.status.facts.generation_state }}" tabindex="{% if forloop.first %}0{% else %}-1{% endif %}" aria-selected="{% if forloop.first %}true{% else %}false{% endif %}" class="{% if forloop.first %}selected{% endif %}">
+            <td>{{ row.track.side }}{{ row.track.track_number|default:row.track.sequence_number }}</td>
+            <td><strong>{{ row.track.display_title }}</strong><small>{{ row.track.recording.title }}{% if row.release_count > 1 %} · samme innspilling på {{ row.release_count }} utgivelser{% endif %}</small></td>
+            <td>{% if row.raw_sources %}<span class="status success">Dokumentert</span><small>{{ row.raw_sources|length }} råkobling{{ row.raw_sources|length|pluralize:"er" }}</small>{% else %}<span class="status muted">Ikke dokumentert</span>{% endif %}</td>
+            <td>{% if row.masters %}<span class="status success">{{ row.masters|length }} versjon{{ row.masters|length|pluralize:"er" }}</span>{% else %}<span class="status muted">Ikke registrert</span>{% endif %}</td>
+            <td><span class="status {{ row.status.master_kind }}">{{ row.status.master_label }}</span><small>{{ row.status.facts.selected_master.filename }}</small></td>
+            <td><span class="status {{ row.status.generation_kind }}">{{ row.status.generation_label }}</span><small>{{ row.status.facts.candidate_asset.filename }}</small></td>
+            <td><span class="status {{ row.status.current_kind }}">{{ row.status.current_label }}</span><small>{{ row.status.facts.current_radio.filename }}</small></td>
+            <td><span class="digitization-work-status {{ row.issue_kind }}">{{ row.issue }}</span></td>
+          </tr>
+          {% empty %}<tr><td colspan="8">Ingen spor er registrert på utgivelsen.</td></tr>{% endfor %}
+        </tbody></table></div>
+        <p class="recording-empty" data-matrix-empty hidden>Ingen spor samsvarer med filteret.</p>
+      </section>
+      <section class="recording-card digitization-context-note"><h2>Slik leses matrisen</h2><p>RAW-koblingen dokumenterer manuelt arbeid utenfor P7. Manglende RAW-opprinnelse betyr ikke at radiofilen må regenereres. En verifisert kandidat kan eksistere samtidig med en eldre gjeldende radiofil. Ingen fil åpnes eller kontrolleres fysisk når denne siden vises.</p></section>
+    </main>
+    <aside class="recording-files-inspector" aria-label="Valgt spor">
+      {% for row in workspace.rows %}<section class="recording-card digitization-detail" data-matrix-detail="{{ row.track.pk }}" {% if not forloop.first %}hidden{% endif %}>
+        <header><span class="eyebrow">Spor {{ row.track.sequence_number }} · {{ row.track.side }}{{ row.track.track_number }}</span><h2>{{ row.track.display_title }}</h2></header>
+        <div class="digitization-detail-body">
+          <p class="digitization-work-status {{ row.issue_kind }}">{{ row.issue }}</p>
+          <ol class="digitization-lineage">
+            <li><strong>RAW</strong><br>{% for raw in row.raw_sources %}{{ raw.filename }}{% if not forloop.last %}, {% endif %}{% empty %}Opprinnelse ikke dokumentert{% endfor %}</li>
+            <li><strong>Masterversjoner</strong><br>{% for master in row.masters %}{{ master.filename }}{% if master.pk == row.status.facts.selected_master.pk %} · valgt{% endif %}<br>{% empty %}Ingen registrert i denne kjeden{% endfor %}</li>
+            <li><strong>Recording</strong><br>{{ row.track.recording.title }}{% if row.release_count > 1 %}<small>Valg gjelder alle {{ row.release_count }} utgivelser der innspillingen finnes.</small>{% endif %}</li>
+            <li><strong>Valgt master</strong><br>{{ row.status.facts.selected_master.filename|default:"Ikke valgt" }}</li>
+            <li><strong>Radio-kandidat</strong><br>{{ row.status.facts.candidate_asset.filename|default:row.status.generation_label }}</li>
+            <li><strong>Gjeldende radio</strong><br>{{ row.status.facts.current_radio.filename|default:"Ingen gjeldende radiofil" }}<small>{{ row.status.current_label }}{% if row.status.facts.current_source_master %} · kilde: {{ row.status.facts.current_source_master.filename }}{% endif %}</small></li>
+          </ol>
+          <div class="file-action-list">
+            {% if row.candidate_generation %}<a href="{% url 'gui_v2:recording_generation_preview' row.track.recording_id %}?generation={{ row.candidate_generation.pk }}&amp;return={{ request.get_full_path|urlencode }}">Kontroller verifisert kandidat →</a>{% endif %}
+            {% if row.status.facts.selected_master %}<a href="{% url 'gui_v2:recording_generation_preview' row.track.recording_id %}?return={{ request.get_full_path|urlencode }}">Forbered ny radio-FLAC →</a>{% endif %}
+            <a href="{% url 'gui_v2:recording_files' row.track.recording_id %}?return={{ request.get_full_path|urlencode }}">Innspilling → Filer og historikk →</a>
+            <a href="{% url 'gui_v2:release_detail' release.pk %}">Utgivelse og sporliste →</a>
+          </div>
+        </div>
+      </section>{% empty %}<section class="recording-card digitization-empty-detail"><h2>Ingen spor</h2><p>Opprett spor i utgivelsesvisningen.</p></section>{% endfor %}
+    </aside>
+  </div>
+</div>
+<script src="{% static 'gui_v2/digitization_matrix.js' %}"></script>
+{% endblock %}
