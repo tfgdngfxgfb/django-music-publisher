@@ -397,12 +397,11 @@ def write_catalogue_tags(path, values):
         )
         if after_tags.get(tag) != expected:
             raise FlacWriteError(f"Kontroll etter skriving feilet for {tag}.")
+    written = {tag.upper() for tag in values}
     for tag, previous in before_tags.items():
-        if tag not in CATALOGUE_WRITE_TAGS and after_tags.get(tag) != previous:
+        if tag not in written and after_tags.get(tag) != previous:
             raise FlacWriteError(f"Den beskyttede taggen {tag} ble endret.")
     protected = {
-        tag: values
-        for tag, values in after_tags.items()
-        if tag not in CATALOGUE_WRITE_TAGS
+        tag: values for tag, values in after_tags.items() if tag not in written
     }
     return after_tags, protected

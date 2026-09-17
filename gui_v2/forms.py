@@ -77,7 +77,12 @@ class MusicLibraryFilterForm(forms.Form):
     )
     managed = forms.ChoiceField(
         required=False,
-        choices=(("", "Alle"), ("yes", "Forvaltet"), ("no", "Ikke forvaltet")),
+        choices=(
+            ("", "Alle"),
+            ("yes", "Forvaltet"),
+            ("release_only", "Kun via forvaltet utgivelse"),
+            ("no", "Ikke forvaltet"),
+        ),
         label="Forvaltning",
     )
     follow_up = forms.ChoiceField(

@@ -6,6 +6,11 @@ from collections import defaultdict
 from pathlib import PurePosixPath
 from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 
+from catalogue.authority import (
+    annotate_recording_authority,
+    protecting_releases,
+)
+
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
@@ -340,7 +345,10 @@ def music_library(request):
     if request.GET and form.is_valid():
         remembered = request.GET.copy()
         for name in list(remembered):
-            if name not in MusicLibraryFilterForm.base_fields and name != "page":
+            if (
+                name not in MusicLibraryFilterForm.base_fields
+                and name != "page"
+            ):
                 remembered.pop(name)
         if remembered:
             request.session[session_key] = remembered.urlencode()
@@ -415,9 +423,10 @@ def music_library(request):
         .values("target_audience__name")[:1]
     )
     queryset = (
-        MusicLibraryEntry.objects.select_related(
-            "recording__media_selection__current_radio"
+        annotate_recording_authority(
+            MusicLibraryEntry.objects.all(), recording_ref="recording_id"
         )
+        .select_related("recording__media_selection__current_radio")
         .prefetch_related(
             artist_prefetch,
             "channels",
@@ -432,11 +441,7 @@ def music_library(request):
             sort_isrc=Subquery(isrc_sort),
             sort_channel=Subquery(channel_sort),
             sort_target=Subquery(target_sort),
-            sort_managed=Exists(
-                ManagedRecording.objects.filter(
-                    library_entry_id=OuterRef("pk")
-                )
-            ),
+            sort_managed=F("authority_managed"),
             radio_file_count=Coalesce(Subquery(radio_counts), Value(0)),
             has_radio_file=Exists(radio_assets),
             has_active_radio_location=Exists(
@@ -587,11 +592,20 @@ def music_library(request):
                         rotation_suitability="", channels__isnull=True
                     )
             queryset = queryset.filter(rotation_query)
-        managed_values = set(request.GET.getlist("managed")) & {"yes", "no"}
-        if managed_values == {"yes"}:
-            queryset = queryset.filter(managed_recording__isnull=False)
-        elif managed_values == {"no"}:
-            queryset = queryset.filter(managed_recording__isnull=True)
+        managed_values = set(request.GET.getlist("managed")) & {
+            "yes",
+            "no",
+            "release_only",
+        }
+        if managed_values:
+            managed_query = Q()
+            if "yes" in managed_values:
+                managed_query |= Q(authority_managed=True)
+            if "no" in managed_values:
+                managed_query |= Q(authority_managed=False)
+            if "release_only" in managed_values:
+                managed_query |= Q(authority_release_only=True)
+            queryset = queryset.filter(managed_query)
         for relation, mode_name, chosen in (
             ("channels", "channel_mode", data.get("channels") or []),
             (
@@ -807,6 +821,7 @@ def music_library(request):
             if item.role == FileAsset.Role.RADIO_FLAC
         ]
         entry.is_managed = entry.sort_managed
+        entry.managed_release_only = entry.authority_release_only
         entry.language_display = radio_language_name(entry.language)
         channel_values = list(entry.channels.all())
         target_values = list(entry.target_audiences.all())
@@ -896,6 +911,13 @@ def music_library(request):
     if selected is None and page.object_list:
         selected = page.object_list[0]
     if selected:
+        selected.protecting_releases = (
+            list(protecting_releases(selected.recording))
+            if selected.authority_via_release
+            and request.user.has_perm("catalogue.view_release")
+            and request.user.has_perm("managed_music.view_managedrelease")
+            else []
+        )
         selected.releases = list(
             {
                 track.release_id: track.release
@@ -915,6 +937,7 @@ def music_library(request):
             asset.can_split = (
                 len(selected.radio_files) > 1
                 and not selected.is_managed
+                and not selected.authority_via_release
                 and request.user.is_staff
                 and request.user.has_perms(
                     (
@@ -1101,7 +1124,9 @@ def recording_files(request, recording_id):
     file_view = build_recording_files(
         recording, selected_asset_id=request.GET.get("selected_file")
     )
-    workspace = _recording_workspace_context(request, recording, overview, "files")
+    workspace = _recording_workspace_context(
+        request, recording, overview, "files"
+    )
     return render(
         request,
         "gui_v2/recording_files.html",
@@ -1131,7 +1156,9 @@ def recording_releases(request, recording_id):
         .select_related("release__managed_release")
         .annotate(release_track_count=Count("release__tracks", distinct=True))
     )
-    can_view_management = request.user.has_perm("managed_music.view_managedrelease")
+    can_view_management = request.user.has_perm(
+        "managed_music.view_managedrelease"
+    )
     for track in tracks:
         position = []
         if track.disc_number:
@@ -1152,7 +1179,11 @@ def recording_releases(request, recording_id):
         except ManagedRelease.DoesNotExist:
             track.management = None
     selected = next(
-        (track for track in tracks if str(track.pk) == request.GET.get("track")),
+        (
+            track
+            for track in tracks
+            if str(track.pk) == request.GET.get("track")
+        ),
         tracks[0] if tracks else None,
     )
     context = _recording_workspace_context(
@@ -1195,7 +1226,11 @@ def recording_radio(request, recording_id):
     context = _recording_workspace_context(
         request, recording, _recording_header_data(request, recording), "radio"
     )
-    form = RadioMetadataForm(request.POST or None, instance=entry) if entry else None
+    form = (
+        RadioMetadataForm(request.POST or None, instance=entry)
+        if entry
+        else None
+    )
     if request.method == "POST" and form.is_valid():
         with transaction.atomic():
             form.save()
@@ -1215,8 +1250,12 @@ def recording_radio(request, recording_id):
                 else None
             ),
             "channels": list(entry.channels.all()) if entry else [],
-            "target_audiences": list(entry.target_audiences.all()) if entry else [],
-            "radio_language": radio_language_name(entry.language) if entry else "",
+            "target_audiences": (
+                list(entry.target_audiences.all()) if entry else []
+            ),
+            "radio_language": (
+                radio_language_name(entry.language) if entry else ""
+            ),
         }
     )
     return render(request, "gui_v2/recording_radio.html", context)
@@ -1237,7 +1276,11 @@ def recording_deliveries(request, recording_id):
         .order_by("-delivery__created_at", "-created_at")
     )
     selected = next(
-        (item for item in items if str(item.delivery_id) == request.GET.get("delivery")),
+        (
+            item
+            for item in items
+            if str(item.delivery_id) == request.GET.get("delivery")
+        ),
         items[0] if items else None,
     )
     artifact = None
@@ -1269,17 +1312,25 @@ def recording_deliveries(request, recording_id):
             selected.delivery.profile == DeliveryProfile.INTERNAL_COMPLETE
             and selected.status == DeliveryItem.Status.READY
             and active_artifact is None
-            and selected.delivery.items.filter(status=DeliveryItem.Status.READY).count()
+            and selected.delivery.items.filter(
+                status=DeliveryItem.Status.READY
+            ).count()
             == 1
         )
         can_download = (
             request.user.has_perm("delivery.download_delivery")
             and selected.delivery.status
-            not in {selected.delivery.Status.FAILED, selected.delivery.Status.EXPIRED}
+            not in {
+                selected.delivery.Status.FAILED,
+                selected.delivery.Status.EXPIRED,
+            }
             and bool(ready_artifact or direct_internal)
         )
     context = _recording_workspace_context(
-        request, recording, _recording_header_data(request, recording), "deliveries"
+        request,
+        recording,
+        _recording_header_data(request, recording),
+        "deliveries",
     )
     context.update(
         {

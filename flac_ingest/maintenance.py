@@ -7,6 +7,10 @@ from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.utils import timezone
 
+from catalogue.authority import (
+    annotate_recording_authority,
+    recording_authority,
+)
 from catalogue.models import (
     DuplicateCandidate,
     ExternalIdentifier,
@@ -98,15 +102,14 @@ def _protection_map(recording_ids):
         "Innspillingen har andre filressurser enn radio-FLAC.",
     )
     add(
-        RecordingMediaSelection.objects.filter(
-            recording_id__in=ids
-        )
+        RecordingMediaSelection.objects.filter(recording_id__in=ids)
         .filter(
             Q(selected_master__isnull=False)
             | Q(selected_master_by__isnull=False)
             | Q(current_radio_by__isnull=False)
             | Q(current_radio_at__isnull=False)
-        ).values_list("recording_id", flat=True),
+        )
+        .values_list("recording_id", flat=True),
         "Innspillingen har beskyttede valg av master eller radiofil.",
     )
     add(
@@ -273,7 +276,8 @@ def _radio_rows(relative_root=".", recording_id=None):
             | Q(file_assets__locations__relative_path__startswith=f"{prefix}/")
         )
     recordings = list(
-        recordings_query.distinct()
+        annotate_recording_authority(recordings_query)
+        .distinct()
         .select_related("music_library_entry")
         .prefetch_related("file_assets__locations")
     )
@@ -312,6 +316,11 @@ def _radio_rows(relative_root=".", recording_id=None):
                 "existing_paths": existing,
                 "missing_paths": missing,
                 "protected_reasons": protection.get(recording.pk, []),
+                "catalogue_protected": (
+                    recording.authority_managed
+                    or recording.authority_via_release
+                    or recording.authority_local_ownership
+                ),
             }
         )
     return rows
@@ -379,9 +388,20 @@ def create_rebuild_preview(*, user, relative_root="."):
     regenerable = [
         row
         for row in rows
-        if not row["protected_reasons"] and row["existing_paths"]
+        if not row["protected_reasons"]
+        and not row["catalogue_protected"]
+        and row["existing_paths"]
     ]
-    protected = [row for row in rows if row["protected_reasons"]]
+    refresh_only = [
+        row
+        for row in rows
+        if row["catalogue_protected"] and row["existing_paths"]
+    ]
+    protected = [
+        row
+        for row in rows
+        if row["protected_reasons"] or row["catalogue_protected"]
+    ]
     stats = {
         "flac_files": flac_count,
         "regenerable_entries": sum(
@@ -390,6 +410,7 @@ def create_rebuild_preview(*, user, relative_root="."):
         "recordings_reused": len(regenerable),
         "protected_recordings": len(protected),
         "managed_recordings_changed": 0,
+        "radio_metadata_refresh": len(refresh_only),
     }
     return FlacMaintenanceJob.objects.create(
         kind=FlacMaintenanceJob.Kind.REBUILD,
@@ -398,6 +419,7 @@ def create_rebuild_preview(*, user, relative_root="."):
             "stats": stats,
             "regenerable": regenerable,
             "protected": protected,
+            "refresh_only": refresh_only,
         },
         created_by=user,
     )
@@ -509,6 +531,9 @@ def execute_rebuild(job, *, user):
     planned_ids = {
         row["recording_id"] for row in job.plan.get("regenerable", [])
     }
+    refresh_ids = {
+        row["recording_id"] for row in job.plan.get("refresh_only", [])
+    }
     try:
         batch = scan_directory(
             relative_root=job.relative_root,
@@ -529,7 +554,7 @@ def execute_rebuild(job, *, user):
             item.file_asset.recording if item.file_asset_id else None
         )
         recording_id = str(recording.pk) if recording else ""
-        if recording and recording_id not in planned_ids:
+        if recording and recording_id not in planned_ids | refresh_ids:
             skipped += 1
             continue
         if not item.can_apply:
@@ -537,21 +562,31 @@ def execute_rebuild(job, *, user):
             continue
         try:
             with transaction.atomic():
+                if (
+                    recording_id in refresh_ids
+                    and not recording_authority(recording).protected
+                ):
+                    skipped += 1
+                    continue
                 if recording and recording_id not in reset_ids:
+                    protected = recording_authority(recording).protected
                     reasons = _protection_map([recording.pk])[recording.pk]
-                    if reasons:
+                    # A preview never authorizes a broader, destructive reset if
+                    # catalogue membership changes between preview and apply.
+                    if reasons and not protected:
                         skipped += 1
                         continue
-                    MusicLibraryEntry.objects.filter(
-                        recording=recording
-                    ).delete()
-                    RecordingContribution.objects.filter(
-                        recording=recording,
-                        source_record__source_system__name=SOURCE_SYSTEM_NAME,
-                    ).delete()
-                    reset_ids.add(recording_id)
+                    if not protected:
+                        MusicLibraryEntry.objects.filter(
+                            recording=recording
+                        ).delete()
+                        RecordingContribution.objects.filter(
+                            recording=recording,
+                            source_record__source_system__name=SOURCE_SYSTEM_NAME,
+                        ).delete()
                 was_new = recording is None
                 apply_item(item, user=user)
+                reset_ids.add(recording_id)
                 new += int(was_new)
                 rebuilt += int(not was_new)
         except (

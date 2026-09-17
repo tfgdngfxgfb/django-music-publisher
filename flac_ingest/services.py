@@ -14,6 +14,12 @@ from django.db.models import Q
 from django.utils import timezone
 from django.utils.text import slugify
 
+from catalogue.authority import (
+    recording_authority,
+    release_is_protected,
+    file_release_is_protected,
+)
+
 from catalogue.models import (
     DuplicateCandidate,
     ExternalIdentifier,
@@ -27,10 +33,13 @@ from catalogue.validators import (
     normalize_isrc,
     normalize_trade_item_number,
 )
-from managed_music.models import ManagedRecording
 from media_assets.models import FileAsset, FileChecksum, FileLocation
 from media_assets.selection import establish_current_radio_if_unambiguous
-from media_assets.storage import get_storage_root, resolve_storage_path
+from media_assets.storage import (
+    get_storage_root,
+    resolve_location,
+    resolve_storage_path,
+)
 from music_library.models import (
     Channel,
     MusicLibraryChannel,
@@ -48,7 +57,7 @@ from provenance.models import (
     SourceRecord,
     SourceSystem,
 )
-from rights.models import RightsClaim, RightsConfiguration
+from rights.models import RightsClaim
 from rights_core.models import VerificationStatus
 
 from .adapter import (
@@ -102,39 +111,38 @@ def _source_system():
 
 
 def database_is_catalogue_authority(recording):
-    if ManagedRecording.objects.filter(
-        library_entry__recording_id=recording.pk
-    ).exists():
-        return True
-    local_id = RightsConfiguration.objects.values_list(
-        "local_organization_id", flat=True
-    ).first()
-    if not local_id:
-        return False
-    today = timezone.localdate()
-    return (
-        RightsClaim.objects.filter(
-            recording=recording,
-            right_type=RightsClaim.RightType.OWNERSHIP,
-            rights_holder_id=local_id,
-            status=VerificationStatus.CONFIRMED,
-        )
-        .filter(
-            Q(valid_from__isnull=True) | Q(valid_from__lte=today),
-            Q(valid_until__isnull=True) | Q(valid_until__gte=today),
-        )
-        .exists()
-    )
+    """Compatibility name for Recording ingest protection, not writeback."""
+    return recording_authority(recording).protected
 
 
 def mark_recording_for_sync(recording_id):
     recording = Recording.objects.filter(pk=recording_id).first()
-    if not recording or not database_is_catalogue_authority(recording):
+    if not recording or not recording_authority(recording).writeback:
         return 0
     count = 0
     for asset in FileAsset.objects.filter(
         recording=recording, role=FileAsset.Role.RADIO_FLAC
     ):
+        asset.sync_status = FileAsset.SyncStatus.PENDING
+        asset.sync_requested_at = timezone.now()
+        asset.sync_error = ""
+        asset.save(
+            update_fields=("sync_status", "sync_requested_at", "sync_error")
+        )
+        count += 1
+    return count
+
+
+def mark_release_for_sync(release_id, *, track_id=None):
+    if not release_is_protected(Release.objects.filter(pk=release_id).first()):
+        return 0
+    assets = FileAsset.objects.filter(
+        release_track__release_id=release_id, role=FileAsset.Role.RADIO_FLAC
+    )
+    if track_id:
+        assets = assets.filter(release_track_id=track_id)
+    count = 0
+    for asset in assets:
         asset.sync_status = FileAsset.SyncStatus.PENDING
         asset.sync_requested_at = timezone.now()
         asset.sync_error = ""
@@ -991,6 +999,15 @@ def scan_directory(
             ):
                 differences.append("ISRC avviker fra databaseverdien")
             messages.extend(differences)
+        if recording and len(release_candidates) <= 1:
+            try:
+                _release, _track, release_messages = _release_context(
+                    parsed, recording, existing_asset
+                )
+                messages.extend(release_messages)
+            except ValidationError as error:
+                messages.extend(error.messages)
+                action = FlacIngestItem.Action.CONFLICT
         FlacIngestItem.objects.create(
             batch=batch,
             relative_path=relative_path,
@@ -1047,7 +1064,8 @@ def _resolve_or_create_release(parsed):
     signature = _release_signature(parsed)
     if release:
         if (
-            signature
+            not release_is_protected(release)
+            and signature
             and not release.identifiers.filter(
                 scheme=ExternalIdentifier.Scheme.EXTERNAL,
                 namespace=RELEASE_SIGNATURE_NAMESPACE,
@@ -1086,6 +1104,9 @@ def _resolve_or_create_release(parsed):
 
 def _attach_release_cover(release, parsed):
     """Register one unambiguous cover file from the album folder, without writing it."""
+    if release_is_protected(release):
+        _observe_registered_covers(release)
+        return None
     folder_value = str(parsed.get("release_folder", "")).strip()
     if not release or not folder_value or folder_value == ".":
         return None
@@ -1161,6 +1182,8 @@ def _attach_release_cover(release, parsed):
 def _release_track(release, recording, parsed, duration_ms):
     if not release:
         return None
+    if release_is_protected(release):
+        return _match_protected_track(release, recording, parsed)
     disc = parsed.get("disc_number")
     track = parsed.get("track_number")
     if disc and track:
@@ -1194,6 +1217,121 @@ def _release_track(release, recording, parsed, duration_ms):
             else ""
         ),
     )
+
+
+def _match_protected_track(release, recording, parsed):
+    if not parsed.get("track_number"):
+        return None
+    candidates = release.tracks.filter(
+        recording=recording, track_number=parsed["track_number"]
+    )
+    if parsed.get("disc_number"):
+        candidates = candidates.filter(disc_number=parsed["disc_number"])
+    matches = list(candidates[:2])
+    return matches[0] if len(matches) == 1 else None
+
+
+def _release_context(
+    parsed, recording, asset=None, *, apply=False, duration_ms=None
+):
+    """Resolve independently of Recording protection; never mutate managed tracks."""
+    messages = []
+    known = asset.release_track if asset and asset.release_track_id else None
+    if known and release_is_protected(known.release):
+        release, track = known.release, known
+        if track.recording_id != recording.pk:
+            raise ValidationError(
+                "Den beskyttede sporkoblingen gjelder en annen innspilling."
+            )
+    else:
+        release = (
+            _resolve_or_create_release(parsed)
+            if apply
+            else _find_release(parsed)
+        )
+        if release_is_protected(release):
+            track = _match_protected_track(release, recording, parsed)
+            if track is None:
+                messages.append(
+                    "Forvaltet utgivelse: ingen entydig eksisterende sporforekomst passer. Ingen spor opprettes eller flyttes."
+                )
+        elif known and release and known.release_id == release.pk:
+            track = known
+        else:
+            track = (
+                _release_track(release, recording, parsed, duration_ms)
+                if apply
+                else None
+            )
+    if release_is_protected(release):
+        expected = (
+            _release_tags(track)
+            if track
+            else {
+                "ALBUM": release.title,
+                "CATALOGNUMBER": release.catalogue_number,
+            }
+        )
+        for field, tag in RELEASE_TAG_FIELDS:
+            if (
+                tag in expected
+                and str(parsed.get(field) or "").strip()
+                != str(expected[tag] or "").strip()
+            ):
+                messages.append(
+                    f"{tag} avviker fra forvaltet utgivelse/spor. Databaseverdien beholdes."
+                )
+        if (
+            track
+            and track.title_override
+            and parsed.get("title") != track.title_override
+        ):
+            messages.append(
+                "TITLE avviker fra utgivelsens title_override. Sporet beholdes."
+            )
+    return release, track, messages
+
+
+def _observe_registered_covers(release):
+    """Observe only already chosen covers; never discover/replace catalogue links."""
+    for asset in release.file_assets.filter(
+        role=FileAsset.Role.COVER_IMAGE
+    ).prefetch_related("locations"):
+        for location in asset.locations.all():
+            if not location.is_current or location.storage_type not in {
+                FileLocation.StorageType.NAS,
+                FileLocation.StorageType.LOCAL,
+            }:
+                continue
+            try:
+                path = resolve_location(location).server_path
+                stat = path.stat()
+                checksum = file_sha256(path)
+            except (OSError, ValidationError):
+                location.status = FileLocation.Status.MISSING
+                location.save(update_fields=("status",))
+                continue
+            asset.size_bytes = stat.st_size
+            asset.sha256 = checksum
+            asset.metadata_read_at = timezone.now()
+            asset.source_modified_at = datetime.fromtimestamp(
+                stat.st_mtime, tz=timezone.get_current_timezone()
+            )
+            asset.save(
+                update_fields=(
+                    "size_bytes",
+                    "sha256",
+                    "metadata_read_at",
+                    "source_modified_at",
+                )
+            )
+            location.status = FileLocation.Status.ACTIVE
+            location.save(update_fields=("status",))
+            FileChecksum.objects.get_or_create(
+                asset=asset,
+                sha256=checksum,
+                defaults={"reason": FileChecksum.Reason.INGEST},
+            )
 
 
 def _raw_value(value):
@@ -1691,22 +1829,16 @@ def apply_item(item, *, user):
         ):
             for name in parsed.get(field, []):
                 _credit(recording, role, name, source_record)
-    release = (
-        None if catalogue_authority else _resolve_or_create_release(parsed)
+    release, release_track, release_messages = _release_context(
+        parsed,
+        recording,
+        item.file_asset,
+        apply=True,
+        duration_ms=item.technical_metadata.get("duration_ms"),
     )
-    if release and not catalogue_authority:
+    item.messages = list(dict.fromkeys([*item.messages, *release_messages]))
+    if release:
         _attach_release_cover(release, parsed)
-    known_track = item.file_asset.release_track if item.file_asset else None
-    release_track = (
-        known_track
-        if known_track and release and known_track.release_id == release.pk
-        else _release_track(
-            release,
-            recording,
-            parsed,
-            item.technical_metadata.get("duration_ms"),
-        )
-    )
     entry, _ = MusicLibraryEntry.objects.get_or_create(recording=recording)
     # Radio metadata is an exact snapshot of the FLAC tags for an already
     # registered radio file. Missing tags therefore clear earlier values on a
@@ -1852,7 +1984,7 @@ def apply_item(item, *, user):
         asset.sync_status = FileAsset.SyncStatus.SYNCED
         asset.sync_error = ""
         asset.save()
-    if catalogue_authority and _catalogue_metadata_differs(asset, parsed):
+    if _catalogue_metadata_differs(asset, parsed):
         asset.sync_status = FileAsset.SyncStatus.PENDING
         asset.sync_requested_at = timezone.now()
         asset.sync_error = (
@@ -1861,6 +1993,10 @@ def apply_item(item, *, user):
         asset.save(
             update_fields=("sync_status", "sync_requested_at", "sync_error")
         )
+    elif release_messages:
+        asset.sync_status = FileAsset.SyncStatus.CONFLICT
+        asset.sync_error = " ".join(release_messages)
+        asset.save(update_fields=("sync_status", "sync_error"))
     FileChecksum.objects.get_or_create(
         asset=asset,
         sha256=item.sha256,
@@ -1976,9 +2112,7 @@ def preview_radio_file_split(*, asset_id):
         )
     blocked_reason = ""
     if (
-        ManagedRecording.objects.filter(
-            library_entry__recording=asset.recording
-        ).exists()
+        database_is_catalogue_authority(asset.recording)
         or RightsClaim.objects.filter(recording=asset.recording).exists()
     ):
         blocked_reason = (
@@ -2042,9 +2176,7 @@ def split_radio_file_to_new_recording(*, asset_id, user):
                 "Innspillingen har ikke flere radiofiler. Det er derfor ingenting å skille ut."
             )
         if (
-            ManagedRecording.objects.filter(
-                library_entry__recording=old_recording
-            ).exists()
+            database_is_catalogue_authority(old_recording)
             or RightsClaim.objects.filter(recording=old_recording).exists()
         ):
             raise ValidationError(
@@ -2265,10 +2397,50 @@ def split_radio_file_to_new_recording(*, asset_id, user):
     return recording, old_recording, remaining_assets
 
 
+RELEASE_TAG_FIELDS = (
+    ("album", "ALBUM"),
+    ("track_number", "TRACKNUMBER"),
+    ("disc_number", "DISCNUMBER"),
+    ("date", "DATE"),
+    ("catalogue_number", "CATALOGNUMBER"),
+    ("barcode", "BARCODE"),
+)
+
+
+def _release_tags(track):
+    release = track.release
+    values = {
+        "ALBUM": release.title,
+        "TRACKNUMBER": track.track_number or "",
+        "DISCNUMBER": track.disc_number or "",
+        "DATE": "",
+        "CATALOGNUMBER": release.catalogue_number,
+        "BARCODE": "",
+    }
+    if release.release_date:
+        values["DATE"] = release.release_date.isoformat()
+    elif release.release_year:
+        values["DATE"] = release.release_year
+    barcode = release.identifiers.filter(
+        scheme__in=(
+            ExternalIdentifier.Scheme.UPC,
+            ExternalIdentifier.Scheme.EAN,
+            ExternalIdentifier.Scheme.GTIN,
+        )
+    ).first()
+    if barcode:
+        values["BARCODE"] = barcode.normalized_value
+    return values
+
+
 def _catalogue_tags(asset, p7uuid_only=False):
     recording = asset.recording
     values = {"P7UUID": str(recording.pk)}
     if p7uuid_only:
+        return values
+    if file_release_is_protected(asset):
+        values.update(_release_tags(asset.release_track))
+    if not recording_authority(recording).writeback:
         return values
     values.update(
         {
@@ -2299,37 +2471,6 @@ def _catalogue_tags(asset, p7uuid_only=False):
         ]
         if names:
             values[tag] = names
-    track = asset.release_track
-    if track:
-        release = track.release
-        values.update(
-            {
-                "ALBUM": release.title,
-                "ALBUMARTIST": (
-                    primary.credited_as or str(primary.party)
-                    if primary
-                    else ""
-                ),
-                "TRACKNUMBER": track.track_number or "",
-                "DISCNUMBER": track.disc_number or "",
-                "DATE": "",
-                "CATALOGNUMBER": release.catalogue_number,
-                "BARCODE": "",
-            }
-        )
-        if release.release_date:
-            values["DATE"] = release.release_date.isoformat()
-        elif release.release_year:
-            values["DATE"] = release.release_year
-        barcode = release.identifiers.filter(
-            scheme__in=(
-                ExternalIdentifier.Scheme.UPC,
-                ExternalIdentifier.Scheme.EAN,
-                ExternalIdentifier.Scheme.GTIN,
-            )
-        ).first()
-        if barcode:
-            values["BARCODE"] = barcode.normalized_value
     return values
 
 
@@ -2340,7 +2481,9 @@ def _catalogue_metadata_differs(asset, parsed):
     def scalar(value):
         return str(value or "").strip().casefold()
 
-    if scalar(parsed.get("title")) != scalar(expected.get("TITLE")):
+    if "TITLE" in expected and scalar(parsed.get("title")) != scalar(
+        expected["TITLE"]
+    ):
         return True
     try:
         source_isrc = (
@@ -2348,11 +2491,11 @@ def _catalogue_metadata_differs(asset, parsed):
         )
     except ValidationError:
         return True
-    if source_isrc != expected.get("ISRC", ""):
+    if "ISRC" in expected and source_isrc != expected["ISRC"]:
         return True
-    if scalar((parsed.get("artists") or [""])[0]) != scalar(
-        expected.get("ARTIST")
-    ):
+    if "ARTIST" in expected and scalar(
+        (parsed.get("artists") or [""])[0]
+    ) != scalar(expected.get("ARTIST")):
         return True
     for field, tag in (
         ("composers", "COMPOSER"),
@@ -2361,18 +2504,13 @@ def _catalogue_metadata_differs(asset, parsed):
     ):
         actual = [scalar(value) for value in parsed.get(field, [])]
         wanted = [scalar(value) for value in expected.get(tag, [])]
-        if actual != wanted:
+        if tag in expected and actual != wanted:
             return True
     if asset.release_track_id:
-        for field, tag in (
-            ("album", "ALBUM"),
-            ("track_number", "TRACKNUMBER"),
-            ("disc_number", "DISCNUMBER"),
-            ("date", "DATE"),
-            ("catalogue_number", "CATALOGNUMBER"),
-            ("barcode", "BARCODE"),
-        ):
-            if scalar(parsed.get(field)) != scalar(expected.get(tag)):
+        for field, tag in RELEASE_TAG_FIELDS:
+            if tag in expected and scalar(parsed.get(field)) != scalar(
+                expected[tag]
+            ):
                 return True
     return False
 
@@ -2406,9 +2544,8 @@ def sync_file_asset(asset_id, *, p7uuid_only=False):
                 )
             )
         return None
-    if not p7uuid_only and not database_is_catalogue_authority(
-        asset.recording
-    ):
+    values = _catalogue_tags(asset, p7uuid_only=p7uuid_only)
+    if not p7uuid_only and set(values) == {"P7UUID"}:
         message = (
             "Katalogtags ble ikke skrevet fordi databasen ikke er "
             "katalogautoritet for innspillingen."
@@ -2423,7 +2560,6 @@ def sync_file_asset(asset_id, *, p7uuid_only=False):
             protected_tags={},
             error=message,
         )
-    values = _catalogue_tags(asset, p7uuid_only=p7uuid_only)
     error_message = ""
     try:
         path = _asset_path(asset)
@@ -2483,8 +2619,6 @@ def sync_file_asset(asset_id, *, p7uuid_only=False):
 
 
 def sync_recording_files(recording):
-    if not database_is_catalogue_authority(recording):
-        return []
     return [
         sync_file_asset(asset.pk)
         for asset in FileAsset.objects.filter(

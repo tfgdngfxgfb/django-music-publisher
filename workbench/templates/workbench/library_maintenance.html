@@ -52,11 +52,12 @@
     <div class="stats-grid">
       <div><strong>{{ selected_job.plan.stats.flac_files|default:0 }}</strong><span>FLAC-filer leses</span></div>
       <div><strong>{{ selected_job.plan.stats.regenerable_entries|default:0 }}</strong><span>Poster regenereres</span></div>
+      <div><strong>{{ selected_job.plan.stats.radio_metadata_refresh|default:0 }}</strong><span>Beskyttet katalog: bare radiodata og filobservasjoner leses på nytt</span></div>
       <div><strong>{{ selected_job.plan.stats.recordings_reused|default:0 }}</strong><span>Innspillinger gjenbrukes</span></div>
       <div><strong>{{ selected_job.plan.stats.protected_recordings|default:0 }}</strong><span>Beskyttede innspillinger</span></div>
       <div><strong>0</strong><span>Forvaltede innspillinger endres</span></div>
     </div>
-    {% if selected_job.plan.protected %}<details><summary>Vis beskyttet kunnskap ({{ selected_job.plan.stats.protected_recordings }})</summary><div class="table-wrap"><table class="data-table"><thead><tr><th>Innspilling</th><th>Bevares fordi</th></tr></thead><tbody>{% for item in selected_job.plan.protected|slice:":100" %}<tr><td>{{ item.title }}</td><td>{{ item.protected_reasons|join:" " }}</td></tr>{% endfor %}</tbody></table></div></details>{% endif %}
+    {% if selected_job.plan.protected %}<details><summary>Vis beskyttet kunnskap ({{ selected_job.plan.stats.protected_recordings }})</summary><div class="table-wrap"><table class="data-table"><thead><tr><th>Innspilling</th><th>Bevares fordi</th></tr></thead><tbody>{% for item in selected_job.plan.protected|slice:":100" %}<tr><td>{{ item.title }}</td><td>{{ item.protected_reasons|join:" " }}{% if item.catalogue_protected %} Kanonisk katalog beholdes; radiodata kan leses på nytt.{% endif %}</td></tr>{% endfor %}</tbody></table></div></details>{% endif %}
   {% endif %}
 
   {% if selected_job.status == 'preview' %}
@@ -65,7 +66,7 @@
       {% if selected_job.kind == 'cleanup' %}
         <p>Dette vil fjerne {{ selected_job.plan.stats.safe_to_remove|default:0 }} regenererbare Musikkarkiv-tilhørigheter. Innspillinger, filhistorikk og beskyttet kunnskap beholdes.</p>
       {% else %}
-        <p>Dette vil regenerere {{ selected_job.plan.stats.regenerable_entries|default:0 }} uforvaltede Musikkarkiv-poster fra {{ selected_job.plan.stats.flac_files|default:0 }} FLAC-filer. All Forvaltet musikk og beskyttet kunnskap beholdes.</p>
+        <p>Dette vil regenerere {{ selected_job.plan.stats.regenerable_entries|default:0 }} uforvaltede Musikkarkiv-poster fra {{ selected_job.plan.stats.flac_files|default:0 }} FLAC-filer. Katalogkunnskap beholdes. Radiodata og filobservasjoner for {{ selected_job.plan.stats.radio_metadata_refresh|default:0 }} beskyttede innspillinger leses på nytt uten katalogoverskriving.</p>
         <label><input type="checkbox" name="backup_confirmed" value="yes" required> Databasebackup er tatt eller bevisst vurdert.</label>
       {% endif %}
       <label><input type="checkbox" name="confirmed" value="yes" required> Jeg har lest planen og forstår hva som fjernes, beholdes og regenereres.</label>

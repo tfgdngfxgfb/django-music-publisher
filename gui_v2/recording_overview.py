@@ -1,6 +1,7 @@
 """Read-only presentation data for the GUI v2 Recording overview."""
 
 from django.db.models import Prefetch
+from catalogue.authority import annotate_file_authority
 
 from catalogue.models import (
     DuplicateCandidate,
@@ -64,9 +65,11 @@ def recording_overview_queryset():
         "party", "artist_identity", "source_record__source_system"
     ).order_by("display_order", "id")
     tracks = recording_release_tracks_with_covers_queryset()
-    files = FileAsset.objects.prefetch_related(
-        "locations", "checksum_history"
-    ).order_by("role", "filename", "id")
+    files = (
+        annotate_file_authority(FileAsset.objects.all())
+        .prefetch_related("locations", "checksum_history")
+        .order_by("role", "filename", "id")
+    )
     duplicate_cases = DuplicateCandidate.objects.select_related(
         "recording_a", "recording_b"
     )

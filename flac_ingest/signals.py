@@ -11,7 +11,7 @@ from catalogue.models import (
     Release,
     ReleaseTrack,
 )
-from managed_music.models import ManagedRecording
+from managed_music.models import ManagedRecording, ManagedRelease
 from rights.models import RightsClaim, RightsDecision
 
 _automatic_sync_suppressed = ContextVar(
@@ -37,6 +37,14 @@ def _mark(recording_id):
     mark_recording_for_sync(recording_id)
 
 
+def _mark_release(release_id, *, track_id=None):
+    if not release_id or _automatic_sync_suppressed.get():
+        return
+    from .services import mark_release_for_sync
+
+    mark_release_for_sync(release_id, track_id=track_id)
+
+
 @receiver(post_save, sender=Recording)
 def recording_changed(sender, instance, created, **kwargs):
     if not created:
@@ -51,20 +59,23 @@ def contribution_changed(sender, instance, **kwargs):
 @receiver((post_save, post_delete), sender=ExternalIdentifier)
 def identifier_changed(sender, instance, **kwargs):
     _mark(instance.recording_id)
+    _mark_release(instance.release_id)
 
 
 @receiver(post_save, sender=Release)
 def release_changed(sender, instance, created, **kwargs):
     if not created:
-        for recording_id in instance.tracks.values_list(
-            "recording_id", flat=True
-        ):
-            _mark(recording_id)
+        _mark_release(instance.pk)
 
 
 @receiver((post_save, post_delete), sender=ReleaseTrack)
 def release_track_changed(sender, instance, **kwargs):
-    _mark(instance.recording_id)
+    _mark_release(instance.release_id, track_id=instance.pk)
+
+
+@receiver(post_save, sender=ManagedRelease)
+def managed_release_changed(sender, instance, **kwargs):
+    _mark_release(instance.release_id)
 
 
 @receiver(post_save, sender=ManagedRecording)
