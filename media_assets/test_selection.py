@@ -2,7 +2,11 @@ from django.test import TestCase
 
 from catalogue.models import Recording
 
-from media_assets.models import FileAsset, FileLocation, RecordingMediaSelection
+from media_assets.models import (
+    FileAsset,
+    FileLocation,
+    RecordingMediaSelection,
+)
 from media_assets.selection import establish_current_radio_if_unambiguous
 
 
@@ -27,13 +31,17 @@ class CurrentRadioSelectionTests(TestCase):
         recording = Recording.objects.create(title="Entydig")
         asset = self._radio(recording, "one.flac")
 
-        selected, changed = establish_current_radio_if_unambiguous(recording.pk)
+        selected, changed = establish_current_radio_if_unambiguous(
+            recording.pk
+        )
 
         asset.refresh_from_db()
         selection = RecordingMediaSelection.objects.get(recording=recording)
         self.assertTrue(changed)
         self.assertEqual(selected, asset)
-        self.assertEqual(asset.lifecycle_status, FileAsset.LifecycleStatus.CURRENT)
+        self.assertEqual(
+            asset.lifecycle_status, FileAsset.LifecycleStatus.CURRENT
+        )
         self.assertEqual(selection.current_radio_id, asset.pk)
 
     def test_does_not_choose_between_multiple_radio_files(self):
@@ -41,12 +49,16 @@ class CurrentRadioSelectionTests(TestCase):
         first = self._radio(recording, "one.flac")
         second = self._radio(recording, "two.flac")
 
-        selected, changed = establish_current_radio_if_unambiguous(recording.pk)
+        selected, changed = establish_current_radio_if_unambiguous(
+            recording.pk
+        )
 
         self.assertIsNone(selected)
         self.assertFalse(changed)
         self.assertIsNone(
-            RecordingMediaSelection.objects.get(recording=recording).current_radio_id
+            RecordingMediaSelection.objects.get(
+                recording=recording
+            ).current_radio_id
         )
         first.refresh_from_db()
         second.refresh_from_db()
@@ -66,11 +78,15 @@ class CurrentRadioSelectionTests(TestCase):
         )
         self._radio(recording, "new.flac")
 
-        selected, changed = establish_current_radio_if_unambiguous(recording.pk)
+        selected, changed = establish_current_radio_if_unambiguous(
+            recording.pk
+        )
 
         self.assertFalse(changed)
         self.assertEqual(selected, current)
         self.assertEqual(
-            RecordingMediaSelection.objects.get(recording=recording).current_radio_id,
+            RecordingMediaSelection.objects.get(
+                recording=recording
+            ).current_radio_id,
             current.pk,
         )

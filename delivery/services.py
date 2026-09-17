@@ -22,7 +22,11 @@ from django.db import transaction
 from django.utils import timezone
 from mutagen.flac import FLAC
 
-from catalogue.models import ExternalIdentifier, Recording, RecordingContribution
+from catalogue.models import (
+    ExternalIdentifier,
+    Recording,
+    RecordingContribution,
+)
 from media_assets.mastering import _pcm_digest
 from media_assets.models import FileAsset, FileLocation
 from media_assets.storage import (
@@ -63,7 +67,8 @@ def _recordings(recording_ids):
     return list(
         Recording.objects.filter(pk__in=recording_ids)
         .select_related(
-            "media_selection__current_radio", "music_library_entry__managed_recording"
+            "media_selection__current_radio",
+            "music_library_entry__managed_recording",
         )
         .prefetch_related(
             "contributions__party",
@@ -80,7 +85,10 @@ def _artist(recording):
         item.display_credit
         for item in recording.contributions.all()
         if item.role
-        in {RecordingContribution.Role.PRIMARY, RecordingContribution.Role.FEATURED}
+        in {
+            RecordingContribution.Role.PRIMARY,
+            RecordingContribution.Role.FEATURED,
+        }
         and item.display_credit != "Uavklart"
     ]
     return ", ".join(dict.fromkeys(values))
@@ -104,7 +112,11 @@ def resolve_delivery_source(recording, *, verify_file=True):
         asset = None
     if asset is None:
         return SourceResolution(
-            recording, None, None, "missing_current", "Mangler gjeldende radiofil"
+            recording,
+            None,
+            None,
+            "missing_current",
+            "Mangler gjeldende radiofil",
         )
     if (
         asset.recording_id != recording.pk
@@ -138,7 +150,12 @@ def resolve_delivery_source(recording, *, verify_file=True):
     if verify_file:
         try:
             validate_readable_location(location)
-        except (ImproperlyConfigured, ValidationError, OSError, StorageFileUnavailable):
+        except (
+            ImproperlyConfigured,
+            ValidationError,
+            OSError,
+            StorageFileUnavailable,
+        ):
             return SourceResolution(
                 recording,
                 asset,
@@ -150,7 +167,11 @@ def resolve_delivery_source(recording, *, verify_file=True):
 
 
 def _safe_component(value, fallback):
-    value = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", str(value or "")).strip().rstrip(". ")
+    value = (
+        re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", str(value or ""))
+        .strip()
+        .rstrip(". ")
+    )
     value = re.sub(r"\s+", " ", value)[:180] or fallback
     if value.upper() in WINDOWS_RESERVED:
         value = f"_{value}"
@@ -165,7 +186,9 @@ def _output_names(rows):
         )
         number = seen.get(base.casefold(), 0) + 1
         seen[base.casefold()] = number
-        row["output_filename"] = f"{base}{f' ({number})' if number > 1 else ''}.flac"
+        row["output_filename"] = (
+            f"{base}{f' ({number})' if number > 1 else ''}.flac"
+        )
 
 
 def build_preview(recording_ids, *, user, cleaned_data):
@@ -187,8 +210,12 @@ def build_preview(recording_ids, *, user, cleaned_data):
                 "status": source.status,
                 "message": source.message,
                 "asset_id": str(source.asset.pk) if source.asset else None,
-                "asset_revision": source.asset.revision if source.asset else None,
-                "location_id": str(source.location.pk) if source.location else None,
+                "asset_revision": (
+                    source.asset.revision if source.asset else None
+                ),
+                "location_id": (
+                    str(source.location.pk) if source.location else None
+                ),
                 "location_revision": (
                     source.location.revision if source.location else None
                 ),
@@ -203,19 +230,28 @@ def build_preview(recording_ids, *, user, cleaned_data):
         "purpose_label": Delivery.Purpose(cleaned_data["purpose"]).label,
         "purpose_description": cleaned_data.get("purpose_description", ""),
         "recipient_name": cleaned_data["recipient_name"],
-        "recipient_organization": cleaned_data.get("recipient_organization", ""),
-        "retain_for_future_use": bool(cleaned_data.get("retain_for_future_use")),
+        "recipient_organization": cleaned_data.get(
+            "recipient_organization", ""
+        ),
+        "retain_for_future_use": bool(
+            cleaned_data.get("retain_for_future_use")
+        ),
         "other_use": bool(cleaned_data.get("other_use")),
         "other_use_description": cleaned_data.get("other_use_description", ""),
         "items": rows,
     }
-    return {**data, "token": signing.dumps(data, salt=PREVIEW_SALT, compress=True)}
+    return {
+        **data,
+        "token": signing.dumps(data, salt=PREVIEW_SALT, compress=True),
+    }
 
 
 def _artifact_root():
     raw = getattr(settings, "P7_DELIVERY_ARTIFACT_ROOT", "")
     if not raw:
-        raise ImproperlyConfigured("P7_DELIVERY_ARTIFACT_ROOT er ikke konfigurert.")
+        raise ImproperlyConfigured(
+            "P7_DELIVERY_ARTIFACT_ROOT er ikke konfigurert."
+        )
     root = Path(raw).expanduser().resolve(strict=False)
     root.mkdir(parents=True, exist_ok=True)
     return root
@@ -257,7 +293,9 @@ def _source_metadata(location):
 
 def _external_copy(item, target):
     source = validate_readable_location(item.source_file_location).server_path
-    with source.open("rb") as source_stream, target.open("wb") as target_stream:
+    with source.open("rb") as source_stream, target.open(
+        "wb"
+    ) as target_stream:
         shutil.copyfileobj(source_stream, target_stream, length=1024 * 1024)
     tags = _external_tags(item)
     audio = FLAC(target)
@@ -284,7 +322,9 @@ def _manifest_rows(items, external):
             row.update(
                 {
                     "recording_uuid": str(item.recording_uuid_snapshot),
-                    "file_asset_uuid": str(item.source_asset_uuid_snapshot or ""),
+                    "file_asset_uuid": str(
+                        item.source_asset_uuid_snapshot or ""
+                    ),
                     "source_sha256": item.source_sha256_snapshot,
                     "profile": item.delivery.profile,
                 }
@@ -294,7 +334,11 @@ def _manifest_rows(items, external):
 
 def _write_manifest(directory, items, external):
     rows = list(_manifest_rows(items, external))
-    fields = list(rows[0]) if rows else ["title", "artist", "isrc", "output_filename"]
+    fields = (
+        list(rows[0])
+        if rows
+        else ["title", "artist", "isrc", "output_filename"]
+    )
     csv_path = directory / "manifest.csv"
     with csv_path.open("w", encoding="utf-8-sig", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=fields)
@@ -375,7 +419,9 @@ def _delivery_manifest(delivery):
         )
     )
     return list(
-        _manifest_rows(ready, delivery.profile == DeliveryProfile.EXTERNAL_RADIO)
+        _manifest_rows(
+            ready, delivery.profile == DeliveryProfile.EXTERNAL_RADIO
+        )
     )
 
 
@@ -388,7 +434,9 @@ def confirm_preview(token, *, user, allow_partial=False):
         ) from error
     if data.get("user_id") != str(user.pk):
         raise PermissionDenied
-    if data.get("profile") == DeliveryProfile.EXTERNAL_RADIO and not user.has_perm(
+    if data.get(
+        "profile"
+    ) == DeliveryProfile.EXTERNAL_RADIO and not user.has_perm(
         "delivery.create_external_delivery"
     ):
         raise PermissionDenied
@@ -405,7 +453,10 @@ def confirm_preview(token, *, user, allow_partial=False):
             or old["location_id"] != now_location
             or old["recording_revision"] != recording.revision
             or (now.asset and old["asset_revision"] != now.asset.revision)
-            or (now.location and old.get("location_revision") != now.location.revision)
+            or (
+                now.location
+                and old.get("location_revision") != now.location.revision
+            )
         ):
             raise DeliveryPreviewStale(
                 "Gjeldende radiofil eller katalogdata er endret. Lag en ny forhåndsvisning."
@@ -443,7 +494,9 @@ def confirm_preview(token, *, user, allow_partial=False):
                 source_file_asset=source.asset if ready else None,
                 source_file_location=source.location if ready else None,
                 status=(
-                    DeliveryItem.Status.READY if ready else DeliveryItem.Status.SKIPPED
+                    DeliveryItem.Status.READY
+                    if ready
+                    else DeliveryItem.Status.SKIPPED
                 ),
                 output_filename=old["output_filename"] if ready else "",
                 recording_uuid_snapshot=recording.pk,
@@ -454,7 +507,8 @@ def confirm_preview(token, *, user, allow_partial=False):
                 source_sha256_snapshot=source.asset.sha256 if ready else "",
                 delivered_metadata=(
                     _source_metadata(source.location)
-                    if ready and data["profile"] == DeliveryProfile.INTERNAL_COMPLETE
+                    if ready
+                    and data["profile"] == DeliveryProfile.INTERNAL_COMPLETE
                     else {}
                 ),
                 message="" if ready else source.message,
@@ -471,10 +525,15 @@ def confirm_preview(token, *, user, allow_partial=False):
         shutil.rmtree(artifact_path(str(delivery.pk)), ignore_errors=True)
         logger.exception(
             "Delivery artifact generation failed",
-            extra={"delivery_id": str(delivery.pk), "profile": delivery.profile},
+            extra={
+                "delivery_id": str(delivery.pk),
+                "profile": delivery.profile,
+            },
         )
         delivery.status = Delivery.Status.FAILED
         delivery.save(update_fields={"status", "manifest_snapshot"})
-        raise ValidationError("Leveranseartefakten kunne ikke opprettes.") from error
+        raise ValidationError(
+            "Leveranseartefakten kunne ikke opprettes."
+        ) from error
     delivery.save(update_fields={"status", "manifest_snapshot"})
     return delivery

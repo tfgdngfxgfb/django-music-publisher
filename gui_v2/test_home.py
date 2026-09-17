@@ -34,19 +34,27 @@ class HomeTests(TestCase):
         self.grant("view_recording", "view_release")
         recording = Recording.objects.create(title="Nylig innspilling")
         release = Release.objects.create(title="Nylig utgivelse")
-        self.client.get(reverse("gui_v2:recording_detail", args=[recording.pk]))
+        self.client.get(
+            reverse("gui_v2:recording_detail", args=[recording.pk])
+        )
         self.client.get(reverse("gui_v2:release_detail", args=[release.pk]))
         response = self.client.get(self.home_url)
         self.assertEqual(
             [item["title"] for item in response.context["recent_items"]],
             ["Nylig utgivelse", "Nylig innspilling"],
         )
-        other = get_user_model().objects.create_user(username="second-home-user")
+        other = get_user_model().objects.create_user(
+            username="second-home-user"
+        )
         second_client = Client()
         second_client.force_login(other)
-        self.assertNotContains(second_client.get(self.home_url), "Nylig utgivelse")
+        self.assertNotContains(
+            second_client.get(self.home_url), "Nylig utgivelse"
+        )
         self.user.user_permissions.clear()
-        self.assertEqual(self.client.get(self.home_url).context["recent_items"], [])
+        self.assertEqual(
+            self.client.get(self.home_url).context["recent_items"], []
+        )
 
     def test_partial_digitization_permissions_do_not_offer_dead_links(self):
         self.grant("view_digitizationbatch")
@@ -71,7 +79,9 @@ class HomeTests(TestCase):
         self.assertIn("status=open", response.context["followups"][0]["url"])
         self.client.get(reverse("gui_v2:digitization_detail", args=[batch.pk]))
         self.assertEqual(
-            self.client.get(self.home_url).context["continue_items"][0]["title"],
+            self.client.get(self.home_url).context["continue_items"][0][
+                "title"
+            ],
             "Arbeidsbatch",
         )
 
@@ -136,10 +146,13 @@ class HomeTests(TestCase):
     def test_recent_list_resolves_in_batches(self):
         self.grant("view_recording")
         recordings = [
-            Recording.objects.create(title=f"Spor {index}") for index in range(7)
+            Recording.objects.create(title=f"Spor {index}")
+            for index in range(7)
         ]
         for recording in recordings:
-            self.client.get(reverse("gui_v2:recording_detail", args=[recording.pk]))
+            self.client.get(
+                reverse("gui_v2:recording_detail", args=[recording.pk])
+            )
         with CaptureQueriesContext(connection) as queries:
             response = self.client.get(self.home_url)
         self.assertEqual(len(response.context["recent_items"]), 7)

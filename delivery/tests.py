@@ -17,7 +17,11 @@ from mutagen.flac import FLAC
 
 from catalogue.models import Recording, RecordingContribution
 from media_assets.mastering import _pcm_digest
-from media_assets.models import FileAsset, FileLocation, RecordingMediaSelection
+from media_assets.models import (
+    FileAsset,
+    FileLocation,
+    RecordingMediaSelection,
+)
 
 from delivery.models import (
     Delivery,
@@ -110,7 +114,11 @@ class DeliveryTests(TestCase):
                 (np.linspace(-0.2, 0.2, 600), np.linspace(0.2, -0.2, 600))
             )
             sf.write(
-                self.root / filename, audio, 48000, format="FLAC", subtype="PCM_24"
+                self.root / filename,
+                audio,
+                48000,
+                format="FLAC",
+                subtype="PCM_24",
             )
             flac = FLAC(self.root / filename)
             for key, value in (
@@ -171,7 +179,9 @@ class DeliveryTests(TestCase):
         self,
     ):
         recording, source, _, selection = self._recording()
-        delivery = confirm_preview(self._preview([recording])["token"], user=self.user)
+        delivery = confirm_preview(
+            self._preview([recording])["token"], user=self.user
+        )
         item = delivery.items.get()
         self.assertEqual(item.source_file_asset, source)
         replacement = FileAsset.objects.create(
@@ -210,22 +220,30 @@ class DeliveryTests(TestCase):
         missing, *_ = self._recording("Mangler", "missing.flac", present=False)
         preview = self._preview([ready, missing])
         self.assertEqual(
-            {row["status"] for row in preview["items"]}, {"ready", "unavailable"}
+            {row["status"] for row in preview["items"]},
+            {"ready", "unavailable"},
         )
         with self.assertRaises(ValidationError):
             confirm_preview(preview["token"], user=self.user)
-        delivery = confirm_preview(preview["token"], user=self.user, allow_partial=True)
+        delivery = confirm_preview(
+            preview["token"], user=self.user, allow_partial=True
+        )
         self.assertEqual(delivery.status, Delivery.Status.PARTIAL)
         self.assertEqual(
-            delivery.items.filter(status=DeliveryItem.Status.SKIPPED).count(), 1
+            delivery.items.filter(status=DeliveryItem.Status.SKIPPED).count(),
+            1,
         )
 
     def test_internal_single_is_exact_source_and_read_only(self):
         recording, asset, location, _ = self._recording()
         revisions = (recording.revision, asset.revision, location.revision)
         before = (self.root / "radio.flac").read_bytes()
-        delivery = confirm_preview(self._preview([recording])["token"], user=self.user)
-        response = self.client.get(reverse("delivery:download", args=[delivery.pk]))
+        delivery = confirm_preview(
+            self._preview([recording])["token"], user=self.user
+        )
+        response = self.client.get(
+            reverse("delivery:download", args=[delivery.pk])
+        )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(b"".join(response.streaming_content), before)
         self.assertEqual((self.root / "radio.flac").read_bytes(), before)
@@ -268,7 +286,9 @@ class DeliveryTests(TestCase):
         source_bytes = (self.root / "radio.flac").read_bytes()
         source_pcm = _pcm_digest(self.root / "radio.flac")
         delivery = confirm_preview(
-            self._preview([recording], DeliveryProfile.EXTERNAL_RADIO)["token"],
+            self._preview([recording], DeliveryProfile.EXTERNAL_RADIO)[
+                "token"
+            ],
             user=self.user,
         )
         artifact = delivery.artifacts.get()
@@ -283,7 +303,9 @@ class DeliveryTests(TestCase):
         first, *_ = self._recording("Første", "first.flac")
         second, *_ = self._recording("Andre", "second.flac")
         delivery = confirm_preview(
-            self._preview([first, second], DeliveryProfile.EXTERNAL_RADIO)["token"],
+            self._preview([first, second], DeliveryProfile.EXTERNAL_RADIO)[
+                "token"
+            ],
             user=self.user,
         )
         artifact = delivery.artifacts.get()
@@ -312,15 +334,23 @@ class DeliveryTests(TestCase):
     def test_filename_is_windows_safe(self):
         recording, *_ = self._recording("Sang: <test>?", "safe.flac")
         preview = self._preview([recording])
-        self.assertNotRegex(preview["items"][0]["output_filename"], r'[<>:"/\\|?*]')
+        self.assertNotRegex(
+            preview["items"][0]["output_filename"], r'[<>:"/\\|?*]'
+        )
 
     def test_unauthenticated_and_unpermitted_download_are_denied(self):
         recording, *_ = self._recording()
-        delivery = confirm_preview(self._preview([recording])["token"], user=self.user)
+        delivery = confirm_preview(
+            self._preview([recording])["token"], user=self.user
+        )
         self.client.logout()
-        response = self.client.get(reverse("delivery:download", args=[delivery.pk]))
+        response = self.client.get(
+            reverse("delivery:download", args=[delivery.pk])
+        )
         self.assertEqual(response.status_code, 302)
-        other = get_user_model().objects.create_user("other", password="secret")
+        other = get_user_model().objects.create_user(
+            "other", password="secret"
+        )
         self.client.force_login(other)
         self.assertEqual(
             self.client.get(
@@ -332,7 +362,9 @@ class DeliveryTests(TestCase):
     def test_cleanup_removes_artifact_but_keeps_delivery_audit(self):
         recording, *_ = self._recording()
         delivery = confirm_preview(
-            self._preview([recording], DeliveryProfile.EXTERNAL_RADIO)["token"],
+            self._preview([recording], DeliveryProfile.EXTERNAL_RADIO)[
+                "token"
+            ],
             user=self.user,
         )
         artifact = delivery.artifacts.get()
@@ -382,4 +414,6 @@ class DeliveryTests(TestCase):
         )
         self.assertEqual(response.status_code, 302)
         delivery = Delivery.objects.get()
-        self.assertEqual(response.url, reverse("delivery:detail", args=[delivery.pk]))
+        self.assertEqual(
+            response.url, reverse("delivery:detail", args=[delivery.pk])
+        )

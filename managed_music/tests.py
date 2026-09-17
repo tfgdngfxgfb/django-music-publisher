@@ -11,7 +11,10 @@ from rights.services import decide_rights_claim
 from rights_core.models import VerificationStatus
 
 from managed_music.models import ManagedRecording, ManagedRelease
-from managed_music.services import create_managed_recording, save_managed_release
+from managed_music.services import (
+    create_managed_recording,
+    save_managed_release,
+)
 
 
 class ManagedMusicTests(TestCase):
@@ -106,7 +109,9 @@ class ManagedMusicTests(TestCase):
 
         self.assertEqual(managed.release, release)
         self.assertFalse(ManagedRecording.objects.exists())
-        self.assertFalse(RightsClaim.objects.filter(recording=recording).exists())
+        self.assertFalse(
+            RightsClaim.objects.filter(recording=recording).exists()
+        )
 
     def test_managed_release_is_unique_and_protects_release(self):
         release = Release.objects.create(title="Beskyttet utgivelse")

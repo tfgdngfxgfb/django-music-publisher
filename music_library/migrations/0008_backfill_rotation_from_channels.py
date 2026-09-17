@@ -31,5 +31,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RunPython(backfill_rotation_from_channels, migrations.RunPython.noop)
+        migrations.RunPython(
+            backfill_rotation_from_channels, migrations.RunPython.noop
+        )
     ]

@@ -1611,15 +1611,21 @@ class FlacWorkbenchPermissionTests(FlacTestMixin, TestCase):
             response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Les inn fra musikkarkiv")
-        self.assertContains(response, "Les hele arkivet på nytt og forhåndsvis")
+        self.assertContains(
+            response, "Les hele arkivet på nytt og forhåndsvis"
+        )
 
     def test_full_rescan_button_reads_unchanged_files_into_preview_only(self):
         path = self.make_flac("nested/track.flac", TITLE="Eksisterende spor")
         original_bytes = path.read_bytes()
         with override_settings(P7_MUSIC_ROOT=str(self.root)):
-            first = scan_directory(relative_root=".", recursive=True, user=self.user)
+            first = scan_directory(
+                relative_root=".", recursive=True, user=self.user
+            )
             apply_batch(first, user=self.user)
-            ordinary = scan_directory(relative_root=".", recursive=True, user=self.user)
+            ordinary = scan_directory(
+                relative_root=".", recursive=True, user=self.user
+            )
             self.assertEqual(
                 ordinary.items.get().action, FlacIngestItem.Action.UNCHANGED
             )
@@ -1630,7 +1636,9 @@ class FlacWorkbenchPermissionTests(FlacTestMixin, TestCase):
             )
 
         self.assertEqual(response.status_code, 302)
-        batch = FlacIngestBatch.objects.exclude(pk__in=[first.pk, ordinary.pk]).get()
+        batch = FlacIngestBatch.objects.exclude(
+            pk__in=[first.pk, ordinary.pk]
+        ).get()
         self.assertEqual(batch.relative_root, ".")
         self.assertTrue(batch.recursive)
         item = batch.items.get()

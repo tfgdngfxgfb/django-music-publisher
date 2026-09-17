@@ -33,7 +33,9 @@ logger = logging.getLogger(__name__)
 @permission_required("delivery.create_delivery", raise_exception=True)
 @require_http_methods(["GET", "POST"])
 def create(request):
-    selected_ids = request.GET.getlist("recording") or request.POST.getlist("recording")
+    selected_ids = request.GET.getlist("recording") or request.POST.getlist(
+        "recording"
+    )
     preview = None
     form = DeliveryForm(request.POST or None, user=request.user)
     if request.method == "POST":
@@ -55,12 +57,15 @@ def create(request):
                 "delivery.create_external_delivery"
             ):
                 form.add_error(
-                    "profile", "Du har ikke tilgang til ekstern leveranseprofil."
+                    "profile",
+                    "Du har ikke tilgang til ekstern leveranseprofil.",
                 )
             else:
                 try:
                     preview = build_preview(
-                        selected_ids, user=request.user, cleaned_data=form.cleaned_data
+                        selected_ids,
+                        user=request.user,
+                        cleaned_data=form.cleaned_data,
                     )
                 except ValidationError as error:
                     form.add_error(None, "; ".join(error.messages))
@@ -82,7 +87,9 @@ def create(request):
 @permission_required("delivery.view_delivery", raise_exception=True)
 def history(request):
     deliveries = (
-        Delivery.objects.select_related("created_by").prefetch_related("items").all()
+        Delivery.objects.select_related("created_by")
+        .prefetch_related("items")
+        .all()
     )
     attention_only = request.GET.get("status") == "attention"
     if attention_only:
@@ -134,7 +141,9 @@ def download(request, delivery_id):
         actor=request.user,
         event_type=DownloadEvent.EventType.REQUESTED,
     )
-    artifact = next(iter(delivery.artifacts.filter(removed_at__isnull=True)), None)
+    artifact = next(
+        iter(delivery.artifacts.filter(removed_at__isnull=True)), None
+    )
     item = None
     try:
         if artifact:
@@ -152,11 +161,14 @@ def download(request, delivery_id):
             )
         else:
             ready = list(
-                delivery.items.filter(status=DeliveryItem.Status.READY).select_related(
-                    "source_file_location", "source_file_asset"
-                )
+                delivery.items.filter(
+                    status=DeliveryItem.Status.READY
+                ).select_related("source_file_location", "source_file_asset")
             )
-            if delivery.profile != DeliveryProfile.INTERNAL_COMPLETE or len(ready) != 1:
+            if (
+                delivery.profile != DeliveryProfile.INTERNAL_COMPLETE
+                or len(ready) != 1
+            ):
                 raise Http404("Leveransen har ikke et nedlastbart artefakt.")
             item = ready[0]
             stream = open_for_read(item.source_file_location)
@@ -173,7 +185,10 @@ def download(request, delivery_id):
         )
         raise Http404("Leveransefilen er ikke tilgjengelig.") from error
     response = FileResponse(
-        stream, as_attachment=True, filename=filename, content_type=content_type
+        stream,
+        as_attachment=True,
+        filename=filename,
+        content_type=content_type,
     )
     response["X-Content-Type-Options"] = "nosniff"
     DownloadEvent.objects.create(

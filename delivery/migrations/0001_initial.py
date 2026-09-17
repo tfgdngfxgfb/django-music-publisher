@@ -35,11 +35,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "created_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="opprettet"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="opprettet"
+                    ),
                 ),
                 (
                     "updated_at",
-                    models.DateTimeField(auto_now=True, verbose_name="sist endret"),
+                    models.DateTimeField(
+                        auto_now=True, verbose_name="sist endret"
+                    ),
                 ),
                 (
                     "revision",
@@ -77,7 +81,10 @@ class Migration(migrations.Migration):
                             ("internal", "Intern bruk"),
                             ("broadcast", "Kringkasting"),
                             ("archive", "Arkivarbeid"),
-                            ("rightsholder", "Levering til artist/rettighetshaver"),
+                            (
+                                "rightsholder",
+                                "Levering til artist/rettighetshaver",
+                            ),
                             ("distribution", "Distribusjonsrelatert arbeid"),
                             ("other", "Annet"),
                         ],
@@ -93,7 +100,10 @@ class Migration(migrations.Migration):
                     "recipient_organization",
                     models.CharField(blank=True, max_length=255),
                 ),
-                ("manifest_snapshot", models.JSONField(blank=True, default=list)),
+                (
+                    "manifest_snapshot",
+                    models.JSONField(blank=True, default=list),
+                ),
                 (
                     "created_by",
                     models.ForeignKey(
@@ -108,7 +118,10 @@ class Migration(migrations.Migration):
                 "permissions": [
                     ("create_delivery", "Kan opprette leveranse"),
                     ("download_delivery", "Kan laste ned leveranse"),
-                    ("create_external_delivery", "Kan opprette ekstern leveranse"),
+                    (
+                        "create_external_delivery",
+                        "Kan opprette ekstern leveranse",
+                    ),
                 ],
             },
         ),
@@ -127,11 +140,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "created_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="opprettet"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="opprettet"
+                    ),
                 ),
                 (
                     "updated_at",
-                    models.DateTimeField(auto_now=True, verbose_name="sist endret"),
+                    models.DateTimeField(
+                        auto_now=True, verbose_name="sist endret"
+                    ),
                 ),
                 (
                     "revision",
@@ -183,11 +200,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "created_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="opprettet"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="opprettet"
+                    ),
                 ),
                 (
                     "updated_at",
-                    models.DateTimeField(auto_now=True, verbose_name="sist endret"),
+                    models.DateTimeField(
+                        auto_now=True, verbose_name="sist endret"
+                    ),
                 ),
                 (
                     "revision",
@@ -206,14 +227,29 @@ class Migration(migrations.Migration):
                         max_length=20,
                     ),
                 ),
-                ("output_filename", models.CharField(blank=True, max_length=255)),
+                (
+                    "output_filename",
+                    models.CharField(blank=True, max_length=255),
+                ),
                 ("recording_uuid_snapshot", models.UUIDField()),
                 ("title_snapshot", models.CharField(max_length=500)),
-                ("artist_snapshot", models.CharField(blank=True, max_length=500)),
+                (
+                    "artist_snapshot",
+                    models.CharField(blank=True, max_length=500),
+                ),
                 ("isrc_snapshot", models.CharField(blank=True, max_length=30)),
-                ("source_asset_uuid_snapshot", models.UUIDField(blank=True, null=True)),
-                ("source_sha256_snapshot", models.CharField(blank=True, max_length=64)),
-                ("delivered_metadata", models.JSONField(blank=True, default=dict)),
+                (
+                    "source_asset_uuid_snapshot",
+                    models.UUIDField(blank=True, null=True),
+                ),
+                (
+                    "source_sha256_snapshot",
+                    models.CharField(blank=True, max_length=64),
+                ),
+                (
+                    "delivered_metadata",
+                    models.JSONField(blank=True, default=dict),
+                ),
                 ("message", models.CharField(blank=True, max_length=500)),
                 (
                     "delivery",
@@ -271,11 +307,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "created_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="opprettet"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="opprettet"
+                    ),
                 ),
                 (
                     "updated_at",
-                    models.DateTimeField(auto_now=True, verbose_name="sist endret"),
+                    models.DateTimeField(
+                        auto_now=True, verbose_name="sist endret"
+                    ),
                 ),
                 (
                     "revision",
@@ -326,7 +366,8 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="deliveryitem",
             constraint=models.UniqueConstraint(
-                fields=("delivery", "recording"), name="delivery_one_item_per_recording"
+                fields=("delivery", "recording"),
+                name="delivery_one_item_per_recording",
             ),
         ),
     ]

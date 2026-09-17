@@ -70,7 +70,9 @@ class MusicLibraryTests(TestCase):
                 recording=recording, rotation_suitability=rotation
             )
             if has_channel:
-                MusicLibraryChannel.objects.create(library_entry=entry, channel=channel)
+                MusicLibraryChannel.objects.create(
+                    library_entry=entry, channel=channel
+                )
             entries.append(entry)
 
         migration = import_module(
@@ -84,4 +86,6 @@ class MusicLibraryTests(TestCase):
         ):
             entry.refresh_from_db()
             self.assertEqual(entry.rotation_suitability, expected)
-            self.assertEqual(entry.revision, 2 if expected == "suitable" else 1)
+            self.assertEqual(
+                entry.revision, 2 if expected == "suitable" else 1
+            )

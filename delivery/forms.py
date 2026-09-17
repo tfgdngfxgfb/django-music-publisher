@@ -4,8 +4,12 @@ from .models import Delivery, DeliveryProfile
 
 
 class DeliveryForm(forms.Form):
-    profile = forms.ChoiceField(choices=DeliveryProfile.choices, label="Profil")
-    purpose = forms.ChoiceField(choices=Delivery.Purpose.choices, label="Formål")
+    profile = forms.ChoiceField(
+        choices=DeliveryProfile.choices, label="Profil"
+    )
+    purpose = forms.ChoiceField(
+        choices=Delivery.Purpose.choices, label="Formål"
+    )
     purpose_description = forms.CharField(
         required=False,
         widget=forms.Textarea(attrs={"rows": 2}),
@@ -33,7 +37,9 @@ class DeliveryForm(forms.Form):
                 "recipient_name", user.get_full_name() or user.get_username()
             )
             self.initial.setdefault("purpose", Delivery.Purpose.INTERNAL)
-            self.initial.setdefault("profile", DeliveryProfile.INTERNAL_COMPLETE)
+            self.initial.setdefault(
+                "profile", DeliveryProfile.INTERNAL_COMPLETE
+            )
         if user and not user.has_perm("delivery.create_external_delivery"):
             self.fields["profile"].choices = [
                 (
@@ -55,5 +61,7 @@ class DeliveryForm(forms.Form):
             cleaned.get("other_use")
             and not cleaned.get("other_use_description", "").strip()
         ):
-            self.add_error("other_use_description", "Beskriv den andre bruken.")
+            self.add_error(
+                "other_use_description", "Beskriv den andre bruken."
+            )
         return cleaned

@@ -25,4 +25,6 @@ class Command(BaseCommand):
                 delivery.status = Delivery.Status.EXPIRED
                 delivery.save(update_fields={"status"})
             count += 1
-        self.stdout.write(self.style.SUCCESS(f"Fjernet {count} utløpte artefakter."))
+        self.stdout.write(
+            self.style.SUCCESS(f"Fjernet {count} utløpte artefakter.")
+        )

@@ -29,7 +29,9 @@ class Delivery(CanonicalModel):
         OTHER = "other", "Annet"
 
     created_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="deliveries"
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="deliveries",
     )
     status = models.CharField(max_length=20, choices=Status.choices)
     profile = models.CharField(max_length=30, choices=DeliveryProfile.choices)
@@ -52,7 +54,10 @@ class Delivery(CanonicalModel):
 
     def clean(self):
         super().clean()
-        if self.purpose == self.Purpose.OTHER and not self.purpose_description.strip():
+        if (
+            self.purpose == self.Purpose.OTHER
+            and not self.purpose_description.strip()
+        ):
             raise ValidationError(
                 {"purpose_description": "Beskriv formålet når Annet er valgt."}
             )
@@ -103,21 +108,26 @@ class DeliveryItem(CanonicalModel):
         ordering = ("created_at", "id")
         constraints = [
             models.UniqueConstraint(
-                fields=("delivery", "recording"), name="delivery_one_item_per_recording"
+                fields=("delivery", "recording"),
+                name="delivery_one_item_per_recording",
             )
         ]
 
     def clean(self):
         super().clean()
         if self.status == self.Status.READY:
-            if not self.source_file_asset_id or not self.source_file_location_id:
+            if (
+                not self.source_file_asset_id
+                or not self.source_file_location_id
+            ):
                 raise ValidationError(
                     "Et klart element må fryse både filressurs og plassering."
                 )
             if (
                 self.source_file_asset.recording_id != self.recording_id
                 or self.source_file_asset.role != FileAsset.Role.RADIO_FLAC
-                or self.source_file_location.asset_id != self.source_file_asset_id
+                or self.source_file_location.asset_id
+                != self.source_file_asset_id
             ):
                 raise ValidationError(
                     "Leveransekilden må være en radio-FLAC for samme Recording."
@@ -159,7 +169,9 @@ class DownloadEvent(CanonicalModel):
         null=True,
         blank=True,
     )
-    actor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT
+    )
     event_type = models.CharField(max_length=20, choices=EventType.choices)
 
     class Meta:

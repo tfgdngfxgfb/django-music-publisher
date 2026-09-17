@@ -685,7 +685,9 @@ class Command(BaseCommand):
                         )[:2]
                     )
                     if not current:
-                        asset.lifecycle_status = FileAsset.LifecycleStatus.CURRENT
+                        asset.lifecycle_status = (
+                            FileAsset.LifecycleStatus.CURRENT
+                        )
                         asset.save(update_fields=("lifecycle_status",))
                         current = [asset]
                     if len(current) == 1:

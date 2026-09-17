@@ -4,7 +4,9 @@ from django.db import migrations
 def backfill_unambiguous_current_radio(apps, schema_editor):
     FileAsset = apps.get_model("media_assets", "FileAsset")
     FileLocation = apps.get_model("media_assets", "FileLocation")
-    RecordingMediaSelection = apps.get_model("media_assets", "RecordingMediaSelection")
+    RecordingMediaSelection = apps.get_model(
+        "media_assets", "RecordingMediaSelection"
+    )
 
     recording_ids = (
         FileAsset.objects.filter(
@@ -58,7 +60,9 @@ def backfill_unambiguous_current_radio(apps, schema_editor):
         )
         if other_current_exists:
             continue
-        FileAsset.objects.filter(pk=asset.pk).update(lifecycle_status="current")
+        FileAsset.objects.filter(pk=asset.pk).update(
+            lifecycle_status="current"
+        )
         if selection:
             RecordingMediaSelection.objects.filter(pk=selection.pk).update(
                 current_radio_id=asset.pk

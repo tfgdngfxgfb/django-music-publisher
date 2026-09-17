@@ -32,11 +32,15 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "created_at",
-                    models.DateTimeField(auto_now_add=True, verbose_name="opprettet"),
+                    models.DateTimeField(
+                        auto_now_add=True, verbose_name="opprettet"
+                    ),
                 ),
                 (
                     "updated_at",
-                    models.DateTimeField(auto_now=True, verbose_name="sist endret"),
+                    models.DateTimeField(
+                        auto_now=True, verbose_name="sist endret"
+                    ),
                 ),
                 (
                     "revision",
@@ -62,14 +66,20 @@ class Migration(migrations.Migration):
                     models.CharField(
                         choices=[
                             ("owned_catalogue", "Eid/kontrollert katalog"),
-                            ("managed_catalogue", "Forvaltet på vegne av andre"),
+                            (
+                                "managed_catalogue",
+                                "Forvaltet på vegne av andre",
+                            ),
                         ],
                         help_text="Gjelder utgivelsen som katalogobjekt og sier ikke hvem som eier masterne på sporene.",
                         max_length=30,
                         verbose_name="katalogforhold",
                     ),
                 ),
-                ("notes", models.TextField(blank=True, verbose_name="merknader")),
+                (
+                    "notes",
+                    models.TextField(blank=True, verbose_name="merknader"),
+                ),
                 (
                     "release",
                     models.OneToOneField(
@@ -96,7 +106,9 @@ class Migration(migrations.Migration):
                 "verbose_name_plural": "forvaltede utgivelser",
                 "ordering": ("release__title", "id"),
                 "indexes": [
-                    models.Index(fields=["status"], name="managed_release_status_idx"),
+                    models.Index(
+                        fields=["status"], name="managed_release_status_idx"
+                    ),
                     models.Index(
                         fields=["relationship"], name="managed_release_rel_idx"
                     ),

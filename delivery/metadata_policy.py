@@ -37,6 +37,8 @@ def external_radio_tags(raw_tags):
     return {
         str(key).upper(): [str(value) for value in values]
         for key, values in raw_tags.items()
-        if TAG_VISIBILITY.get(str(key).upper(), MetadataVisibility.CONFIDENTIAL)
+        if TAG_VISIBILITY.get(
+            str(key).upper(), MetadataVisibility.CONFIDENTIAL
+        )
         in allowed
     }

@@ -597,9 +597,12 @@ def managed_list(request):
 @permission_required("flac_ingest.add_flacingestbatch", raise_exception=True)
 def flac_ingest_start(request):
     full_rescan = (
-        request.method == "POST" and request.POST.get("scan_mode") == "force_all"
+        request.method == "POST"
+        and request.POST.get("scan_mode") == "force_all"
     )
-    form = FlacScanForm(None if full_rescan else request.POST or None, user=request.user)
+    form = FlacScanForm(
+        None if full_rescan else request.POST or None, user=request.user
+    )
     if request.method == "POST" and (full_rescan or form.is_valid()):
         scan_options = (
             {"relative_root": ".", "recursive": True, "force_read": True}
@@ -613,11 +616,13 @@ def flac_ingest_start(request):
         else:
             messages.success(
                 request,
-                f"{batch.items.count()} FLAC-filer er lest på nytt. "
-                "Kontroller forhåndsvisningen før bruk."
-                if full_rescan
-                else f"{batch.items.count()} FLAC-filer er lest. "
-                "Kontroller forhåndsvisningen før bruk.",
+                (
+                    f"{batch.items.count()} FLAC-filer er lest på nytt. "
+                    "Kontroller forhåndsvisningen før bruk."
+                    if full_rescan
+                    else f"{batch.items.count()} FLAC-filer er lest. "
+                    "Kontroller forhåndsvisningen før bruk."
+                ),
             )
             return redirect("workbench:flac_ingest_preview", pk=batch.pk)
     return render(

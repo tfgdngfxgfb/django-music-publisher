@@ -9,7 +9,12 @@ from django.urls import reverse
 from django.utils import timezone
 
 from catalogue.models import Label, Recording, Release, ReleaseTrack
-from delivery.models import Delivery, DeliveryArtifact, DeliveryItem, DeliveryProfile
+from delivery.models import (
+    Delivery,
+    DeliveryArtifact,
+    DeliveryItem,
+    DeliveryProfile,
+)
 from media_assets.models import FileAsset, FileLocation
 from music_library.models import (
     Channel,
@@ -22,7 +27,9 @@ from music_library.models import (
 
 class RecordingWorkspaceTests(TestCase):
     def setUp(self):
-        self.user = get_user_model().objects.create_user("workspace", password="test")
+        self.user = get_user_model().objects.create_user(
+            "workspace", password="test"
+        )
         self.user.is_staff = True
         self.user.save()
         for app_label, codename in (
@@ -71,7 +78,9 @@ class RecordingWorkspaceTests(TestCase):
             release_year=2026,
             release_type=Release.Type.CD,
         )
-        second = Release.objects.create(title="Samling", release_type=Release.Type.LP)
+        second = Release.objects.create(
+            title="Samling", release_type=Release.Type.LP
+        )
         track = ReleaseTrack.objects.create(
             release=first,
             recording=self.recording,
@@ -88,7 +97,9 @@ class RecordingWorkspaceTests(TestCase):
             side="B",
             track_number=2,
         )
-        response = self.client.get(self.url("releases"), {"track": str(track.pk)})
+        response = self.client.get(
+            self.url("releases"), {"track": str(track.pk)}
+        )
         for value in (
             "Original",
             "Samling",
@@ -99,7 +110,9 @@ class RecordingWorkspaceTests(TestCase):
             "03:03",
         ):
             self.assertContains(response, value)
-        self.assertContains(response, reverse("gui_v2:release_detail", args=[first.pk]))
+        self.assertContains(
+            response, reverse("gui_v2:release_detail", args=[first.pk])
+        )
 
     @override_settings(GUI_V2_WRITES_ENABLED=True)
     def test_radio_read_edit_permissions_and_shared_form(self):
@@ -109,7 +122,9 @@ class RecordingWorkspaceTests(TestCase):
         )
         entry = MusicLibraryEntry.objects.create(recording=self.recording)
         channel = Channel.objects.create(code="radio-test", name="Radiokanal")
-        target = TargetAudience.objects.create(code="adult-test", name="Voksne")
+        target = TargetAudience.objects.create(
+            code="adult-test", name="Voksne"
+        )
         response = self.client.post(
             self.url("radio"),
             {
@@ -130,7 +145,12 @@ class RecordingWorkspaceTests(TestCase):
         self.assertEqual(list(entry.channels.all()), [channel])
         self.assertEqual(list(entry.target_audiences.all()), [target])
         page = self.client.get(self.url("radio"))
-        for value in ("4 av 5", "Ikke rotasjonsverdig", "Radiokanal", "Voksne"):
+        for value in (
+            "4 av 5",
+            "Ikke rotasjonsverdig",
+            "Radiokanal",
+            "Voksne",
+        ):
             self.assertContains(page, value)
         self.assertContains(page, "Rediger radiodata")
 
@@ -139,7 +159,10 @@ class RecordingWorkspaceTests(TestCase):
                 self.client.get(self.url("radio")), "Lagre radiodata"
             )
             self.assertEqual(
-                self.client.post(self.url("radio"), {"genre": "Rock"}).status_code, 403
+                self.client.post(
+                    self.url("radio"), {"genre": "Rock"}
+                ).status_code,
+                403,
             )
         entry.refresh_from_db()
         self.assertEqual(entry.genre, "Pop")
@@ -163,7 +186,8 @@ class RecordingWorkspaceTests(TestCase):
         self.assertContains(available, "first.flac")
         self.assertContains(available, "data-play-recording")
         self.assertContains(
-            available, reverse("gui_v2:recording_audio", args=[self.recording.pk])
+            available,
+            reverse("gui_v2:recording_audio", args=[self.recording.pk]),
         )
         second = FileAsset.objects.create(
             recording=self.recording,
@@ -181,7 +205,9 @@ class RecordingWorkspaceTests(TestCase):
         self.assertContains(ambiguous, "Flere mulige radiofiler")
         self.assertNotContains(ambiguous, "data-play-recording")
 
-    def _delivery(self, recording, *, recipient="Mottaker", source=None, location=None):
+    def _delivery(
+        self, recording, *, recipient="Mottaker", source=None, location=None
+    ):
         delivery = Delivery.objects.create(
             created_by=self.user,
             status=Delivery.Status.READY,
@@ -193,7 +219,9 @@ class RecordingWorkspaceTests(TestCase):
             delivery=delivery,
             recording=recording,
             status=(
-                DeliveryItem.Status.READY if location else DeliveryItem.Status.SKIPPED
+                DeliveryItem.Status.READY
+                if location
+                else DeliveryItem.Status.SKIPPED
             ),
             recording_uuid_snapshot=recording.pk,
             title_snapshot=recording.title,
@@ -225,7 +253,9 @@ class RecordingWorkspaceTests(TestCase):
         self.assertContains(response, "a" * 64)
         self.assertContains(response, "historical.flac")
         self.assertContains(response, f"?recording={self.recording.pk}")
-        self.assertContains(response, reverse("delivery:detail", args=[delivery.pk]))
+        self.assertContains(
+            response, reverse("delivery:detail", args=[delivery.pk])
+        )
         current = FileAsset.objects.create(
             recording=self.recording,
             role=FileAsset.Role.RADIO_FLAC,
@@ -247,8 +277,12 @@ class RecordingWorkspaceTests(TestCase):
             relative_path="delivery-source.flac",
             status=FileLocation.Status.ACTIVE,
         )
-        delivery, _ = self._delivery(self.recording, source=source, location=location)
-        self.assertContains(self.client.get(self.url("deliveries")), ">Last ned</a>")
+        delivery, _ = self._delivery(
+            self.recording, source=source, location=location
+        )
+        self.assertContains(
+            self.client.get(self.url("deliveries")), ">Last ned</a>"
+        )
         DeliveryArtifact.objects.create(
             delivery=delivery,
             kind=DeliveryArtifact.Kind.ZIP,
@@ -261,7 +295,9 @@ class RecordingWorkspaceTests(TestCase):
         response = self.client.get(self.url("deliveries"))
         self.assertContains(response, "utløpt")
         self.assertNotContains(response, ">Last ned</a>")
-        restricted = get_user_model().objects.create_user("restricted", password="test")
+        restricted = get_user_model().objects.create_user(
+            "restricted", password="test"
+        )
         self.client.force_login(restricted)
         for tab in ("releases", "radio", "deliveries"):
             self.assertEqual(self.client.get(self.url(tab)).status_code, 403)

@@ -22,7 +22,10 @@ def establish_current_radio_if_unambiguous(recording_id):
         )
         .get(pk=recording_id)
     )
-    selection, _ = RecordingMediaSelection.objects.select_for_update().get_or_create(
+    (
+        selection,
+        _,
+    ) = RecordingMediaSelection.objects.select_for_update().get_or_create(
         recording=recording
     )
     if selection.current_radio_id:

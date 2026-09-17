@@ -603,7 +603,9 @@ class GuiV2WorkspaceTests(TestCase):
         self.assertContains(home_response, 'class="player-footer"')
         self.assertEqual(home_response.content.count(b'id="v2-audio"'), 1)
 
-    def test_library_remembers_page_size_without_overriding_explicit_choice(self):
+    def test_library_remembers_page_size_without_overriding_explicit_choice(
+        self,
+    ):
         self._superuser()
         self.client.cookies["p7-v2-library-per-page"] = "100"
         remembered = self.client.get(reverse("gui_v2:music_library"))

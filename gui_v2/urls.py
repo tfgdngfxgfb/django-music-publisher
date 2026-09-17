@@ -94,6 +94,10 @@ urlpatterns = [
         views.release_detail,
         name="release_detail",
     ),
-    path("api/innspillinger/", views.recording_search, name="recording_search"),
-    path("utgivelse-spor/", views.legacy_release_tracks, name="release_tracks"),
+    path(
+        "api/innspillinger/", views.recording_search, name="recording_search"
+    ),
+    path(
+        "utgivelse-spor/", views.legacy_release_tracks, name="release_tracks"
+    ),
 ]

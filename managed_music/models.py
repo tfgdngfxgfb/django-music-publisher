@@ -97,7 +97,9 @@ class ManagedRelease(CanonicalModel):
         verbose_name_plural = "forvaltede utgivelser"
         ordering = ("release__title", "id")
         indexes = [
-            models.Index(fields=("status",), name="managed_release_status_idx"),
+            models.Index(
+                fields=("status",), name="managed_release_status_idx"
+            ),
             models.Index(
                 fields=("relationship",), name="managed_release_rel_idx"
             ),

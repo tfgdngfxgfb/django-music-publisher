@@ -65,7 +65,9 @@ def recent_objects(request):
         if not isinstance(item, dict):
             continue
         kind = item.get("kind")
-        if kind not in ids or not request.user.has_perms(RECENT_PERMISSIONS[kind]):
+        if kind not in ids or not request.user.has_perms(
+            RECENT_PERMISSIONS[kind]
+        ):
             continue
         try:
             object_id = UUID(str(item.get("id")))
@@ -121,7 +123,9 @@ def recent_objects(request):
             icon = "▣"
         else:
             title = f"Leveranse {str(object_id)[:8]}"
-            detail = f"{item.get_status_display()} · {item.get_purpose_display()}"
+            detail = (
+                f"{item.get_status_display()} · {item.get_purpose_display()}"
+            )
             url = reverse("delivery:detail", args=[object_id])
             label = "Leveranse"
             icon = "⇧"
@@ -142,7 +146,9 @@ def recent_objects(request):
 def build_home_context(request):
     """Only cheap, permission-aware facts; never scan physical media on Hjem."""
     hour = timezone.localtime().hour
-    greeting = "God morgen" if hour < 10 else "God dag" if hour < 18 else "God kveld"
+    greeting = (
+        "God morgen" if hour < 10 else "God dag" if hour < 18 else "God kveld"
+    )
     can_view_digitization = request.user.has_perms(RECENT_PERMISSIONS["batch"])
     workspaces = []
     for permission, title, description, icon, url_name in (
@@ -235,7 +241,8 @@ def build_home_context(request):
     return {
         "section": "home",
         "greeting": greeting,
-        "display_name": request.user.get_short_name() or request.user.get_username(),
+        "display_name": request.user.get_short_name()
+        or request.user.get_username(),
         "workspaces": workspaces,
         "followups": followups,
         "continue_items": recent[:3],
