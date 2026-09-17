@@ -1,12 +1,11 @@
 (() => {
   const root = document.documentElement;
-  const theme = document.querySelector("#v2-theme-toggle");
-  theme?.addEventListener("click", () => {
-    root.dataset.v2Theme = root.dataset.v2Theme === "dark" ? "light" : "dark";
-    localStorage.setItem("p7-v2-theme", root.dataset.v2Theme);
-  });
-
   document.addEventListener("click", async event => {
+    if (event.target.closest("#v2-theme-toggle")) {
+      root.dataset.v2Theme = root.dataset.v2Theme === "dark" ? "light" : "dark";
+      localStorage.setItem("p7-v2-theme", root.dataset.v2Theme);
+      return;
+    }
     const button = event.target.closest("[data-copy]");
     if (!button) return;
     if (!button.dataset.copy) return;
@@ -35,9 +34,51 @@
   const playerSubtitle = document.querySelector("[data-player-subtitle]");
   const playerProgress = document.querySelector("[data-player-progress]");
   const playerCover = document.querySelector("[data-player-cover]");
-  const libraryRows = [...document.querySelectorAll("[data-library-row]")];
+  const playerPrevious = document.querySelector("[data-player-previous]");
+  const playerNext = document.querySelector("[data-player-next]");
+  const playerVolume = document.querySelector("[data-player-volume]");
+  let followLibraryRow = async () => {};
   let playingRecording = "";
   let playingArtist = "";
+  let queue = [];
+  let queueIndex = -1;
+  let queueSource = "";
+  const librarySignature = () => {
+    const url = new URL(location.href);
+    url.searchParams.delete("selected");
+    return `${url.pathname}?${url.searchParams}`;
+  };
+  const playableTriggerForRow = row =>
+    row?.querySelector("[data-play-recording][data-play-url]:not(:disabled)");
+  const trackFromTrigger = trigger => ({
+    playUrl: trigger.dataset.playUrl,
+    playRecordingId: trigger.dataset.playRecordingId || "",
+    playTitle: trigger.dataset.playTitle || "Innspilling",
+    playArtist: trigger.dataset.playArtist || "",
+    playCoverUrl: trigger.dataset.playCoverUrl || "",
+    playCoverAlt: trigger.dataset.playCoverAlt || "",
+  });
+  const updateQueueControls = () => {
+    if (playerPrevious) playerPrevious.disabled = queueIndex <= 0;
+    if (playerNext) playerNext.disabled = queueIndex < 0 || queueIndex >= queue.length - 1;
+  };
+  const captureQueue = trigger => {
+    const row = trigger.closest?.("[data-library-row]") ||
+      (document.body.classList.contains("music-library-page")
+        ? document.querySelector("[data-library-row].selected") : null);
+    if (row && playableTriggerForRow(row)?.dataset.playRecordingId === trigger.dataset.playRecordingId) {
+      const rows = [...document.querySelectorAll("[data-library-row]")]
+        .filter(item => !item.hidden && playableTriggerForRow(item));
+      queue = rows.map(item => trackFromTrigger(playableTriggerForRow(item)));
+      queueIndex = rows.indexOf(row);
+      queueSource = librarySignature();
+    } else {
+      queue = [trackFromTrigger(trigger)];
+      queueIndex = 0;
+      queueSource = "";
+    }
+    updateQueueControls();
+  };
   const primaryPlaybackTrigger = () => {
     const trigger = document.querySelector("[data-player-primary][data-play-recording]");
     return trigger && !trigger.disabled && trigger.dataset.playUrl ? trigger : null;
@@ -88,8 +129,9 @@
     placeholder.setAttribute("aria-hidden", "true");
     playerCover.append(placeholder);
   };
-  const startPlayback = async trigger => {
+  const startPlayback = async (trigger, preserveQueue = false) => {
     if (!audio || !trigger.dataset.playUrl) return;
+    if (!preserveQueue) captureQueue(trigger);
     setPlayerHidden(false);
     const recordingId = trigger.dataset.playRecordingId || "";
     if (playingRecording !== recordingId || audio.dataset.playUrl !== trigger.dataset.playUrl) {
@@ -134,6 +176,16 @@
   playerProgress?.addEventListener("input", () => {
     if (audio && Number.isFinite(audio.duration)) audio.currentTime = Number(playerProgress.value);
   });
+  if (audio && playerVolume) {
+    const storedVolume = localStorage.getItem("p7-v2-player-volume");
+    const savedVolume = storedVolume === null ? 1 : Number(storedVolume);
+    audio.volume = Number.isFinite(savedVolume) && savedVolume >= 0 && savedVolume <= 1 ? savedVolume : 1;
+    playerVolume.value = String(audio.volume);
+    playerVolume.addEventListener("input", () => {
+      audio.volume = Number(playerVolume.value);
+      localStorage.setItem("p7-v2-player-volume", String(audio.volume));
+    });
+  }
   audio?.addEventListener("play", () => {
     playerToggle.textContent = "Ⅱ";
     playerToggle.setAttribute("aria-label", "Pause");
@@ -146,24 +198,23 @@
   });
   audio?.addEventListener("loadedmetadata", updatePlayerTime);
   audio?.addEventListener("timeupdate", updatePlayerTime);
-  const playableTriggerForRow = row =>
-    row?.querySelector("[data-play-recording][data-play-url]:not(:disabled)");
-  const advanceLibraryPlayback = async () => {
-    if (!libraryRows.length || !playingRecording) return;
-    const currentIndex = libraryRows.findIndex(
-      row => playableTriggerForRow(row)?.dataset.playRecordingId === playingRecording
+  const moveInQueue = async offset => {
+    const nextIndex = queueIndex + offset;
+    if (nextIndex < 0 || nextIndex >= queue.length) return;
+    queueIndex = nextIndex;
+    updateQueueControls();
+    await startPlayback({dataset: queue[nextIndex]}, true);
+    if (queueSource !== librarySignature()) return;
+    const row = [...document.querySelectorAll("[data-library-row]")].find(
+      item => playableTriggerForRow(item)?.dataset.playRecordingId === queue[nextIndex].playRecordingId
     );
-    if (currentIndex < 0) return;
-    const nextRow = libraryRows
-      .slice(currentIndex + 1)
-      .find(row => !row.hidden && playableTriggerForRow(row));
-    if (!nextRow) return;
-    await startPlayback(playableTriggerForRow(nextRow));
-    await followLibraryRow(nextRow);
+    if (row) await followLibraryRow(row);
   };
+  playerPrevious?.addEventListener("click", () => void moveInQueue(-1));
+  playerNext?.addEventListener("click", () => void moveInQueue(1));
   audio?.addEventListener("ended", () => {
     updatePlaybackButtons();
-    void advanceLibraryPlayback();
+    void moveInQueue(1);
   });
   audio?.addEventListener("error", () => {
     playerToggle.textContent = "▶";
@@ -171,8 +222,22 @@
     updatePlaybackButtons();
   });
   document.addEventListener("p7:playback-context-changed", syncPlayerAvailability);
+  document.addEventListener("p7:page-changed", () => {
+    syncPlayerAvailability();
+    updatePlaybackButtons();
+  });
   syncPlayerAvailability();
 
+  let pageController;
+  const initPage = () => {
+  pageController?.abort();
+  pageController = new AbortController();
+  const pageSignal = pageController.signal;
+  const libraryRows = [...document.querySelectorAll("[data-library-row]")];
+  const goTo = url => {
+    if (window.P7_V2?.navigate) void window.P7_V2.navigate(url);
+    else location.assign(url);
+  };
   const autoSubmitFilters = document.querySelector("[data-auto-submit-filters]");
   autoSubmitFilters?.addEventListener("change", event => {
     if (!event.target.matches("select, input[type='checkbox'], input[type='radio']")) return;
@@ -190,7 +255,7 @@
       void followLibraryRow(row);
       return;
     }
-    location.href = row.dataset.rowHref;
+    goTo(row.dataset.rowHref);
   }));
 
   const inspector = document.querySelector("#v2-inspector");
@@ -204,7 +269,7 @@
     layout.style.setProperty("--inspector-offset", `${offset}px`);
   };
   alignInspectorWithTable();
-  window.addEventListener("resize", alignInspectorWithTable);
+  window.addEventListener("resize", alignInspectorWithTable, {signal: pageSignal});
   const inspectorOpeners = document.querySelectorAll("[data-open-inspector]");
   const libraryInspectorToggles = document.querySelectorAll("[data-toggle-library-inspector]");
   const animateLibraryInspector = layout?.matches(".archive-layout");
@@ -249,14 +314,14 @@
   };
   document.addEventListener("click", event => {
     if (event.target.closest("[data-close-inspector]")) setInspector(false);
-  });
+  }, {signal: pageSignal});
   inspectorOpeners.forEach(button => button.addEventListener("click", () => setInspector(true)));
   libraryInspectorToggles.forEach(button => button.addEventListener("click", () => {
     const isOpen = !inspector?.hidden && !inspector?.classList.contains("inspector-leaving");
     setInspector(!isOpen);
   }));
   let libraryDetailRequest = 0;
-  const followLibraryRow = async row => {
+  followLibraryRow = async row => {
     const requestId = ++libraryDetailRequest;
     libraryRows.forEach(item => {
       const selected = item === row;
@@ -269,10 +334,10 @@
       const response = await fetch(row.dataset.rowHref, {
         headers: {"X-Requested-With": "XMLHttpRequest"},
       });
-      if (!response.ok || requestId !== libraryDetailRequest) return;
+      if (!response.ok || pageSignal.aborted || requestId !== libraryDetailRequest) return;
       const page = new DOMParser().parseFromString(await response.text(), "text/html");
       const nextInspector = page.querySelector("#v2-inspector");
-      if (!nextInspector || requestId !== libraryDetailRequest) return;
+      if (!nextInspector || pageSignal.aborted || requestId !== libraryDetailRequest) return;
       inspector.innerHTML = nextInspector.innerHTML;
       history.replaceState({}, "", row.dataset.rowHref);
       setInspector(true);
@@ -290,7 +355,7 @@
     }
     if (!row || !libraryRows.length) return;
     if (event.key === "Enter") {
-      event.preventDefault(); location.href = row.dataset.detailHref; return;
+      event.preventDefault(); goTo(row.dataset.detailHref); return;
     }
     if (!["ArrowUp", "ArrowDown"].includes(event.key)) return;
     const index = libraryRows.indexOf(row);
@@ -300,13 +365,13 @@
     next.focus({preventScroll: true});
     next.scrollIntoView({block: "nearest", inline: "nearest"});
     void followLibraryRow(next);
-  });
+  }, {signal: pageSignal});
   document.addEventListener("click", event => {
     const button = event.target.closest("[data-tab]");
     if (!button || !inspector?.contains(button)) return;
     document.querySelectorAll("[data-tab]").forEach(item => item.setAttribute("aria-selected", String(item === button)));
     document.querySelectorAll("[data-panel]").forEach(panel => { panel.hidden = panel.dataset.panel !== button.dataset.tab; });
-  });
+  }, {signal: pageSignal});
   document.addEventListener("keydown", event => {
     if (!event.target.closest("#v2-inspector .tabs")) return;
     if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
@@ -314,7 +379,7 @@
     const current = tabs.indexOf(document.activeElement);
     const next = (current + (event.key === "ArrowRight" ? 1 : -1) + tabs.length) % tabs.length;
     event.preventDefault(); tabs[next].focus(); tabs[next].click();
-  });
+  }, {signal: pageSignal});
   document.addEventListener("pointerdown", event => {
     const handle = event.target.closest("#v2-inspector .resize-handle");
     if (!handle) return;
@@ -325,7 +390,7 @@
     };
     handle.addEventListener("pointermove", move);
     handle.addEventListener("pointerup", () => handle.removeEventListener("pointermove", move), {once:true});
-  });
+  }, {signal: pageSignal});
   document.addEventListener("keydown", event => {
     if (!event.target.closest("#v2-inspector .resize-handle")) return;
     if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
@@ -334,7 +399,7 @@
     root.style.setProperty("--inspector", `${width}px`);
     localStorage.setItem("p7-v2-inspector-width", width);
     event.preventDefault();
-  });
+  }, {signal: pageSignal});
   const storedWidth = localStorage.getItem("p7-v2-inspector-width");
   if (storedWidth) root.style.setProperty("--inspector", `${storedWidth}px`);
 
@@ -358,7 +423,7 @@
     event.preventDefault();
     librarySearch.focus();
     librarySearch.select();
-  });
+  }, {signal: pageSignal});
 
   const scrollKey = `p7-v2-scroll:${location.pathname}${location.search.replace(/([?&])selected=[^&]*/, "$1")}`;
   const scroller = document.querySelector(".table-scroll");
@@ -423,4 +488,8 @@
     });
   }
 
+  };
+  window.P7_V2 ||= {};
+  window.P7_V2.initPage = initPage;
+  initPage();
 })();

@@ -385,6 +385,10 @@ class GuiV2WorkspaceTests(TestCase):
         self.assertContains(
             response, reverse("workbench:cover_image", args=[cover.pk])
         )
+        self.assertContains(
+            response,
+            f'data-play-cover-url="{reverse("workbench:cover_image", args=[cover.pk])}?size=128"',
+        )
         self.assertContains(response, "genre%3DPop")
         self.assertContains(response, "Ingen åpne oppgaver")
         self.assertNotContains(response, "Krever oppfølging")
@@ -575,10 +579,11 @@ class GuiV2WorkspaceTests(TestCase):
             response.content.index(b'class="filter-toggle"'),
             response.content.index(b'class="list-heading"'),
         )
-        self.assertContains(response, 'class="player library-player"')
-        self.assertNotContains(response, 'class="player header-player"')
-        self.assertContains(response, 'class="library-player-dock"')
-        self.assertNotContains(response, '<footer class="player"')
+        self.assertContains(response, 'class="player global-player"')
+        self.assertContains(response, 'class="player-footer"')
+        self.assertContains(response, 'data-p7-shell="gui-v2"')
+        self.assertContains(response, "gui_v2/navigation.js")
+        self.assertEqual(response.content.count(b'id="v2-audio"'), 1)
         self.assertNotContains(response, "Bruk filtre")
         self.assertNotContains(response, "Radiomusikk")
         self.assertEqual(
@@ -590,8 +595,9 @@ class GuiV2WorkspaceTests(TestCase):
         )
 
         home_response = self.client.get(reverse("gui_v2:home"))
-        self.assertContains(home_response, 'class="player header-player"')
-        self.assertNotContains(home_response, 'class="player library-player"')
+        self.assertContains(home_response, 'class="player global-player"')
+        self.assertContains(home_response, 'class="player-footer"')
+        self.assertEqual(home_response.content.count(b'id="v2-audio"'), 1)
 
     def test_library_uses_table_headers_for_sorting_and_keeps_filters(self):
         self._superuser()

@@ -1,4 +1,9 @@
 (() => {
+  let gridController;
+  const initGrid = () => {
+  gridController?.abort();
+  gridController = new AbortController();
+  const gridSignal = gridController.signal;
   const form = document.querySelector("#track-grid-form");
   if (!form) return;
   const body = document.querySelector("#track-rows");
@@ -332,8 +337,9 @@
     if (dirty()) persistDraft();
     form.dataset.internalNavigation = "true";
   }));
-  addEventListener("beforeunload", event => { if (dirty() && !form.dataset.submitting && !form.dataset.internalNavigation) { event.preventDefault(); event.returnValue = ""; } });
-  document.addEventListener("keydown", event => { if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "n") { event.preventDefault(); focusCell(rowCells(addRow())[0]); } });
+  addEventListener("beforeunload", event => { if (dirty() && !form.dataset.submitting && !form.dataset.internalNavigation) { event.preventDefault(); event.returnValue = ""; } }, {signal: gridSignal});
+  document.addEventListener("p7:before-navigation", () => { if (dirty()) persistDraft(); }, {signal: gridSignal});
+  document.addEventListener("keydown", event => { if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "n") { event.preventDefault(); focusCell(rowCells(addRow())[0]); } }, {signal: gridSignal});
   form.addEventListener("submit", event => {
     if (form.dataset.submitting) { event.preventDefault(); return; }
     const invalid = cells().filter(cell => !validate(cell)); if (invalid.length) { event.preventDefault(); focusCell(invalid[0]); updateControls(); return; }
@@ -348,4 +354,8 @@
   } else if (localStorage.getItem(draftKey)) draftBanner.hidden = false;
   try { const [r, c] = JSON.parse(sessionStorage.getItem(focusKey) || "[0,0]"); focusCell(rowCells(body.rows[r] || body.rows[0])?.[c]); } catch { focusCell(cells()[0]); }
   try { const [left, top] = JSON.parse(sessionStorage.getItem(scrollKey) || "[0,0]"); if (tableWrap) { tableWrap.scrollLeft = left; tableWrap.scrollTop = top; } } catch {}
+  };
+  window.P7_V2 ||= {};
+  window.P7_V2.initGrid = initGrid;
+  initGrid();
 })();

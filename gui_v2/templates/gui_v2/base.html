@@ -6,7 +6,7 @@
   <script>document.documentElement.dataset.v2Theme=localStorage.getItem("p7-v2-theme")||"dark";</script>
   <link rel="stylesheet" href="{% static 'gui_v2/prototype.css' %}">
 </head>
-<body class="{% block body_class %}{% endblock %}">
+<body class="{% block body_class %}{% endblock %}" data-p7-shell="gui-v2">
   <a class="skip-link" href="#v2-main">Hopp til innhold</a>
   <header class="app-header">
     <a class="brand" href="{% url 'gui_v2:home' %}" aria-label="P7 Arkiv og rettigheter, GUI v2"><span>P7</span><strong>Arkiv og rettigheter</strong></a>
@@ -21,12 +21,14 @@
       {% if perms.media_assets.view_fileasset %}<a href="{% url 'workbench:files' %}">Filer</a>{% endif %}
       {% if perms.flac_ingest.preview_library_cleanup or perms.flac_ingest.preview_library_rebuild %}<a href="{% url 'workbench:library_maintenance' %}">Kontroll</a>{% endif %}
     </nav>
-    <div class="header-actions">{% block header_player %}{% include "gui_v2/includes/player.html" with player_class="header-player" %}{% endblock %}<span class="prototype-mark">GUI v2 · prototype</span><button type="button" id="v2-theme-toggle" aria-label="Bytt lyst eller mørkt tema">◐</button><span class="user-chip">{{ request.user.get_username }}</span></div>
+    <div class="header-actions"><span class="prototype-mark">GUI v2 · prototype</span><button type="button" id="v2-theme-toggle" aria-label="Bytt lyst eller mørkt tema">◐</button><span class="user-chip">{{ request.user.get_username }}</span></div>
   </header>
   <div class="prototype-strip"><span>GUI v2 · testområde</span>{% if writes_enabled %}<strong>Endringer lagres i den separate testdatabasen</strong>{% else %}<strong>Ingen endringer lagres</strong>{% endif %}<a href="{% url 'home' %}">Tidligere Workbench</a></div>
   {% if messages %}<div class="messages" aria-live="polite">{% for message in messages %}<p class="message {{ message.tags }}">{{ message }}</p>{% endfor %}</div>{% endif %}
   <main id="v2-main" tabindex="-1">{% block content %}{% endblock %}</main>
+  <footer class="player-footer" data-p7-player-footer>{% include "gui_v2/includes/player.html" with player_class="global-player" %}</footer>
   <script>window.P7_V2={recordingSearch:"{% url 'gui_v2:recording_search' %}"};</script>
   <script src="{% static 'gui_v2/prototype.js' %}"></script>
   <script src="{% static 'gui_v2/grid.js' %}"></script>
+  <script src="{% static 'gui_v2/navigation.js' %}"></script>
 </body></html>

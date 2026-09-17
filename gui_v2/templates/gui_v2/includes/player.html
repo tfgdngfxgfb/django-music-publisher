@@ -5,9 +5,10 @@
     <strong data-player-title>Ingen lyd valgt</strong>
     <span data-player-subtitle>Velg Spill ved en innspilling</span>
   </div>
-  <button type="button" disabled aria-label="Forrige">◀</button>
+  <button type="button" data-player-previous disabled aria-label="Forrige innspilling">◀</button>
   <button class="play" type="button" data-player-toggle disabled aria-label="Spill av">▶</button>
-  <button type="button" disabled aria-label="Neste">▶|</button>
+  <button type="button" data-player-next disabled aria-label="Neste innspilling">▶|</button>
+  <label class="player-volume-label" aria-label="Volum">🔊 <input data-player-volume type="range" min="0" max="1" step="0.01" value="1" aria-label="Volum"></label>
   <button class="player-hide" type="button" data-player-hide aria-label="Skjul avspilleren" title="Skjul avspilleren">×</button>
   <input class="player-progress" data-player-progress type="range" min="0" max="0" value="0" step="0.1" aria-label="Avspillingsposisjon" disabled>
 </div>
