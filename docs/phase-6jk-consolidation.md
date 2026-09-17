@@ -36,9 +36,14 @@ separate reviews og grønn obligatorisk CI. Integrasjonsrekkefølge:
 Ingen konflikter. Ingen 6J-/6K-semantikk eller pakkefiler ble endret under
 integrasjonen; diff mot hver originalcommit for dens filområde er tom.
 Ingen nye modeller, migrasjoner, Django-apps eller endringer i canonical
-rights/lifecycle/authority. Master er ikke merget. Eksakt combined HEAD og
-combined CI-resultat rapporteres ved levering; individuell CI alene er ikke
-samlet godkjenning.
+rights/lifecycle/authority. Master er ikke merget. Integrert kodebaseline er
+`54a7c2b970064ca5045046841f5dca95b692440b`. Samlet CI for denne committen
+er grønn: [build](https://github.com/tfgdngfxgfb/django-music-publisher/actions/runs/35285158796)
+og [P7 Rights foundation](https://github.com/tfgdngfxgfb/django-music-publisher/actions/runs/35285158825).
+Black/lint, full Python 3.14-suite på PostgreSQL 17.11, SQLite og de
+eksperimentelle Python 3.15/PostgreSQL-jobbene fullførte med success.
+Den normative, korte [fase 6-kontrakten](phase-6-done.md) er dermed låst mot
+denne verifiserte kodebaselinen.
 
 Samlet lokal verifikasjon: `coverage run --omit=manage.py manage.py test`
 med SQLite: **702 tester kjørt, 13 skipped** (710 oppdaget av runneren).
