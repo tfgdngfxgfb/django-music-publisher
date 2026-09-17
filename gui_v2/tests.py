@@ -233,7 +233,7 @@ class GuiV2WorkspaceTests(TestCase):
         self.assertContains(
             response,
             f'data-play-cover-url="{player_cover_url}"',
-            count=2,
+            count=3,
         )
         self.assertContains(response, "data-player-cover")
 

@@ -1,15 +1,22 @@
-<div class="player {{ player_class }}" id="v2-player" role="region" aria-label="Avspillingsfelt">
+<div class="player {{ player_class }}" id="v2-player" role="region" aria-label="Avspillingsfelt" data-recording-url-template="{% url 'gui_v2:recording_detail' '00000000-0000-0000-0000-000000000000' %}">
   <audio id="v2-audio" preload="metadata"></audio>
-  <div class="player-cover" data-player-cover><span aria-hidden="true">♫</span></div>
-  <div class="player-title" aria-live="polite">
-    <strong data-player-title>Ingen lyd valgt</strong>
-    <span data-player-subtitle>Velg Spill ved en innspilling</span>
+  <div class="player-identity">
+    <a class="player-cover" data-player-recording-link data-player-cover aria-label="Åpne innspilling"><span aria-hidden="true">♫</span></a>
+    <div class="player-title" aria-live="polite">
+      <a data-player-recording-link><strong data-player-title>Ingen lyd valgt</strong></a>
+      <span data-player-subtitle>Velg Spill ved en innspilling</span>
+    </div>
   </div>
-  <button type="button" data-player-previous disabled aria-label="Forrige innspilling">◀</button>
-  <button class="play" type="button" data-player-toggle disabled aria-label="Spill av">▶</button>
-  <button type="button" data-player-next disabled aria-label="Neste innspilling">▶|</button>
-  <label class="player-volume-label" aria-label="Volum">🔊 <input data-player-volume type="range" min="0" max="1" step="0.01" value="1" aria-label="Volum"></label>
-  <button class="player-hide" type="button" data-player-hide aria-label="Skjul avspilleren" title="Skjul avspilleren">×</button>
-  <input class="player-progress" data-player-progress type="range" min="0" max="0" value="0" step="0.1" aria-label="Avspillingsposisjon" disabled>
+  <div class="player-transport">
+    <div class="player-controls"><button type="button" data-player-previous disabled aria-label="Forrige spor" title="Forrige spor">◀</button><button class="play" type="button" data-player-toggle disabled aria-label="Spill av">▶</button><button type="button" data-player-next disabled aria-label="Neste spor" title="Neste spor">▶|</button></div>
+    <div class="player-timeline"><span data-player-elapsed>0:00</span><input class="player-progress" data-player-progress type="range" min="0" max="0" value="0" step="0.1" aria-label="Avspillingsposisjon" disabled><span data-player-duration>0:00</span></div>
+  </div>
+  <div class="player-utilities">
+    <div class="player-sound"><button type="button" data-player-mute aria-label="Demp lyd" aria-pressed="false" title="Demp lyd">🔊</button><input data-player-volume type="range" min="0" max="1" step="0.01" value="1" aria-label="Volum"></div>
+    <button type="button" data-player-queue disabled aria-label="Vis kø" aria-expanded="false" aria-controls="player-queue-panel" title="Vis kø">Kø</button>
+    <button class="player-hide" type="button" data-player-hide aria-label="Skjul avspilleren" title="Skjul avspilleren">×</button>
+  </div>
+  <div class="player-queue-panel" id="player-queue-panel" data-player-queue-panel hidden><header><strong data-player-queue-context>Kø</strong><button type="button" data-player-queue-close aria-label="Lukk kø">×</button></header><ol data-player-queue-list></ol></div>
+  <span class="player-notice" data-player-notice role="status" hidden></span>
 </div>
 <button class="player-show" type="button" data-player-show aria-label="Vis avspilleren" title="Vis avspilleren" hidden>♫</button>

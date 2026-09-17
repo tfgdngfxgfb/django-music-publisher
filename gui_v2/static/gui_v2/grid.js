@@ -136,10 +136,13 @@
     const play = document.querySelector("#inspector-play");
     const playbackStatus = document.querySelector("#inspector-playback-status");
     if (play) {
-      play.dataset.playUrl = row.dataset.playbackUrl || "";
+      const savedRecording = row.dataset.playbackRecordingId || "";
+      play.dataset.playUrl = savedRecording === value(row, "recording_id") ? (row.dataset.playbackUrl || "") : "";
       play.dataset.playRecordingId = row.dataset.playbackRecordingId || "";
       play.dataset.playTitle = row.dataset.playbackTitle || value(row, "recording_title") || "";
       play.dataset.playArtist = row.dataset.playbackArtist || value(row, "artists") || "";
+      play.dataset.playCoverUrl = row.dataset.playCoverUrl || "";
+      play.dataset.playCoverAlt = row.dataset.playCoverAlt || "";
       play.disabled = !play.dataset.playUrl;
       play.setAttribute("aria-label", play.dataset.playUrl ? `Spill ${play.dataset.playTitle}` : (row.dataset.playbackMessage || "Ingen spillbar radiofil"));
     }

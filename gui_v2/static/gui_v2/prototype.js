@@ -37,45 +37,112 @@
   const playerPrevious = document.querySelector("[data-player-previous]");
   const playerNext = document.querySelector("[data-player-next]");
   const playerVolume = document.querySelector("[data-player-volume]");
+  const playerMute = document.querySelector("[data-player-mute]");
+  const playerElapsed = document.querySelector("[data-player-elapsed]");
+  const playerDuration = document.querySelector("[data-player-duration]");
+  const playerQueue = document.querySelector("[data-player-queue]");
+  const queuePanel = document.querySelector("[data-player-queue-panel]");
+  const queueList = document.querySelector("[data-player-queue-list]");
+  const queueLabel = document.querySelector("[data-player-queue-context]");
+  const playerNotice = document.querySelector("[data-player-notice]");
+  const recordingLinks = [...document.querySelectorAll("[data-player-recording-link]")];
   let followLibraryRow = async () => {};
   let playingRecording = "";
   let playingArtist = "";
   let queue = [];
   let queueIndex = -1;
-  let queueSource = "";
+  let queueContext = {type: "SINGLE", key: "", label: "Enkeltinnspilling"};
+  let queueTransitioning = false;
+  let lastFailedSource = "";
+  let noticeTimer;
   const librarySignature = () => {
     const url = new URL(location.href);
     url.searchParams.delete("selected");
     return `${url.pathname}?${url.searchParams}`;
   };
-  const playableTriggerForRow = row =>
-    row?.querySelector("[data-play-recording][data-play-url]:not(:disabled)");
   const trackFromTrigger = trigger => ({
-    playUrl: trigger.dataset.playUrl,
+    playUrl: trigger.dataset.playUrl || "",
     playRecordingId: trigger.dataset.playRecordingId || "",
     playTitle: trigger.dataset.playTitle || "Innspilling",
     playArtist: trigger.dataset.playArtist || "",
     playCoverUrl: trigger.dataset.playCoverUrl || "",
     playCoverAlt: trigger.dataset.playCoverAlt || "",
+    playMessage: trigger.dataset.playMessage || "Ingen spillbar radiofil",
   });
+  const trackFromRow = row => {
+    const button = row.querySelector("[data-play-recording]");
+    const data = row.dataset;
+    const editedRecording = row.matches(".track-row") ? row.querySelector("[name$='-recording_id']")?.value : null;
+    const matchesSavedRecording = editedRecording === null || editedRecording === (data.playbackRecordingId || "");
+    return trackFromTrigger({dataset: {
+      playUrl: matchesSavedRecording ? (data.playbackUrl || button?.dataset.playUrl || "") : "",
+      playRecordingId: matchesSavedRecording ? (data.playbackRecordingId || button?.dataset.playRecordingId || "") : "",
+      playTitle: data.playbackTitle || button?.dataset.playTitle || row.querySelector("[name$='-recording_title']")?.value || "Spor uten innspilling",
+      playArtist: data.playbackArtist || button?.dataset.playArtist || "",
+      playCoverUrl: data.playCoverUrl || button?.dataset.playCoverUrl || "",
+      playCoverAlt: data.playCoverAlt || button?.dataset.playCoverAlt || "",
+      playMessage: matchesSavedRecording ? (data.playbackMessage || "Ingen spillbar radiofil") : "Lagre sporkoblingen før avspilling",
+    }});
+  };
+  const renderQueue = () => {
+    if (!queueList || !queueLabel) return;
+    queueLabel.textContent = queueContext.label;
+    queueList.replaceChildren();
+    queue.forEach((track, index) => {
+      const item = document.createElement("li");
+      item.setAttribute("aria-current", String(index === queueIndex));
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.queueIndex = String(index);
+      button.disabled = !track.playUrl;
+      const title = document.createElement("strong");
+      title.textContent = `${index + 1}. ${track.playTitle}`;
+      const marker = document.createElement("small");
+      marker.textContent = index === queueIndex ? "Spilles nå" : "";
+      const detail = document.createElement("span");
+      detail.textContent = track.playUrl ? (track.playArtist || "Uavklart artist") : track.playMessage;
+      button.append(title, marker, detail);
+      item.append(button);
+      queueList.append(item);
+    });
+  };
+  const notify = message => {
+    if (!playerNotice) return;
+    clearTimeout(noticeTimer);
+    playerNotice.textContent = message;
+    playerNotice.hidden = !message;
+    if (message) noticeTimer = setTimeout(() => { playerNotice.hidden = true; }, 3800);
+  };
   const updateQueueControls = () => {
-    if (playerPrevious) playerPrevious.disabled = queueIndex <= 0;
-    if (playerNext) playerNext.disabled = queueIndex < 0 || queueIndex >= queue.length - 1;
+    if (playerPrevious) playerPrevious.disabled = queueIndex < 0 || !queue.slice(0, queueIndex).some(track => track.playUrl);
+    if (playerNext) playerNext.disabled = queueIndex < 0 || !queue.slice(queueIndex + 1).some(track => track.playUrl);
+    if (playerQueue) playerQueue.disabled = !queue.length;
+    renderQueue();
   };
   const captureQueue = trigger => {
-    const row = trigger.closest?.("[data-library-row]") ||
+    const libraryRow = trigger.closest?.("[data-library-row]") ||
       (document.body.classList.contains("music-library-page")
         ? document.querySelector("[data-library-row].selected") : null);
-    if (row && playableTriggerForRow(row)?.dataset.playRecordingId === trigger.dataset.playRecordingId) {
-      const rows = [...document.querySelectorAll("[data-library-row]")]
-        .filter(item => !item.hidden && playableTriggerForRow(item));
-      queue = rows.map(item => trackFromTrigger(playableTriggerForRow(item)));
-      queueIndex = rows.indexOf(row);
-      queueSource = librarySignature();
+    const releaseForm = document.querySelector("#track-grid-form[data-release-id]");
+    const releaseRow = trigger.closest?.(".track-row") || releaseForm?.querySelector(".track-row.active");
+    if (libraryRow && trackFromRow(libraryRow).playRecordingId === trigger.dataset.playRecordingId) {
+      const rows = [...document.querySelectorAll("[data-library-row]")].filter(item => !item.hidden);
+      queue = rows.map(trackFromRow);
+      queueIndex = rows.indexOf(libraryRow);
+      queueContext = {type: "MUSIC_LIBRARY", key: librarySignature(), label: "Musikkarkiv"};
+    } else if (releaseRow && releaseForm && trackFromRow(releaseRow).playRecordingId === trigger.dataset.playRecordingId) {
+      const rows = [...releaseForm.querySelectorAll("#track-rows > .track-row")]
+        .filter(item => !item.hidden && !item.querySelector("[name$='-remove']:checked"));
+      queue = rows.map(trackFromRow);
+      queueIndex = rows.indexOf(releaseRow);
+      queueContext = {type: "RELEASE", key: releaseForm.dataset.releaseId, label: "Utgivelsens sporliste"};
+    } else if (queue[queueIndex]?.playRecordingId === trigger.dataset.playRecordingId &&
+               queue[queueIndex]?.playUrl === trigger.dataset.playUrl) {
+      return; // A play button on the Recording page must not replace its existing context.
     } else {
       queue = [trackFromTrigger(trigger)];
       queueIndex = 0;
-      queueSource = "";
+      queueContext = {type: "SINGLE", key: "", label: "Enkeltinnspilling"};
     }
     updateQueueControls();
   };
@@ -107,7 +174,9 @@
   const updatePlayerTime = () => {
     if (!audio || !playerSubtitle || !playingRecording) return;
     const duration = Number.isFinite(audio.duration) ? audio.duration : 0;
-    playerSubtitle.textContent = `${playingArtist || "Uavklart artist"} · ${timeText(audio.currentTime)} / ${timeText(duration)}`;
+    playerSubtitle.textContent = playingArtist || "Uavklart artist";
+    if (playerElapsed) playerElapsed.textContent = timeText(audio.currentTime);
+    if (playerDuration) playerDuration.textContent = timeText(duration);
     if (playerProgress) {
       playerProgress.max = String(duration || 0);
       playerProgress.value = String(audio.currentTime || 0);
@@ -130,35 +199,53 @@
     playerCover.append(placeholder);
   };
   const startPlayback = async (trigger, preserveQueue = false) => {
-    if (!audio || !trigger.dataset.playUrl) return;
+    if (!audio || !trigger.dataset.playUrl) return false;
     if (!preserveQueue) captureQueue(trigger);
+    const details = queue[queueIndex]?.playRecordingId === trigger.dataset.playRecordingId &&
+      queue[queueIndex]?.playUrl === trigger.dataset.playUrl ? queue[queueIndex] : trigger.dataset;
     setPlayerHidden(false);
-    const recordingId = trigger.dataset.playRecordingId || "";
-    if (playingRecording !== recordingId || audio.dataset.playUrl !== trigger.dataset.playUrl) {
+    const recordingId = details.playRecordingId || "";
+    if (playingRecording !== recordingId || audio.dataset.playUrl !== details.playUrl) {
       audio.pause();
       playingRecording = recordingId;
-      playingArtist = trigger.dataset.playArtist || "";
-      audio.dataset.playUrl = trigger.dataset.playUrl;
-      audio.src = trigger.dataset.playUrl;
-      playerTitle.textContent = trigger.dataset.playTitle || "Innspilling";
-      playerSubtitle.textContent = `${playingArtist || "Uavklart artist"} · åpner radiofil …`;
-      updatePlayerCover(trigger);
+      playingArtist = details.playArtist || "";
+      audio.dataset.playUrl = details.playUrl;
+      audio.src = details.playUrl;
+      playerTitle.textContent = details.playTitle || "Innspilling";
+      playerSubtitle.textContent = playingArtist || "Uavklart artist";
+      updatePlayerCover({dataset: details});
+      const urlTemplate = player?.dataset.recordingUrlTemplate;
+      recordingLinks.forEach(link => {
+        if (urlTemplate && /^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i.test(recordingId)) {
+          link.href = urlTemplate.replace("00000000-0000-0000-0000-000000000000", recordingId);
+          link.setAttribute("aria-label", `Åpne innspilling: ${details.playTitle || "Innspilling"}`);
+        } else link.removeAttribute("href");
+      });
       playerToggle.disabled = false;
       playerProgress.disabled = true;
+      lastFailedSource = "";
       audio.load();
     }
     try {
       await audio.play();
     } catch {
       playerSubtitle.textContent = "Radiofilen kunne ikke leses eller spilles.";
+      updatePlaybackButtons();
+      return false;
     }
     updatePlaybackButtons();
+    return true;
   };
   document.addEventListener("click", event => {
     const trigger = event.target.closest("[data-play-recording]");
     if (!trigger || trigger.disabled) return;
     event.preventDefault();
     event.stopPropagation();
+    const releaseRow = trigger.closest(".track-row");
+    if (releaseRow && !trackFromRow(releaseRow).playUrl) {
+      notify("Lagre sporkoblingen før avspilling.");
+      return;
+    }
     startPlayback(trigger);
     const libraryRow = trigger.closest("[data-library-row]");
     if (libraryRow) void followLibraryRow(libraryRow);
@@ -176,6 +263,14 @@
   playerProgress?.addEventListener("input", () => {
     if (audio && Number.isFinite(audio.duration)) audio.currentTime = Number(playerProgress.value);
   });
+  const syncMute = () => {
+    if (!audio || !playerMute) return;
+    const muted = audio.muted || audio.volume === 0;
+    playerMute.textContent = muted ? "🔇" : "🔊";
+    playerMute.setAttribute("aria-label", muted ? "Slå på lyd" : "Demp lyd");
+    playerMute.setAttribute("title", muted ? "Slå på lyd" : "Demp lyd");
+    playerMute.setAttribute("aria-pressed", String(muted));
+  };
   if (audio && playerVolume) {
     const storedVolume = localStorage.getItem("p7-v2-player-volume");
     const savedVolume = storedVolume === null ? 1 : Number(storedVolume);
@@ -183,8 +278,20 @@
     playerVolume.value = String(audio.volume);
     playerVolume.addEventListener("input", () => {
       audio.volume = Number(playerVolume.value);
+      if (audio.volume > 0) audio.muted = false;
       localStorage.setItem("p7-v2-player-volume", String(audio.volume));
+      syncMute();
     });
+    playerMute?.addEventListener("click", () => {
+      audio.muted = !audio.muted;
+      if (!audio.muted && audio.volume === 0) {
+        audio.volume = 1;
+        playerVolume.value = "1";
+        localStorage.setItem("p7-v2-player-volume", "1");
+      }
+      syncMute();
+    });
+    syncMute();
   }
   audio?.addEventListener("play", () => {
     playerToggle.textContent = "Ⅱ";
@@ -198,20 +305,68 @@
   });
   audio?.addEventListener("loadedmetadata", updatePlayerTime);
   audio?.addEventListener("timeupdate", updatePlayerTime);
-  const moveInQueue = async offset => {
-    const nextIndex = queueIndex + offset;
-    if (nextIndex < 0 || nextIndex >= queue.length) return;
-    queueIndex = nextIndex;
-    updateQueueControls();
-    await startPlayback({dataset: queue[nextIndex]}, true);
-    if (queueSource !== librarySignature()) return;
+  const highlightCurrentLibraryRow = async () => {
+    if (queueContext.type !== "MUSIC_LIBRARY" || queueContext.key !== librarySignature()) return;
     const row = [...document.querySelectorAll("[data-library-row]")].find(
-      item => playableTriggerForRow(item)?.dataset.playRecordingId === queue[nextIndex].playRecordingId
+      item => trackFromRow(item).playRecordingId === queue[queueIndex]?.playRecordingId
     );
     if (row) await followLibraryRow(row);
   };
+  const moveInQueue = async offset => {
+    if (queueTransitioning) return;
+    queueTransitioning = true;
+    let skipped = 0;
+    try {
+      for (let index = queueIndex + offset; index >= 0 && index < queue.length; index += offset) {
+        if (!queue[index].playUrl) { skipped++; continue; }
+        queueIndex = index;
+        updateQueueControls();
+        if (await startPlayback({dataset: queue[index]}, true)) {
+          if (skipped) notify(`Hoppet over ${skipped} utilgjengelig${skipped === 1 ? " spor" : "e spor"}.`);
+          await highlightCurrentLibraryRow();
+          return;
+        }
+        queue[index].playUrl = "";
+        queue[index].playMessage = "Kunne ikke spille radiofilen";
+        updateQueueControls();
+        skipped++;
+      }
+      if (skipped) notify(`Ingen flere spillbare spor. ${skipped} ble hoppet over.`);
+    } finally {
+      queueTransitioning = false;
+    }
+  };
+  const playQueueIndex = async index => {
+    if (!queue[index]?.playUrl || queueTransitioning) return;
+    queueIndex = index;
+    updateQueueControls();
+    await startPlayback({dataset: queue[index]}, true);
+    await highlightCurrentLibraryRow();
+  };
   playerPrevious?.addEventListener("click", () => void moveInQueue(-1));
   playerNext?.addEventListener("click", () => void moveInQueue(1));
+  const setQueueOpen = open => {
+    if (!queuePanel || !playerQueue) return;
+    queuePanel.hidden = !open;
+    playerQueue.setAttribute("aria-expanded", String(open));
+    if (open) renderQueue();
+  };
+  playerQueue?.addEventListener("click", () => setQueueOpen(queuePanel.hidden));
+  queuePanel?.addEventListener("click", event => {
+    if (event.target.closest("[data-player-queue-close]")) {
+      setQueueOpen(false);
+      playerQueue.focus();
+      return;
+    }
+    const index = event.target.closest("[data-queue-index]")?.dataset.queueIndex;
+    if (index !== undefined) void playQueueIndex(Number(index));
+  });
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape" && queuePanel && !queuePanel.hidden) {
+      setQueueOpen(false);
+      playerQueue.focus();
+    }
+  });
   audio?.addEventListener("ended", () => {
     updatePlaybackButtons();
     void moveInQueue(1);
@@ -220,6 +375,17 @@
     playerToggle.textContent = "▶";
     playerSubtitle.textContent = "Radiofilen kunne ikke leses eller spilles.";
     updatePlaybackButtons();
+    if (queueTransitioning || audio.dataset.playUrl === lastFailedSource) return;
+    lastFailedSource = audio.dataset.playUrl;
+    if (queue[queueIndex]?.playUrl === audio.dataset.playUrl) {
+      queue[queueIndex].playUrl = "";
+      queue[queueIndex].playMessage = "Kunne ikke spille radiofilen";
+      updateQueueControls();
+    }
+    if (queue.slice(queueIndex + 1).some(track => track.playUrl)) {
+      notify("Et spor kunne ikke spilles. Prøver neste.");
+      void moveInQueue(1);
+    }
   });
   document.addEventListener("p7:playback-context-changed", syncPlayerAvailability);
   document.addEventListener("p7:page-changed", () => {

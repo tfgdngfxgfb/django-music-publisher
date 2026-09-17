@@ -233,9 +233,52 @@ class RadioPlaybackTests(TestCase):
             self.assertContains(response, expected)
             self.assertContains(response, "data-play-recording")
             self.assertContains(response, "data-player-primary")
+            self.assertContains(response, "data-player-queue")
+            self.assertContains(response, "data-player-mute")
+            self.assertEqual(response.content.count(b'id="v2-audio"'), 1)
         self.assertNotContains(library, "autoplay")
         self.assertNotContains(overview, "autoplay")
         self.assertNotContains(release_page, "autoplay")
+
+    def test_queue_snapshot_markup_preserves_release_sequence_and_unavailable_tracks(self):
+        missing = Recording.objects.create(title="Andre spor uten radio")
+        playable = Recording.objects.create(title="Tredje spor med radio")
+        MusicLibraryEntry.objects.create(recording=missing)
+        MusicLibraryEntry.objects.create(recording=playable)
+        asset = FileAsset.objects.create(
+            recording=playable, filename="third.flac", role=FileAsset.Role.RADIO_FLAC
+        )
+        FileLocation.objects.create(
+            asset=asset,
+            storage_type=FileLocation.StorageType.NAS,
+            relative_path="radio/third.flac",
+            status=FileLocation.Status.ACTIVE,
+            is_current=True,
+        )
+        release = Release.objects.create(title="Køutgivelse")
+        ReleaseTrack.objects.create(
+            release=release, recording=playable, sequence_number=3, disc_number=2
+        )
+        ReleaseTrack.objects.create(
+            release=release, recording=self.recording, sequence_number=1, side="A"
+        )
+        ReleaseTrack.objects.create(
+            release=release, recording=missing, sequence_number=2, side="B"
+        )
+
+        release_page = self.client.get(reverse("gui_v2:release_detail", args=[release.pk]))
+        self.assertEqual(release_page.status_code, 200)
+        self.assertContains(release_page, f'data-release-id="{release.pk}"')
+        html = release_page.content
+        positions = [html.index(f'data-playback-title="{title}"'.encode()) for title in (
+            self.recording.title, missing.title, playable.title
+        )]
+        self.assertEqual(positions, sorted(positions))
+        self.assertContains(release_page, 'data-playback-url=""')
+        self.assertContains(release_page, "Andre spor uten radio")
+        library = self.client.get(reverse("gui_v2:music_library"))
+        self.assertContains(library, 'data-playback-title="Andre spor uten radio"')
+        self.assertContains(library, 'data-playback-url=""')
 
     def test_ambiguous_recording_renders_no_playback_url(self):
         other = FileAsset.objects.create(
