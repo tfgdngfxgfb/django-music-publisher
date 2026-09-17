@@ -1,6 +1,44 @@
-{% extends "gui_v2/base.html" %}{% block title %}Start{% endblock %}{% block content %}
-<section class="start-view"><p class="eyebrow">GUI v2</p><h1>Arbeidsflater</h1><p>Prøv den nye visuelle retningen med eksisterende katalogstruktur. De to hovedflatene er tilgjengelige parallelt med dagens Workbench.</p>
-<div class="start-grid">
-{% if perms.music_library.view_musiclibraryentry %}<a class="start-card" href="{% url 'gui_v2:music_library' %}"><span>♫</span><div><strong>Musikkarkiv</strong><p>Søk, radioklassifisering, filer og utgivelseskontekst i én arbeidsflate.</p></div><b>Åpne →</b></a>{% endif %}
-{% if perms.catalogue.view_release %}<a class="start-card" href="{% url 'gui_v2:release_list' %}"><span>▣</span><div><strong>Utgivelser og spor</strong><p>Velg en utgivelse og prøv den tabellbaserte sporregistreringen.</p></div><b>Åpne →</b></a>{% endif %}
-</div></section>{% endblock %}
+{% extends "gui_v2/base.html" %}
+{% block title %}Hjem{% endblock %}
+{% block body_class %}home-page{% endblock %}
+{% block content %}
+<div class="home-workspace">
+  <header class="home-intro">
+    <span class="eyebrow">Felles arbeidsflate</span>
+    <h1>{{ greeting }}, {{ display_name }}</h1>
+    <p>Fortsett der du slapp, eller velg et arbeidsområde.</p>
+  </header>
+
+  <section class="home-section" aria-labelledby="home-continue-title">
+    <header><h2 id="home-continue-title">Fortsett arbeidet</h2></header>
+    {% if continue_items %}<div class="home-continue-grid">
+      {% for item in continue_items %}<a class="home-continue-card" href="{{ item.url }}">
+        <span class="home-card-icon" aria-hidden="true">{{ item.icon }}</span>
+        <div class="home-card-copy"><small>{{ item.label }}</small><strong>{{ item.title }}</strong><span>{{ item.detail }}</span></div>
+        <span class="home-card-foot"><small>Åpnet {{ item.seen|timesince }} siden</small><b>Fortsett →</b></span>
+      </a>{% endfor %}
+    </div>{% else %}<p class="home-empty">Her vises innspillinger, utgivelser og digitaliseringer du åpner. Velg et arbeidsområde nedenfor for å begynne.</p>{% endif %}
+  </section>
+
+  <section class="home-section" aria-labelledby="home-areas-title">
+    <header><h2 id="home-areas-title">Arbeidsområder</h2></header>
+    {% if workspaces %}<div class="home-area-grid">
+      {% for area in workspaces %}<a class="home-area-card" href="{{ area.url }}"><span class="home-area-icon" aria-hidden="true">{{ area.icon }}</span><span><strong>{{ area.title }}</strong><small>{{ area.description }}</small></span><b aria-hidden="true">→</b></a>{% endfor %}
+    </div>{% else %}<p class="home-empty">Du har foreløpig ikke tilgang til et arbeidsområde. Kontakt en administrator dersom du trenger tilgang.</p>{% endif %}
+  </section>
+
+  <section class="home-section" aria-labelledby="home-followup-title">
+    <header><h2 id="home-followup-title">Krever oppfølging</h2></header>
+    {% if followups %}<div class="home-followup-grid">
+      {% for item in followups %}<a class="home-followup-card {{ item.tone }}" href="{{ item.url }}"><strong>{{ item.count }}</strong><span>{{ item.title }}</span><b aria-hidden="true">→</b></a>{% endfor %}
+    </div>{% else %}<p class="home-empty">Ingen kjente oppfølgingspunkter i arbeidsområdene du har tilgang til.</p>{% endif %}
+  </section>
+
+  <section class="home-section" aria-labelledby="home-recent-title">
+    <header><h2 id="home-recent-title">Nylig åpnet</h2></header>
+    {% if recent_items %}<div class="home-recent-list">
+      {% for item in recent_items %}<a href="{{ item.url }}"><span class="home-recent-icon" aria-hidden="true">{{ item.icon }}</span><span class="home-recent-kind">{{ item.label }}</span><strong>{{ item.title }}</strong><span class="home-recent-detail">{{ item.detail }}</span><time datetime="{{ item.seen|date:'c' }}">{{ item.seen|timesince }} siden</time><span aria-hidden="true">→</span></a>{% endfor %}
+    </div>{% else %}<p class="home-empty">Ingen objekter er åpnet i denne økten ennå.</p>{% endif %}
+  </section>
+</div>
+{% endblock %}

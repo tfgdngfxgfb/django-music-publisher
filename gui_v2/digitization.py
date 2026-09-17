@@ -47,6 +47,7 @@ from media_assets.pipeline_status import (
     get_recording_media_pipeline_status,
 )
 from .forms import MasterRegistrationForm, ReleaseMetadataForm
+from .home_state import remember_object
 from .recording_files import _location_data, _technical, _size
 
 logger = logging.getLogger(__name__)
@@ -559,6 +560,11 @@ def index(request):
             | Q(release__title__icontains=query)
             | Q(release__catalogue_number__icontains=query)
         )
+    if request.GET.get("needs") == "recording":
+        batches = batches.filter(
+            files__asset__role=FileAsset.Role.EDITED_WAV_MASTER,
+            files__asset__recording__isnull=True,
+        ).distinct()
     for param, field in (
         ("status", "status"),
         ("label", "release__label_id"),
@@ -721,6 +727,8 @@ def detail(request, batch_id):
         DigitizationBatch.objects.select_related("release", "release__label"),
         pk=batch_id,
     )
+    if request.method == "GET":
+        remember_object(request, "batch", batch.pk)
     folder_form = FolderForm()
     plan = None
     error = ""

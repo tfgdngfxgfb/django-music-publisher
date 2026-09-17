@@ -95,6 +95,7 @@ from rights.summaries import (
 )
 
 from .forms import MusicLibraryFilterForm, ReleaseMetadataForm, TrackRowFormSet
+from .home_state import build_home_context, remember_object
 from .presentation import compact_names, radio_language_name
 from .recording_overview import (
     build_recording_overview,
@@ -238,11 +239,9 @@ def _selected_entry_return(value, entry_id):
 @require_GET
 @login_required
 def home(request):
-    return render(
-        request,
-        "gui_v2/home.html",
-        {"section": "home", "writes_enabled": settings.GUI_V2_WRITES_ENABLED},
-    )
+    context = build_home_context(request)
+    context["writes_enabled"] = settings.GUI_V2_WRITES_ENABLED
+    return render(request, "gui_v2/home.html", context)
 
 
 @require_GET
@@ -941,6 +940,7 @@ def recording_detail(request, recording_id):
     recording = get_object_or_404(
         recording_overview_queryset(), pk=recording_id
     )
+    remember_object(request, "recording", recording.pk)
     return_url = _safe_return(request, reverse("gui_v2:music_library"))
     current_url = request.get_full_path()
     can_view_releases = request.user.has_perm("catalogue.view_release")
@@ -1723,6 +1723,8 @@ def release_detail(request, release_id):
     release = get_object_or_404(
         Release.objects.select_related("label"), pk=release_id
     )
+    if request.method == "GET":
+        remember_object(request, "release", release.pk)
     action = (
         request.POST.get("action", "tracks")
         if request.method == "POST"

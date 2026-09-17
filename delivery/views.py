@@ -9,6 +9,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods
 
 from media_assets.storage import StorageFileUnavailable, open_for_read
+from gui_v2.home_state import remember_object
 
 from .forms import DeliveryForm
 from .models import (
@@ -83,10 +84,20 @@ def history(request):
     deliveries = (
         Delivery.objects.select_related("created_by").prefetch_related("items").all()
     )
+    attention_only = request.GET.get("status") == "attention"
+    if attention_only:
+        deliveries = deliveries.filter(
+            status__in=(Delivery.Status.PARTIAL, Delivery.Status.FAILED)
+        )
     return render(
         request,
         "delivery/history.html",
-        {"section": "delivery", "writes_enabled": True, "deliveries": deliveries},
+        {
+            "section": "delivery",
+            "writes_enabled": True,
+            "deliveries": deliveries,
+            "attention_only": attention_only,
+        },
     )
 
 
@@ -103,6 +114,7 @@ def detail(request, delivery_id):
         ),
         pk=delivery_id,
     )
+    remember_object(request, "delivery", delivery.pk)
     return render(
         request,
         "delivery/detail.html",
