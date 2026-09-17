@@ -19,8 +19,8 @@ from managed_music.services import return_to_music_library
 from parties.models import Party
 from rights_core.models import VerificationStatus as Status
 
-from . import workflows as wf
-from .models import RightsClaim, RightsConfiguration
+from rights import workflows as wf
+from rights.models import RightsClaim, RightsConfiguration
 
 
 @skipUnlessDBFeature("has_select_for_update")
@@ -134,6 +134,21 @@ class WorkflowLockingTests(TransactionTestCase):
                 edit,
             )
         self.assertEqual(RightsClaim.objects.count(), 1)
+
+    def test_decision_cannot_restore_basis_after_concurrent_return(self):
+        wf.decide_rights_claim(self.claim, Status.REJECTED, user=self.user)
+        with self.assertRaises(ValidationError):
+            self.while_locked(
+                lambda: wf.decide_rights_claim(
+                    self.claim, Status.CONFIRMED, user=self.user
+                ),
+                lambda: return_to_music_library(
+                    self.managed, user=self.user, reason="Avvist onboarding"
+                ),
+            )
+        self.claim.refresh_from_db()
+        self.assertEqual(self.claim.status, Status.REJECTED)
+        self.assertFalse(ManagedRecording.objects.exists())
 
     def test_concurrent_onboarding_creates_only_one_membership(self):
         self.recording = Recording.objects.create(

@@ -7,6 +7,7 @@ import json
 from django.core import signing
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
+from django.utils import timezone
 
 from catalogue.models import Recording, ReleaseTrack
 from managed_music.models import ManagedRecording
@@ -17,6 +18,7 @@ from .models import RightsClaim, RightsConfiguration, RightsDecision, Territory
 from .scope import (
     find_ownership_conflict,
     prepare_claims,
+    resolve_management_basis,
     territory_scope_countries,
 )
 
@@ -130,19 +132,51 @@ def onboard_managed_recording(*, user, **values):
     return create_managed_recording(user=user, **values)
 
 
+def _require_membership_for_live_basis(claim):
+    """Historical corrections remain possible; live onboarding stays explicit.
+
+    Caller holds the Recording lock and an atomic transaction. Check both
+    current and future applicability using the shared 6C scope engine.
+    """
+    day = max(timezone.localdate(), claim.valid_from or timezone.localdate())
+    basis = resolve_management_basis(
+        claim.recording_id, claims=(claim,), on_date=day
+    )
+    if (
+        basis.claims
+        and not ManagedRecording.objects.filter(
+            library_entry__recording_id=claim.recording_id
+        ).exists()
+    ):
+        raise ValidationError(
+            "Aktuelt eller framtidig lokalt P7-grunnlag krever eksplisitt "
+            "onboarding før kravet kan registreres eller revurderes."
+        )
+
+
+@transaction.atomic
 def decide_rights_claim(claim, decision, *, user, note=""):
     require_permissions(user, "rights.decide_rightsclaim")
-    return services.decide_rights_claim(claim, decision, user=user, note=note)
+    result = services.decide_rights_claim(
+        claim, decision, user=user, note=note
+    )
+    current = RightsClaim.objects.get(pk=claim.pk)
+    _require_membership_for_live_basis(current)
+    return result
 
 
+@transaction.atomic
 def supersede_rights_claims(previous, *, user, replacements, note=""):
     require_permissions(
         user, "rights.add_rightsclaim", "rights.decide_rightsclaim"
     )
     replacements = tuple(_claim_values(row) for row in replacements)
-    return services.supersede_rights_claims(
+    created = services.supersede_rights_claims(
         previous, user=user, replacements=replacements, note=note
     )
+    for claim in created:
+        _require_membership_for_live_basis(claim)
+    return created
 
 
 def supersede_rights_claim(previous, *, user, note="", **values):

@@ -53,6 +53,13 @@ Eksisterende staff/view-permissions og GUI-v2-writeflag beholdes i views.
 Agreement-/Party-/Document-administrasjon beholder etablerte permissions.
 Eksisterende claims kan dokumenteres eller korrigeres historisk selv om
 medlemskapet senere er tilbakeført; ny normal registrering krever medlemskap.
+Manuell decision eller superseding etter tilbakeføring kan ikke etablere et
+aktuelt eller framtidig lokalt P7-grunnlag (heller ikke ubekreftet/bestridt eller
+Release-scoped) uten eksplisitt onboarding. Workflow-grensen bruker 6C scope på
+dagens dato eller claimets framtidige startdato under samme Recording-lås og
+transaksjon som endringen. Avvisning ruller tilbake claims og audit samlet.
+Dokumentasjon og korreksjon av utløpte historiske posisjoner er fortsatt tillatt.
+Lavnivå import-/system-services beholder sin separate kontrakt.
 Workbench beholder sin strengere managed-grense for decision-skjemaet.
 Ingen delete-handling åpnes for claims eller beslutninger.
 
@@ -102,6 +109,9 @@ Hver replacement er UNVERIFIED, har samme Recording/right_type og peker til
 previous. Holder, grantor, share, territorium, periode og lovlig release_scope
 kan korrigeres. Utelatt release_scope bevarer tidligere scope; eksplisitt None
 betyr generell Recording-kontekst. Øvrige replacement-verdier angis av caller.
+Feil rettighetstype korrigeres ved å avvise den gamle posisjonen og registrere
+en ny separat UNVERIFIED posisjon gjennom normal registrering/onboarding.
+Superseding kan ikke endre right_type, og den gamle historikken beholdes.
 
 Previous blir SUPERSEDED én gang. Én superseding-beslutning på previous lister
 samtlige nye UUID-er og begrunnelse. Nye claims får DOCUMENTED med actor og

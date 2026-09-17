@@ -17,8 +17,8 @@ from parties.models import Party
 from provenance.models import SourceRecord, SourceSystem
 from rights_core.models import VerificationStatus as Status
 
-from . import services, workflows as wf
-from .models import (
+from rights import services, workflows as wf
+from rights.models import (
     Agreement,
     RightsClaim,
     RightsConfiguration,
@@ -188,7 +188,117 @@ class RightsWorkflowTests(TestCase):
         self.assertEqual(claim.rights_holder, self.other)
         self.assertEqual(claim.decisions.get().decided_by, self.user)
 
+    def test_return_blocks_live_local_decisions_and_replacements(self):
+        today = timezone.localdate()
+        for right_type in (OWN, ADMIN, DIST):
+            for start in (today, today + timedelta(days=30)):
+                with self.subTest(right_type=right_type, start=start):
+                    recording = Recording.objects.create(title="Returned")
+                    managed = wf.onboard_managed_recording(
+                        user=self.user,
+                        recording=recording,
+                        relationship_type=right_type,
+                        ownership_share=(
+                            Decimal(100) if right_type == OWN else None
+                        ),
+                        valid_from=start,
+                    )
+                    claim = recording.rights_claims.get()
+                    wf.decide_rights_claim(
+                        claim, Status.REJECTED, user=self.user
+                    )
+                    return_to_music_library(
+                        managed, user=self.user, reason="Onboarding avvist"
+                    )
+                    count = claim.decisions.count()
+                    for decision in (Status.CONFIRMED, Status.DISPUTED):
+                        with self.assertRaisesMessage(
+                            ValidationError, "eksplisitt onboarding"
+                        ):
+                            wf.decide_rights_claim(
+                                claim, decision, user=self.user
+                            )
+                        claim.refresh_from_db()
+                        self.assertEqual(claim.status, Status.REJECTED)
+                        self.assertEqual(claim.decisions.count(), count)
+                    values = dict(
+                        rights_holder=self.local,
+                        share=claim.share,
+                        valid_from=start,
+                    )
+                    with self.assertRaisesMessage(
+                        ValidationError, "eksplisitt onboarding"
+                    ):
+                        wf.supersede_rights_claim(
+                            claim, user=self.user, **values
+                        )
+                    claim.refresh_from_db()
+                    self.assertEqual(claim.status, Status.REJECTED)
+                    self.assertFalse(claim.superseded_by.exists())
+                    self.assertEqual(claim.decisions.count(), count)
+                    self.assertFalse(
+                        ManagedRecording.objects.filter(
+                            library_entry__recording=recording
+                        ).exists()
+                    )
+                    # Explicit onboarding restores the manual workflow.
+                    wf.onboard_managed_recording(
+                        user=self.user,
+                        recording=recording,
+                        relationship_type=ADMIN,
+                    )
+                    wf.decide_rights_claim(
+                        claim, Status.CONFIRMED, user=self.user
+                    )
+
+    def test_return_preserves_historical_correction_and_documentation(self):
+        managed = self.onboard()
+        claim = self.recording.rights_claims.get()
+        wf.decide_rights_claim(claim, Status.REJECTED, user=self.user)
+        return_to_music_library(
+            managed, user=self.user, reason="Ingen forvaltning"
+        )
+        wf.document_rights_claim(
+            claim, user=self.user, note="Senere historisk dokumentasjon"
+        )
+        replacement = wf.supersede_rights_claim(
+            claim,
+            user=self.user,
+            rights_holder=self.local,
+            valid_until=timezone.localdate() - timedelta(days=1),
+        )
+        wf.decide_rights_claim(replacement, Status.CONFIRMED, user=self.user)
+        self.assertFalse(ManagedRecording.objects.exists())
+        claim.refresh_from_db()
+        self.assertEqual(claim.status, Status.SUPERSEDED)
+        self.assertTrue(
+            claim.decisions.filter(
+                note=" Senere historisk dokumentasjon"
+            ).exists()
+        )
+
+    def test_return_release_scope_does_not_bypass_onboarding(self):
+        managed = self.onboard()
+        claim = self.recording.rights_claims.get()
+        wf.decide_rights_claim(claim, Status.REJECTED, user=self.user)
+        return_to_music_library(managed, user=self.user, reason="Avvist")
+        with self.assertRaises(ValidationError):
+            wf.supersede_rights_claim(
+                claim,
+                user=self.user,
+                rights_holder=self.local,
+                release_scope=self.release,
+                territory_mode=RightsClaim.TerritoryMode.INCLUDE,
+                territories=[self.no],
+            )
+        # Trusted imports remain separate, but manual confirmation is guarded.
+        imported = self.claim(release_scope=self.release)
+        with self.assertRaises(ValidationError):
+            wf.decide_rights_claim(imported, Status.CONFIRMED, user=self.user)
+        self.assertFalse(ManagedRecording.objects.exists())
+
     def test_decision_matrix_terminal_noop_and_atomic_conflict(self):
+        self.onboard()
         expected = {
             Status.UNVERIFIED: {
                 Status.CONFIRMED,
