@@ -1,0 +1,84 @@
+/* GUI v2 light palette. Component layout remains shared with the dark theme. */
+:root[data-v2-theme="light"] {
+  color-scheme: light;
+  --bg: #edf4f7;
+  --surface: #ffffff;
+  --surface2: #f4f9fb;
+  --surface3: #e5f1f5;
+  --line: #d3e1e7;
+  --line2: #b8cdd7;
+  --text: #142e3b;
+  --muted: #4f6976;
+  --accent: #006f88;
+  --accent2: #005a70;
+  --accent-soft: #dff2f6;
+  --ok: #0b704d;
+  --warn: #8d5b00;
+  --danger: #b22d40;
+  --shadow: 0 12px 30px #2444541a;
+}
+
+[data-v2-theme="light"] .app-header {
+  background: linear-gradient(180deg, #ffffff, #f6fafc);
+  box-shadow: 0 3px 14px #24445412;
+}
+[data-v2-theme="light"] .prototype-strip {
+  background: #e4f0f5;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+}
+[data-v2-theme="light"] .brand span {
+  background: var(--accent);
+  color: #ffffff;
+}
+[data-v2-theme="light"] .main-nav a:hover,
+[data-v2-theme="light"] .main-nav a[aria-current="page"] {
+  background: var(--accent-soft);
+  color: var(--accent2);
+}
+[data-v2-theme="light"] .primary,
+[data-v2-theme="light"] th[aria-sort="ascending"] .sort-header span,
+[data-v2-theme="light"] th[aria-sort="descending"] .sort-header span,
+[data-v2-theme="light"] .filter-toggle:hover,
+[data-v2-theme="light"] .filter-toggle:focus-visible {
+  color: #ffffff;
+}
+[data-v2-theme="light"] .button:hover {
+  border-color: var(--accent);
+}
+[data-v2-theme="light"] .status.ok,
+[data-v2-theme="light"] .digitization-page .status.success {
+  border-color: #72b59b;
+}
+[data-v2-theme="light"] .status.cyan { border-color: #78afbd; }
+[data-v2-theme="light"] .status.error { border-color: #d3959e; }
+[data-v2-theme="light"] .status.warning { border-color: #c9a45f; }
+[data-v2-theme="light"] .data-table tr:hover,
+[data-v2-theme="light"] .data-table tr.selected,
+[data-v2-theme="light"] .digitization-table tr.selected {
+  background: #eaf5f8;
+}
+[data-v2-theme="light"] .home-continue-card,
+[data-v2-theme="light"] .home-area-card,
+[data-v2-theme="light"] .home-followup-card,
+[data-v2-theme="light"] .home-recent-list {
+  box-shadow: 0 5px 18px #2444540d;
+}
+[data-v2-theme="light"] .form-errors {
+  background: #fbeaed;
+  color: #8d2333;
+}
+
+[data-v2-theme="light"] .player-footer,
+[data-v2-theme="light"] .music-library-page .player-footer {
+  background: linear-gradient(180deg, #ffffff, #eaf3f7);
+  box-shadow: 0 -4px 18px #2444541a;
+}
+[data-v2-theme="light"] .global-player .player-controls .play {
+  background: var(--accent-soft);
+  color: var(--accent2);
+}
+[data-v2-theme="light"] .global-player .player-controls .play:not(:disabled):hover,
+[data-v2-theme="light"] .global-player .player-controls .play:not(:disabled):focus-visible {
+  color: #ffffff;
+}
