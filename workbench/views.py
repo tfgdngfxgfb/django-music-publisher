@@ -596,16 +596,28 @@ def managed_list(request):
 @staff
 @permission_required("flac_ingest.add_flacingestbatch", raise_exception=True)
 def flac_ingest_start(request):
-    form = FlacScanForm(request.POST or None, user=request.user)
-    if request.method == "POST" and form.is_valid():
+    full_rescan = (
+        request.method == "POST" and request.POST.get("scan_mode") == "force_all"
+    )
+    form = FlacScanForm(None if full_rescan else request.POST or None, user=request.user)
+    if request.method == "POST" and (full_rescan or form.is_valid()):
+        scan_options = (
+            {"relative_root": ".", "recursive": True, "force_read": True}
+            if full_rescan
+            else form.cleaned_data
+        )
         try:
-            batch = scan_directory(user=request.user, **form.cleaned_data)
+            batch = scan_directory(user=request.user, **scan_options)
         except (ImproperlyConfigured, ValidationError) as error:
             form.add_error(None, error)
         else:
             messages.success(
                 request,
-                f"{batch.items.count()} FLAC-filer er lest. Kontroller forhåndsvisningen før bruk.",
+                f"{batch.items.count()} FLAC-filer er lest på nytt. "
+                "Kontroller forhåndsvisningen før bruk."
+                if full_rescan
+                else f"{batch.items.count()} FLAC-filer er lest. "
+                "Kontroller forhåndsvisningen før bruk.",
             )
             return redirect("workbench:flac_ingest_preview", pk=batch.pk)
     return render(

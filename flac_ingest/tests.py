@@ -1603,10 +1603,41 @@ class FlacWorkbenchPermissionTests(FlacTestMixin, TestCase):
             )
             self.client.force_login(staff)
             self.assertEqual(self.client.get(url).status_code, 403)
+            self.assertEqual(
+                self.client.post(url, {"scan_mode": "force_all"}).status_code,
+                403,
+            )
             self.client.force_login(self.user)
             response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Les inn fra musikkarkiv")
+        self.assertContains(response, "Les hele arkivet på nytt og forhåndsvis")
+
+    def test_full_rescan_button_reads_unchanged_files_into_preview_only(self):
+        path = self.make_flac("nested/track.flac", TITLE="Eksisterende spor")
+        original_bytes = path.read_bytes()
+        with override_settings(P7_MUSIC_ROOT=str(self.root)):
+            first = scan_directory(relative_root=".", recursive=True, user=self.user)
+            apply_batch(first, user=self.user)
+            ordinary = scan_directory(relative_root=".", recursive=True, user=self.user)
+            self.assertEqual(
+                ordinary.items.get().action, FlacIngestItem.Action.UNCHANGED
+            )
+            self.client.force_login(self.user)
+            response = self.client.post(
+                reverse("workbench:flac_ingest_start"),
+                {"scan_mode": "force_all"},
+            )
+
+        self.assertEqual(response.status_code, 302)
+        batch = FlacIngestBatch.objects.exclude(pk__in=[first.pk, ordinary.pk]).get()
+        self.assertEqual(batch.relative_root, ".")
+        self.assertTrue(batch.recursive)
+        item = batch.items.get()
+        self.assertEqual(item.relative_path, "nested/track.flac")
+        self.assertEqual(item.action, FlacIngestItem.Action.UPDATED)
+        self.assertIsNone(item.applied_at)
+        self.assertEqual(path.read_bytes(), original_bytes)
 
     def test_review_endpoint_enforces_apply_permission_on_direct_post(self):
         self.make_flac(TITLE="Kontroll", RATING="9")

@@ -12,4 +12,13 @@
     <div class="form-actions full"><button class="button primary" type="submit">Skann og forhåndsvis</button><a class="button" href="{{ cancel_url }}">Avbryt</a></div>
   </form>
 </section>
+<section class="panel form-panel ingest-intro" id="full-rescan">
+  <h2>Les hele arkivet på nytt</h2>
+  <p>Les alle FLAC-filer under musikkroten på nytt, også dem som er uendret siden forrige skanning. Dette kan ta tid. Du får en forhåndsvisning og velger selv om resultatet skal brukes. Lydfilene endres ikke.</p>
+  <form method="post" data-submit-once>
+    {% csrf_token %}
+    <input type="hidden" name="scan_mode" value="force_all">
+    <button class="button" type="submit">Les hele arkivet på nytt og forhåndsvis</button>
+  </form>
+</section>
 {% endblock %}
