@@ -2,18 +2,7 @@
 {% block title %}{{ release.title }}{% endblock %}
 {% block content %}
 <div class="release-page">
-  <header class="release-object-header">
-    <a class="release-back" href="{{ return_url }}">← Utgivelser</a>
-    <div class="release-cover compact">{% if release_cover %}<img src="{% url 'workbench:cover_image' release_cover.pk %}" alt="Cover til {{ release.title }}">{% else %}▣{% endif %}</div>
-    <div class="release-identity"><h1>{{ release.title }}</h1><p>{{ release_artist_text }}{% if release.release_year %}<span> · {{ release.release_year }}</span>{% endif %}</p><div class="release-facts"><span><b>Format</b> {{ release.get_release_type_display|default:"—" }}</span><span><b>Label</b> {{ release.label|default:"—" }}</span><span><b>Katalognr.</b> {{ release.catalogue_number|default:"—" }}</span>{% if can_view_release_management %}<span><b>Forvaltning</b> {% if managed_release %}{% if managed_release.status == 'active' %}{{ managed_release.get_relationship_display }}{% else %}{{ managed_release.get_status_display }}{% endif %}{% else %}Ikke forvaltet{% endif %}</span>{% endif %}</div></div>
-    <nav class="release-tabs" aria-label="Utgivelsens arbeidsområder">
-      <a {% if active_tab == 'tracks' %}aria-current="page"{% endif %} href="?tab=tracks">Sporliste</a>
-      <a {% if active_tab == 'details' %}aria-current="page"{% endif %} href="?tab=details">Utgivelsesdetaljer</a>
-      <a {% if active_tab == 'files' %}aria-current="page"{% endif %} href="?tab=files">Filer og kilder</a>
-      <a {% if active_tab == 'rights' %}aria-current="page"{% endif %} href="?tab=rights">Rettigheter</a>
-    </nav>
-    <button class="button subtle release-uuid-copy" type="button" data-copy="{{ release.pk }}" title="Kopier utgivelsens UUID">Kopier UUID</button>
-  </header>
+  {% include "gui_v2/includes/release_header.html" %}
 
   {% if perms.media_assets.view_digitizationbatch and perms.media_assets.view_fileasset and perms.media_assets.view_filelocation and perms.catalogue.view_recording %}<div class="track-toolbar"><span>Digitaliseringer:</span><a href="{% url 'gui_v2:digitization_release_matrix' release.pk %}">Komplett spormatrise</a>{% for batch in release.digitization_batches.all %}<a href="{% url 'gui_v2:digitization_detail' batch.pk %}">{{ batch.title }} · {{ batch.get_status_display }}</a>{% empty %}<a href="{% url 'gui_v2:digitization_index' %}?release={{ release.pk }}">Opprett digitaliseringsbatch →</a>{% endfor %}</div>{% endif %}
 
@@ -66,12 +55,6 @@
     <h3>Kildeopplysninger</h3><div class="source-list">{% for assertion in release_sources %}<article><strong>{{ assertion.field_name }}</strong><span>{{ assertion.raw_value }}</span><small>{{ assertion.source_record.source_system.name }} · {{ assertion.get_status_display }}</small></article>{% empty %}<p class="empty-state">Ingen kildepåstander er registrert direkte på utgivelsen.</p>{% endfor %}</div>
   </section>
 
-  {% elif active_tab == "rights" %}
-  <section class="release-tab-content"><header><span class="eyebrow">Rettigheter</span><h2>Rettighetsforhold for innspillingene</h2><p>Utgivelsen er arbeidskontekst. Rettighetskrav lagres på de underliggende innspillingene.</p></header>
-    {% if perms.rights.view_rightsclaim %}<div class="rights-summary-grid">{% for label, count in rights_summary %}<article><strong>{{ count }}</strong><span>{{ label }}</span></article>{% endfor %}</div>
-    <div class="rights-table-wrap"><table><thead><tr><th>Innspilling</th><th>Rettighetstype</th><th>Rettighetshaver</th><th>Andel</th><th>Status</th><th>Grunnlag</th></tr></thead><tbody>{% for claim in rights_claims %}<tr><td>{{ claim.recording.title }}</td><td>{{ claim.get_right_type_display }}<small>{{ claim.scope_display }}</small></td><td>{{ claim.rights_holder }}</td><td>{{ claim.share|default_if_none:"Ukjent" }}{% if claim.share != None %} %{% endif %}</td><td>{{ claim.get_status_display }}</td><td>{% if claim.agreement %}{{ claim.agreement }}{% elif claim.source_record %}{{ claim.source_record.source_system.name }}{% else %}Ikke registrert{% endif %}</td></tr>{% empty %}<tr><td colspan="6">Ingen rettighetskrav er registrert for innspillingene.</td></tr>{% endfor %}</tbody></table></div>{% else %}<p class="empty-state">Du har ikke tilgang til rettighetsopplysningene.</p>{% endif %}
-    {% if can_manage_rights %}<details class="rights-bulk-panel"{% if rights_form.errors or rights_plan %} open{% endif %}><summary>Registrer rettigheter for valgte innspillinger</summary><form method="post" class="rights-bulk-form"><input type="hidden" name="action" value="rights"><input type="hidden" name="tab" value="rights">{% csrf_token %}{% for field in rights_form %}{% if field.is_hidden %}{{ field }}{% else %}<label>{{ field.label }}{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{% for error in field.errors %}<small class="cell-error">{{ error }}</small>{% endfor %}</label>{% endif %}{% endfor %}{% if rights_form.non_field_errors %}<div class="form-errors">{{ rights_form.non_field_errors }}</div>{% endif %}{% include "workbench/rights_registration_preview.html" %}<button class="primary" type="submit" name="rights_stage" value="preview" {% if not writes_enabled %}disabled{% endif %}>Forhåndsvis registrering</button></form></details>{% endif %}
-  </section>
   {% endif %}
 </div>
 {% endblock %}

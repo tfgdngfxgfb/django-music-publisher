@@ -89,15 +89,6 @@ from music_library.models import (
     TargetAudience,
 )
 from provenance.models import MetadataAssertion
-from rights.forms import ReleaseRightsClaimForm
-from rights.models import RightsClaim
-from rights.services import get_local_organization
-from rights.workflow_forms import process_release_form
-from rights.summaries import (
-    OwnershipCategory,
-    local_confirmed_right_recording_ids,
-    ownership_summaries_for_recordings,
-)
 
 from .forms import MusicLibraryFilterForm, ReleaseMetadataForm, TrackRowFormSet
 from .home_state import build_home_context, remember_object
@@ -1994,6 +1985,14 @@ def _require_track_write_permissions(user, rows):
 @login_required
 @permission_required("catalogue.view_release", raise_exception=True)
 def release_detail(request, release_id):
+    if request.method == "POST" and request.POST.get("action") == "rights":
+        raise PermissionDenied(
+            "Bruk registreringsdialogen i Rettigheter-fanen."
+        )
+    if request.method == "GET" and request.GET.get("tab") == "rights":
+        from gui_v2.release_rights_views import overview
+
+        return overview(request, release_id)
     release = get_object_or_404(
         Release.objects.select_related("label"), pk=release_id
     )
@@ -2069,25 +2068,6 @@ def release_detail(request, release_id):
         instance=managed_release,
         prefix="managed-release",
     )
-    can_manage_rights = request.user.is_staff and request.user.has_perms(
-        ("rights.view_rightsclaim", "rights.add_rightsclaim")
-    )
-    rights_form = None
-    rights_plan = None
-    if can_manage_rights:
-        rights_form = ReleaseRightsClaimForm(
-            request.POST if action == "rights" else None,
-            release=release,
-            prefix="rights",
-        )
-        if not request.user.has_perm("rights.view_agreement"):
-            rights_form.fields["agreement"].queryset = rights_form.fields[
-                "agreement"
-            ].queryset.none()
-        if not request.user.has_perm("provenance.view_sourcerecord"):
-            rights_form.fields["source_record"].queryset = rights_form.fields[
-                "source_record"
-            ].queryset.none()
     if request.method == "POST" and action == "release":
         if not settings.GUI_V2_WRITES_ENABLED:
             raise PermissionDenied(
@@ -2122,31 +2102,6 @@ def release_detail(request, release_id):
             return redirect(
                 f"{reverse('gui_v2:release_detail', args=[release.pk])}?tab=details"
             )
-    elif request.method == "POST" and action == "rights":
-        if not settings.GUI_V2_WRITES_ENABLED:
-            raise PermissionDenied(
-                "GUI v2 er skrivebeskyttet utenfor den isolerte testdatabasen."
-            )
-        if not can_manage_rights:
-            raise PermissionDenied
-        if rights_form.is_valid():
-            try:
-                rights_plan, claims = process_release_form(
-                    rights_form,
-                    user=request.user,
-                    apply=request.POST.get("rights_stage") == "apply",
-                )
-            except ValidationError as error:
-                rights_form.add_error(None, ValidationError(error.messages))
-            else:
-                if claims is not None:
-                    messages.success(
-                        request,
-                        f"{len(claims)} rettighetskrav ble registrert som ikke verifisert.",
-                    )
-                    return redirect(
-                        f"{reverse('gui_v2:release_detail', args=[release.pk])}?tab=rights"
-                    )
     elif request.method == "POST" and action == "tracks":
         if not settings.GUI_V2_WRITES_ENABLED:
             raise PermissionDenied(
@@ -2232,86 +2187,6 @@ def release_detail(request, release_id):
         if request.user.has_perm("provenance.view_metadataassertion")
         else []
     )
-    recording_ids = tuple(
-        dict.fromkeys(track.recording_id for track in tracks)
-    )
-    rights_claims = []
-    rights_summary = []
-    if request.user.has_perm("rights.view_rightsclaim"):
-        rights_claims = list(
-            RightsClaim.objects.filter(recording_id__in=recording_ids)
-            .select_related(
-                "release_scope",
-                "recording",
-                "rights_holder",
-                "grantor",
-                "agreement",
-                "source_record__source_system",
-            )
-            .prefetch_related("territories")
-            .order_by("recording__title", "right_type", "status")
-        )
-        local_organization = get_local_organization()
-        summaries = ownership_summaries_for_recordings(
-            recording_ids, local_organization
-        )
-        rights_summary = [
-            (
-                OwnershipCategory.FULL.label,
-                sum(
-                    item.category == OwnershipCategory.FULL
-                    for item in summaries.values()
-                ),
-            ),
-            (
-                OwnershipCategory.PARTIAL.label,
-                sum(
-                    item.category == OwnershipCategory.PARTIAL
-                    for item in summaries.values()
-                ),
-            ),
-            (
-                OwnershipCategory.NOT_OWNED.label,
-                sum(
-                    item.category == OwnershipCategory.NOT_OWNED
-                    for item in summaries.values()
-                ),
-            ),
-            (
-                OwnershipCategory.UNRESOLVED.label,
-                sum(
-                    item.category == OwnershipCategory.UNRESOLVED
-                    for item in summaries.values()
-                ),
-            ),
-            (
-                OwnershipCategory.DISPUTED.label,
-                sum(
-                    item.category == OwnershipCategory.DISPUTED
-                    for item in summaries.values()
-                ),
-            ),
-            (
-                "Administrert av lokal organisasjon",
-                len(
-                    local_confirmed_right_recording_ids(
-                        recording_ids,
-                        local_organization,
-                        RightsClaim.RightType.ADMINISTRATION,
-                    )
-                ),
-            ),
-            (
-                "Distribuert av lokal organisasjon",
-                len(
-                    local_confirmed_right_recording_ids(
-                        recording_ids,
-                        local_organization,
-                        RightsClaim.RightType.DISTRIBUTION,
-                    )
-                ),
-            ),
-        ]
     return render(
         request,
         "gui_v2/release_tracks.html",
@@ -2333,11 +2208,6 @@ def release_detail(request, release_id):
             "active_tab": active_tab,
             "release_files": release_files,
             "release_sources": release_sources,
-            "rights_claims": rights_claims,
-            "rights_summary": rights_summary,
-            "rights_form": rights_form,
-            "rights_plan": rights_plan,
-            "can_manage_rights": can_manage_rights,
             "writes_enabled": settings.GUI_V2_WRITES_ENABLED,
             "return_query": request.GET.urlencode(),
             "return_url": return_url,

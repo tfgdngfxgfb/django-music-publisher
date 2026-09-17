@@ -20,6 +20,9 @@ from .scope import (
     prepare_claims,
     resolve_management_basis,
     territory_scope_countries,
+    claim_countries,
+    periods_overlap,
+    release_scopes_overlap,
 )
 
 CLAIM_FIELDS = frozenset(
@@ -261,6 +264,7 @@ class RegistrationRow:
     recording: Recording
     managed: bool
     status: str
+    blockers: tuple = ()
 
 
 @dataclass(frozen=True)
@@ -278,6 +282,50 @@ def _snapshot_value(value):
     if isinstance(value, (list, tuple)):
         return sorted((_snapshot_value(v) for v in value), key=str)
     return None if value is None else str(value)
+
+
+def _position_blocker(proposal, existing):
+    """Conservative manual-bulk preflight, not claim consolidation.
+
+    Exact legal identity includes historical claims; documentation is not part
+    of that identity. Potentially additive overlapping positions for the same
+    holder/type require explicit individual review in Recording Rights.
+    """
+    fields = (
+        "recording_id",
+        "right_type",
+        "rights_holder_id",
+        "grantor_id",
+        "share",
+        "territory_mode",
+        "valid_from",
+        "valid_until",
+        "release_scope_id",
+    )
+    for claim in existing:
+        if all(getattr(claim, f) == getattr(proposal, f) for f in fields) and {
+            t.pk for t in claim.territories.all()
+        } == {t.pk for t in proposal.territories.all()}:
+            return "Eksisterende tilsvarende posisjon. Behandle dokumentasjon eller korreksjon i Recording → Rettigheter."
+    for claim in existing:
+        if (
+            claim.right_type == proposal.right_type
+            and claim.rights_holder_id == proposal.rights_holder_id
+            and claim.status
+            not in (VerificationStatus.REJECTED, VerificationStatus.SUPERSEDED)
+            and periods_overlap(
+                claim.valid_from,
+                claim.valid_until,
+                proposal.valid_from,
+                proposal.valid_until,
+            )
+            and release_scopes_overlap(
+                claim.release_scope_id, proposal.release_scope_id
+            )
+            and claim_countries(claim) & claim_countries(proposal)
+        ):
+            return "Mulig overlappende posisjon for samme rettighetshaver. Avklar i Recording → Rettigheter før ny registrering."
+    return ""
 
 
 def preview_release_rights_registration(
@@ -328,12 +376,8 @@ def preview_release_rights_registration(
     )
     rows = []
     for recording in recordings:
+        blocker_start = len(blockers)
         managed = memberships.get(recording.pk)
-        rows.append(
-            RegistrationRow(
-                recording, bool(managed), managed.status if managed else ""
-            )
-        )
         if not managed:
             if not territory_scope_countries(
                 values.get("territory_mode", "world"), values["territories"]
@@ -366,6 +410,10 @@ def preview_release_rights_registration(
             claim._prefetched_objects_cache = {
                 "territories": values["territories"]
             }
+            if duplicate := _position_blocker(
+                claim, [c for c in existing if c.recording_id == recording.pk]
+            ):
+                blockers.append(f"«{recording.title}»: {duplicate}")
             confirmed = [
                 c
                 for c in existing
@@ -383,6 +431,14 @@ def preview_release_rights_registration(
                 )
         except ValidationError as error:
             blockers.extend(error.messages)
+        rows.append(
+            RegistrationRow(
+                recording,
+                bool(managed),
+                managed.status if managed else "",
+                tuple(blockers[blocker_start:]),
+            )
+        )
     snapshot = {
         "user": str(user.pk),
         "release": str(release.pk),

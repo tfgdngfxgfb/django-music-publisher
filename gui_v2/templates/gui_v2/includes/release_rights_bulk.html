@@ -1,0 +1,26 @@
+{% if selection_error %}<h2 id="bulk-title">Registrering kan ikke åpnes</h2><p role="alert">{{ selection_error }}</p>{% else %}
+<h2 id="bulk-title">{% if plan %}2. Forhåndsvis registreringen{% else %}1. Registrer felles rettighetsposisjon{% endif %}</h2>
+<p>{{ release.title }} · {{ selected|length }} unike innspillinger. Samme juridiske posisjon registreres på alle valgte innspillinger.</p>
+<p><strong>Rettighetshaver: {{ form.local|default:"Lokal organisasjon mangler" }}</strong></p>
+<p>Nye rettighetskrav registreres som Uverifisert og må vurderes separat. Ingen nye innspillinger opprettes.</p>
+<form action="{{ bulk_url }}" method="post" data-bulk-form>
+{% csrf_token %}
+{% if form.errors %}<div role="alert" class="form-errors">{{ form.non_field_errors }}{% for field in form %}{% for error in field.errors %}<p>{{ field.label }}: {{ error }}</p>{% endfor %}{% endfor %}</div>{% endif %}
+{% if plan %}
+  {% for field in form %}{{ field.as_hidden }}{% endfor %}
+  <p>{% if plan.release_scoped %}Bare denne utgivelsen{% else %}Innspillingene generelt{% endif %}</p>
+  <dl class="rr-preview-values">{% for label, value in preview_values %}<dt>{{ label }}</dt><dd>{{ value }}</dd>{% endfor %}</dl>
+  <table><thead><tr><th>Innspilling</th><th>Nåværende medlemskap</th><th>Planlagt handling</th></tr></thead><tbody>{% for row in plan.rows %}<tr><td>{{ row.recording.title }}</td><td>{% if row.managed %}ManagedRecording{% else %}Ikke i Forvaltet musikk{% endif %}</td><td>{% if row.blockers %}BLOKKERT{% for error in row.blockers %}<small>{{ error }}</small>{% endfor %}{% elif row.managed %}Nytt Uverifisert claim{% else %}Onboarding: Under vurdering + Uverifisert claim{% endif %}</td></tr>{% endfor %}</tbody></table>
+  <p>{{ plan.rows|length }} planlagte claims · {{ plan.onboarding_count }} onboarding · {{ plan.blockers|length }} blokkeringer</p>
+  {% if plan.blockers %}<div role="alert" class="form-errors"><strong>Hele registreringen er blokkert.</strong><ul>{% for error in plan.blockers %}<li>{{ error }}</li>{% endfor %}</ul></div>{% endif %}
+  <button type="submit" name="stage" value="edit" class="button">Tilbake og endre</button><button type="submit" name="stage" value="apply" class="primary" {% if plan.blockers %}disabled{% endif %}>Bruk registreringen</button>
+{% else %}
+  {% for field in form.hidden_fields %}{{ field }}{% endfor %}
+  <details><summary>Valgte innspillinger ({{ selected|length }})</summary><ul>{% for recording in selected %}<li>{{ recording.title }}</li>{% endfor %}</ul></details>
+  <div class="rr-fields">{% for field in primary_fields %}<div data-bulk-field="{{ field.name }}"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}</div>{% endfor %}</div>
+  <details{% if form.errors %} open{% endif %}><summary>Dokumentasjon og detaljer</summary><div class="rr-fields">{% for field in detail_fields %}<div><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}</div>{% endfor %}</div>{% if form.default_source %}<p>Felles kilde foreslått: {{ form.default_source }}. Provenance er ikke bekreftelse av rettigheten.</p>{% else %}<p>Ingen felles kilde foreslås når opprinnelsen er ulik eller mangler. En eksplisitt kildepost brukes for hele batchen.</p>{% endif %}</details>
+  <p>{{ unmanaged_count }} av {{ selected|length }} er ikke i Forvaltet musikk.</p>{% if can_onboard %}<label class="rr-onboarding">{{ form.allow_managed_registration }} {{ form.allow_managed_registration.label }}</label>{% elif unmanaged_count %}<p role="alert">En administrator må utføre eksplisitt onboarding før registrering.</p>{% endif %}
+  <button type="submit" name="stage" value="preview" class="primary">Forhåndsvis</button>
+{% endif %}
+{% if missing_library %}<p>Musikkarkiv-post vil bli opprettet for eksisterende Recording ved onboarding:</p><ul>{% for recording in missing_library %}<li>{{ recording.title }}</li>{% endfor %}</ul>{% endif %}
+</form>{% endif %}

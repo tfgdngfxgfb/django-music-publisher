@@ -1,0 +1,12 @@
+  <header class="release-object-header">
+    <a class="release-back" href="{{ return_url }}">← Utgivelser</a>
+    <div class="release-cover compact">{% if release_cover %}<img src="{% url 'workbench:cover_image' release_cover.pk %}" alt="Cover til {{ release.title }}">{% else %}▣{% endif %}</div>
+    <div class="release-identity"><h1>{{ release.title }}</h1><p>{{ release_artist_text }}{% if release.release_year %}<span> · {{ release.release_year }}</span>{% endif %}</p><div class="release-facts"><span><b>Format</b> {{ release.get_release_type_display|default:"—" }}</span><span><b>Label</b> {{ release.label|default:"—" }}</span><span><b>Katalognr.</b> {{ release.catalogue_number|default:"—" }}</span>{% if can_view_release_management %}<span><b>Forvaltning</b> {% if managed_release %}{% if managed_release.status == 'active' %}{{ managed_release.get_relationship_display }}{% else %}{{ managed_release.get_status_display }}{% endif %}{% else %}Ikke forvaltet{% endif %}</span>{% endif %}</div></div>
+    <nav class="release-tabs" aria-label="Utgivelsens arbeidsområder">
+      <a {% if active_tab == 'tracks' %}aria-current="page"{% endif %} href="{% url 'gui_v2:release_detail' release.pk %}?tab=tracks&amp;return={{ return_url|urlencode }}">Sporliste</a>
+      <a {% if active_tab == 'details' %}aria-current="page"{% endif %} href="{% url 'gui_v2:release_detail' release.pk %}?tab=details&amp;return={{ return_url|urlencode }}">Utgivelsesdetaljer</a>
+      <a {% if active_tab == 'files' %}aria-current="page"{% endif %} href="{% url 'gui_v2:release_detail' release.pk %}?tab=files&amp;return={{ return_url|urlencode }}">Filer og kilder</a>
+      <a {% if active_tab == 'rights' %}aria-current="page"{% endif %} href="{% url 'gui_v2:release_detail' release.pk %}?tab=rights&amp;return={{ return_url|urlencode }}">Rettigheter</a>
+    </nav>
+    <button class="button subtle release-uuid-copy" type="button" data-copy="{{ release.pk }}" title="Kopier utgivelsens UUID">Kopier UUID</button>
+  </header>

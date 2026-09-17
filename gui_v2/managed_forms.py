@@ -2,44 +2,17 @@
 
 from django import forms
 from django.core.exceptions import ValidationError
-from django.db.models import Q
 from catalogue.models import Recording, Release
 from managed_music.forms import ManagedRecordingCreationForm
-from provenance.models import MetadataAssertion, SourceRecord, SourceSystem
+from provenance.models import SourceSystem
 from rights.scope import OwnershipCategory
 from gui_v2.managed_music import STATUS_LABELS
 
 
 def existing_catalogue_source(recording):
-    """Earliest explicitly linked source, never inferred from names or paths.
+    from gui_v2.catalogue_sources import catalogue_sources
 
-    A UI default for origin, not evidence that a master right is confirmed.
-    Newer rescans must not silently replace the original source selection.
-    """
-    assertions = MetadataAssertion.objects.filter(
-        Q(
-            entity_type=MetadataAssertion.EntityType.RECORDING,
-            entity_uuid=recording.pk,
-        )
-        | Q(
-            entity_type=MetadataAssertion.EntityType.MUSIC_LIBRARY_ENTRY,
-            entity_uuid=recording.music_library_entry.pk,
-        )
-    )
-    return (
-        SourceRecord.objects.filter(
-            Q(pk__in=assertions.values("source_record_id"))
-            | Q(recording_contributions__recording=recording)
-            | Q(
-                flac_ingest_item__recording=recording,
-                flac_ingest_item__applied_at__isnull=False,
-            )
-        )
-        .select_related("source_system")
-        .distinct()
-        .order_by("created_at", "pk")
-        .first()
-    )
+    return catalogue_sources((recording.pk,)).get(recording.pk)
 
 
 class ManagedFilterForm(forms.Form):

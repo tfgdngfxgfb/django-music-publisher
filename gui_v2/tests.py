@@ -921,10 +921,9 @@ class GuiV2WorkspaceTests(TestCase):
         files = self.client.get(detail_url, {"tab": "files"})
         self.assertContains(files, "cover.png")
         rights = self.client.get(detail_url, {"tab": "rights"})
-        self.assertContains(
-            rights, "Registrer rettigheter for valgte innspillinger"
-        )
-        self.assertContains(rights, 'id="id_rights-recordings"')
+        self.assertContains(rights, "Rettighetsmatrise")
+        self.assertContains(rights, "data-select-visible")
+        self.assertContains(rights, "data-bulk-dialog")
 
     @override_settings(GUI_V2_WRITES_ENABLED=True)
     def test_release_management_does_not_create_track_rights(self):
@@ -976,37 +975,34 @@ class GuiV2WorkspaceTests(TestCase):
             release=self.release, recording=self.recording, sequence_number=1
         )
         response = self.client.post(
-            reverse("gui_v2:release_detail", args=[self.release.pk]),
+            reverse("gui_v2:release_rights_bulk", args=[self.release.pk]),
             {
-                "action": "rights",
-                "tab": "rights",
-                "rights-recordings": str(self.recording.pk),
-                "rights-right_type": RightsClaim.RightType.DISTRIBUTION,
-                "rights-rights_holder": str(local.pk),
-                "rights-grantor": "",
-                "rights-share": "",
-                "rights-territory_mode": RightsClaim.TerritoryMode.WORLD,
-                "rights-valid_from": "",
-                "rights-valid_until": "",
-                "rights-evidence_strength": RightsClaim.EvidenceStrength.NOT_ASSESSED,
-                "rights-source_record": "",
-                "rights-agreement": "",
-                "rights-notes": "Testgrunnlag",
-                "rights-allow_managed_registration": "on",
+                "stage": "preview",
+                "legal_scope": "general",
+                "recordings": str(self.recording.pk),
+                "right_type": RightsClaim.RightType.DISTRIBUTION,
+                "rights_holder": str(local.pk),
+                "grantor": "",
+                "share": "",
+                "territory_mode": RightsClaim.TerritoryMode.WORLD,
+                "valid_from": "",
+                "valid_until": "",
+                "evidence_strength": RightsClaim.EvidenceStrength.NOT_ASSESSED,
+                "source_record": "",
+                "agreement": "",
+                "notes": "Testgrunnlag",
+                "allow_managed_registration": "on",
             },
         )
         self.assertEqual(response.status_code, 200)
         self.assertFalse(RightsClaim.objects.exists())
-        form = response.context["rights_form"]
+        form = response.context["form"]
         data = form.data.copy()
-        data["rights_stage"] = "apply"
+        data["stage"] = "apply"
         response = self.client.post(
-            reverse("gui_v2:release_detail", args=[self.release.pk]), data
+            reverse("gui_v2:release_rights_bulk", args=[self.release.pk]), data
         )
-        self.assertRedirects(
-            response,
-            f"{reverse('gui_v2:release_detail', args=[self.release.pk])}?tab=rights",
-        )
+        self.assertEqual(response.json(), {"applied": 1})
         claim = RightsClaim.objects.get()
         self.assertEqual(claim.recording, self.recording)
         self.assertEqual(claim.right_type, RightsClaim.RightType.DISTRIBUTION)

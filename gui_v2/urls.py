@@ -1,10 +1,21 @@
 from django.urls import path
 
-from . import views, digitization, rights_views, managed_views
+from . import (
+    views,
+    digitization,
+    rights_views,
+    managed_views,
+    release_rights_views,
+)
 
 app_name = "gui_v2"
 
 urlpatterns = [
+    path(
+        "utgivelser/<uuid:release_id>/rettigheter/registrering/",
+        release_rights_views.bulk,
+        name="release_rights_bulk",
+    ),
     path("forvaltet-musikk/", managed_views.index, name="managed_music"),
     path(
         "forvaltet-musikk/registrer/",

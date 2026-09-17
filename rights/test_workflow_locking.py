@@ -172,6 +172,33 @@ class WorkflowLockingTests(TransactionTestCase):
         )
         self.assertEqual(self.recording.rights_claims.count(), 1)
 
+    def test_identical_bulk_applies_serialize_without_duplicate_positions(
+        self,
+    ):
+        release = Release.objects.create(title="Concurrent bulk")
+        ReleaseTrack.objects.create(
+            release=release, recording=self.recording, sequence_number=1
+        )
+        values = dict(
+            user=self.user,
+            release=release,
+            recordings=[self.recording],
+            right_type=RightsClaim.RightType.DISTRIBUTION,
+            rights_holder=self.local,
+        )
+        plan = wf.preview_release_rights_registration(**values)
+        apply = lambda: wf.apply_release_rights_registration(
+            preview_token=plan.token, **values
+        )
+        with self.assertRaises(ValidationError):
+            self.while_locked(apply, apply)
+        self.assertEqual(
+            self.recording.rights_claims.filter(
+                right_type=RightsClaim.RightType.DISTRIBUTION
+            ).count(),
+            1,
+        )
+
     def test_legacy_correction_rereads_concurrent_confirmation(self):
         self.managed.status = ManagedRecording.Status.ACTIVE
         self.managed.save()
