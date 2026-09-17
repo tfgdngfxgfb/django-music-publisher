@@ -5,6 +5,9 @@ opprinnelige [arkitekturvurderingen](master-rights-architecture.md).
 Implementasjonen og kontrakttestene finnes i `managed_music/lifecycle.py`,
 `managed_music/services.py` og `managed_music/test_lifecycle.py`.
 
+Scope-integrasjon og datobasert statusoppdatering er videreført i
+[6D – forvaltningslivssyklus](phase-6d-management-lifecycle.md).
+
 ## Avgrensning og medlemskap
 
 `ManagedRecording` betyr at lokal organisasjon (P7) har, har hatt eller konkret

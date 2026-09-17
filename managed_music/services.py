@@ -163,11 +163,7 @@ def return_to_music_library(managed, *, user, reason):
     Recording.objects.select_for_update().get(pk=recording_id)
     managed = ManagedRecording.objects.select_for_update().get(pk=managed.pk)
     state = management_state(managed)
-    if (
-        managed.status != ManagedRecording.Status.PENDING
-        or state.status != ManagedRecording.Status.PENDING
-        or state.has_pending_basis
-    ):
+    if not state.can_return_to_music_library:
         raise ValidationError(
             "Bare onboarding uten gjenstående P7-grunnlag og uten tidligere "
             "aktiv forvaltning kan tilbakeføres."

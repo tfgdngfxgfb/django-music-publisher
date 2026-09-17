@@ -4,6 +4,9 @@ Normativ kontrakt, 17. september 2026. Bygger på grønn 6B (`56120c0`).
 6C beregner registrert rettighetskunnskap. Resultatet er ikke en generell
 bruksautorisasjon, Delivery-klarering eller automatisk lifecycle-handling.
 
+Integrasjonen med forvaltningslivssyklusen er dokumentert separat i
+[6D – forvaltningslivssyklus](phase-6d-management-lifecycle.md).
+
 ## Forhåndsvurdering
 
 `RightsClaim` hadde allerede type, holder, periode, territorier, status,
