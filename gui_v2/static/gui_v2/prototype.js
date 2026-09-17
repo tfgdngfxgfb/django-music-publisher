@@ -263,7 +263,6 @@
     queue = safeQueue;
     queueIndex = state.queueIndex;
     queueContext = state.queueContext || queueContext;
-    setPlayerHidden(false);
     setPlayerDetails(queue[queueIndex]);
     updateQueueControls();
     const duration = Number(state.duration) || 0;
@@ -289,7 +288,6 @@
     const resumeAt = remoteState?.queue?.[remoteState.queueIndex]?.playUrl === details.playUrl
       ? Number(remoteState.time) || 0 : 0;
     claimAudio();
-    setPlayerHidden(false);
     const recordingId = details.playRecordingId || "";
     if (playingRecording !== recordingId || audio.dataset.playUrl !== details.playUrl) {
       audio.pause();
@@ -583,7 +581,6 @@
       queueIndex = index;
       queueContext = saved.queueContext || queueContext;
       claimAudio();
-      setPlayerHidden(false);
       setPlayerDetails(queue[index]);
       updateQueueControls();
       audio.volume = Number.isFinite(saved.volume) ? Math.max(0, Math.min(saved.volume, 1)) : 1;
