@@ -601,6 +601,22 @@ class GuiV2WorkspaceTests(TestCase):
         self.assertContains(home_response, 'class="player-footer"')
         self.assertEqual(home_response.content.count(b'id="v2-audio"'), 1)
 
+    def test_library_remembers_page_size_without_overriding_explicit_choice(self):
+        self._superuser()
+        self.client.cookies["p7-v2-library-per-page"] = "100"
+        remembered = self.client.get(reverse("gui_v2:music_library"))
+        self.assertEqual(remembered.context["page_size"], "100")
+        self.assertEqual(remembered.context["page"].paginator.per_page, 100)
+
+        explicit = self.client.get(
+            reverse("gui_v2:music_library"), {"per_page": "40"}
+        )
+        self.assertEqual(explicit.context["page_size"], "40")
+
+        self.client.cookies["p7-v2-library-per-page"] = "invalid"
+        invalid = self.client.get(reverse("gui_v2:music_library"))
+        self.assertEqual(invalid.context["page_size"], "40")
+
     def test_library_uses_table_headers_for_sorting_and_keeps_filters(self):
         self._superuser()
         second_recording = Recording.objects.create(title="Andre innspilling")

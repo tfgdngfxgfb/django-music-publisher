@@ -258,7 +258,12 @@ def music_library(request):
         and selected_id
     )
     active_filters = []
-    page_size = "40"
+    saved_page_size = request.COOKIES.get("p7-v2-library-per-page", "40")
+    page_size = (
+        saved_page_size
+        if saved_page_size in {"40", "100", "250", "500", "all"}
+        else "40"
+    )
     artist_prefetch = Prefetch(
         "recording__contributions",
         queryset=RecordingContribution.objects.select_related(
@@ -416,7 +421,7 @@ def music_library(request):
     needs_distinct = False
     if form.is_valid():
         data = form.cleaned_data
-        page_size = data.get("per_page") or "40"
+        page_size = data.get("per_page") or page_size
         term = (data.get("q") or "").strip()
         if term:
             matching_contributions = RecordingContribution.objects.filter(

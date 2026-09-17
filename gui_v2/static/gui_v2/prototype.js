@@ -542,6 +542,23 @@
   });
   syncPlayerAvailability();
 
+  const rememberLibraryPageSize = value => {
+    document.cookie = `p7-v2-library-per-page=${value}; Path=/; Max-Age=31536000; SameSite=Lax`;
+  };
+  window.P7_V2 ||= {};
+  window.P7_V2.reduceSlowLibraryPage = loadMs => {
+    if (loadMs < 4000 || !document.body.classList.contains("music-library-page")) return "";
+    const pageSize = document.querySelector("#library-page-size")?.value;
+    const smaller = {all: "100", 500: "250", 250: "100", 100: "40"}[pageSize];
+    if (!smaller) return "";
+    rememberLibraryPageSize(smaller);
+    const url = new URL(location.href);
+    url.searchParams.set("per_page", smaller);
+    url.searchParams.delete("page");
+    url.searchParams.delete("selected");
+    return url.href;
+  };
+
   let pageController;
   const initPage = () => {
   pageController?.abort();
@@ -557,6 +574,11 @@
     if (!event.target.matches("select, input[type='checkbox'], input[type='radio']")) return;
     autoSubmitFilters.requestSubmit();
   });
+  const libraryPageSize = document.querySelector("#library-page-size");
+  libraryPageSize?.addEventListener("change", () => {
+    rememberLibraryPageSize(libraryPageSize.value);
+    libraryPageSize.form.requestSubmit();
+  }, {signal: pageSignal});
 
   const deliveryForm = document.querySelector("#delivery-selection");
   const deliveryStart = document.querySelector("[data-delivery-start]");
@@ -571,29 +593,29 @@
     if (deliveryCancel) deliveryCancel.hidden = !open;
     if (deliveryStatus) deliveryStatus.hidden = true;
   };
-  deliveryStart?.addEventListener("click", event => {
-    if (deliveryLayout?.classList.contains("delivery-selecting")) return;
-    event.preventDefault();
-    setDeliverySelection(true);
-    deliveryChoices[0]?.focus();
-  });
-  deliveryCancel?.addEventListener("click", () => {
-    setDeliverySelection(false);
-    deliveryStart?.focus();
-  });
-  deliveryForm?.addEventListener("submit", event => {
-    if (!deliveryLayout?.classList.contains("delivery-selecting") ||
-        !deliveryChoices.some(choice => choice.checked)) {
-      event.preventDefault();
+  deliveryStart?.addEventListener("click", () => {
+    if (!deliveryLayout?.classList.contains("delivery-selecting")) {
       setDeliverySelection(true);
+      deliveryChoices[0]?.focus();
+      return;
+    }
+    const selected = deliveryChoices.filter(choice => choice.checked);
+    if (!selected.length) {
       if (deliveryStatus) {
         deliveryStatus.textContent = "Velg minst én innspilling for levering.";
         deliveryStatus.hidden = false;
       }
       deliveryChoices[0]?.focus();
+      return;
     }
+    const url = new URL(deliveryForm.action, location.href);
+    selected.forEach(choice => url.searchParams.append("recording", choice.value));
+    goTo(url.href);
   });
-
+  deliveryCancel?.addEventListener("click", () => {
+    setDeliverySelection(false);
+    deliveryStart?.focus();
+  });
   const keyboardFocusKey = `p7-v2-library-keyboard:${location.pathname}`;
   document.querySelectorAll("[data-row-href]").forEach(row => row.addEventListener("click", event => {
     if (event.target.closest("a, button, input, select, textarea, label")) return;

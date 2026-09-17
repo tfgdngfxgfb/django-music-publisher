@@ -38,6 +38,7 @@
       return;
     }
     const currentRequest = ++requestNumber;
+    const startedAt = performance.now();
     pendingRequest?.abort();
     pendingRequest = new AbortController();
     clearTimeout(loadingTimer);
@@ -87,6 +88,10 @@
       document.dispatchEvent(new Event("p7:page-changed"));
       scrollTo(0, options.popstate ? options.scroll || 0 : 0);
       main.focus({preventScroll: true});
+      if (!options.autoReduced) {
+        const reducedUrl = window.P7_V2.reduceSlowLibraryPage?.(performance.now() - startedAt);
+        if (reducedUrl) void navigate(reducedUrl, {autoReduced: true, label: "færre rader"});
+      }
     } catch (error) {
       if (currentRequest !== requestNumber) return;
       if (!contentReplaced) location.assign(url.href);
@@ -129,4 +134,9 @@
   addEventListener("popstate", event => {
     void navigate(location.href, {popstate: true, scroll: event.state?.p7Scroll || 0});
   });
+  addEventListener("load", () => {
+    const timing = performance.getEntriesByType("navigation")[0];
+    const reducedUrl = window.P7_V2.reduceSlowLibraryPage?.(timing?.responseEnd || 0);
+    if (reducedUrl) void navigate(reducedUrl, {autoReduced: true, label: "færre rader"});
+  }, {once: true});
 })();
