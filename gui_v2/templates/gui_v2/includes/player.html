@@ -1,4 +1,4 @@
-<div class="player {{ player_class }}" id="v2-player" role="region" aria-label="Avspillingsfelt" data-player-scope="{{ request.user.pk }}" data-recording-url-template="{% url 'gui_v2:recording_detail' '00000000-0000-0000-0000-000000000000' %}">
+<div class="player {{ player_class }}" id="v2-player" role="region" aria-label="Avspillingsfelt" data-player-scope="{{ request.user.pk }}" data-recording-url-template="{% url 'gui_v2:recording_detail' '00000000-0000-0000-0000-000000000000' %}" data-audio-url-template="{% url 'gui_v2:recording_audio' '00000000-0000-0000-0000-000000000000' %}">
   <audio id="v2-audio" preload="metadata"></audio>
   <div class="player-identity">
     <a class="player-cover" data-player-recording-link data-player-cover aria-label="Åpne innspilling"><span aria-hidden="true">♫</span></a>

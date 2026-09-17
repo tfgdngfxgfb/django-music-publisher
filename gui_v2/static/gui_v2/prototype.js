@@ -56,9 +56,11 @@
   let lastFailedSource = "";
   let noticeTimer;
   const tabId = crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`;
+  const reloadStateKey = `p7-v2-player-reload:${player?.dataset.playerScope || ""}`;
   const channel = player?.dataset.playerScope && "BroadcastChannel" in window
     ? new BroadcastChannel(`p7-v2-player:${player.dataset.playerScope}`) : null;
   let ownsAudio = false;
+  let playbackRequested = false;
   let remoteState = null;
   let remoteOwnerId = "";
   let lastStateSent = 0;
@@ -73,6 +75,17 @@
       duration: Number.isFinite(audio.duration) ? audio.duration : 0,
       playing: !audio.paused, volume: audio.volume, muted: audio.muted,
     }});
+  };
+  const saveReloadState = () => {
+    if (!ownsAudio || !audio?.dataset.playUrl || queueIndex < 0 ||
+        queue[queueIndex]?.playUrl !== audio.dataset.playUrl) return;
+    try {
+      sessionStorage.setItem(reloadStateKey, JSON.stringify({
+        savedAt: Date.now(), pageUrl: location.href, queue, queueIndex, queueContext,
+        time: audio.currentTime || 0, playing: playbackRequested && !audio.ended,
+        volume: audio.volume, muted: audio.muted,
+      }));
+    } catch { /* Playback still works when session storage is unavailable. */ }
   };
   const claimAudio = () => {
     if (ownsAudio) return;
@@ -136,12 +149,12 @@
       queueList.append(item);
     });
   };
-  const notify = message => {
+  const notify = (message, duration = 3800) => {
     if (!playerNotice) return;
     clearTimeout(noticeTimer);
     playerNotice.textContent = message;
     playerNotice.hidden = !message;
-    if (message) noticeTimer = setTimeout(() => { playerNotice.hidden = true; }, 3800);
+    if (message && duration) noticeTimer = setTimeout(() => { playerNotice.hidden = true; }, duration);
   };
   const updateQueueControls = () => {
     if (playerPrevious) playerPrevious.disabled = queueIndex < 0 || !queue.slice(0, queueIndex).some(track => track.playUrl);
@@ -306,6 +319,7 @@
     try {
       await audio.play();
     } catch {
+      playbackRequested = false;
       playerSubtitle.textContent = "Radiofilen kunne ikke leses eller spilles.";
       updatePlaybackButtons();
       sendState(true);
@@ -342,7 +356,10 @@
     }
     if (audio.paused) {
       try { await audio.play(); } catch { playerSubtitle.textContent = "Radiofilen kunne ikke leses eller spilles."; }
-    } else audio.pause();
+    } else {
+      playbackRequested = false;
+      audio.pause();
+    }
   });
   playerProgress?.addEventListener("input", () => {
     if (remoteState) {
@@ -393,6 +410,8 @@
   }
   audio?.addEventListener("play", () => {
     if (!ownsAudio) return;
+    playbackRequested = true;
+    if (playerNotice?.textContent.startsWith("Avspilling klar fra ")) notify("");
     playerToggle.textContent = "Ⅱ";
     playerToggle.setAttribute("aria-label", "Pause");
     updatePlaybackButtons();
@@ -469,12 +488,14 @@
     }
   });
   audio?.addEventListener("ended", () => {
+    playbackRequested = false;
     updatePlaybackButtons();
     sendState(true);
     void moveInQueue(1);
   });
   audio?.addEventListener("error", () => {
     if (!ownsAudio) return;
+    playbackRequested = false;
     playerToggle.textContent = "▶";
     playerSubtitle.textContent = "Radiofilen kunne ikke leses eller spilles.";
     updatePlaybackButtons();
@@ -499,6 +520,7 @@
       } else if (message.type === "claim") {
         if (ownsAudio) {
           ownsAudio = false;
+          playbackRequested = false;
           audio?.pause();
         }
       } else if (message.type === "state") {
@@ -510,7 +532,10 @@
           remoteOwnerId = "";
         }
       } else if (message.type === "command" && ownsAudio) {
-        if (message.action === "pause") audio.pause();
+        if (message.action === "pause") {
+          playbackRequested = false;
+          audio.pause();
+        }
         if (message.action === "seek" && Number.isFinite(message.value) &&
             Number.isFinite(audio.duration)) {
           audio.currentTime = Math.max(0, Math.min(message.value, audio.duration));
@@ -533,8 +558,65 @@
     });
     send({type: "hello"});
     setInterval(() => sendState(true), 2000);
-    window.addEventListener("pagehide", () => { if (ownsAudio) send({type: "goodbye"}); });
   }
+  window.addEventListener("pagehide", () => {
+    if (!ownsAudio) return;
+    saveReloadState();
+    send({type: "goodbye"});
+  });
+  const restoreAfterReload = () => {
+    let saved;
+    try {
+      saved = JSON.parse(sessionStorage.getItem(reloadStateKey) || "null");
+      sessionStorage.removeItem(reloadStateKey);
+    } catch { return; }
+    if (performance.getEntriesByType("navigation")[0]?.type !== "reload" ||
+        !saved || saved.pageUrl !== location.href ||
+        Date.now() - saved.savedAt > 120000 || !Array.isArray(saved.queue) ||
+        saved.queue.length > 500 || !Number.isInteger(saved.queueIndex)) return;
+    const template = player?.dataset.audioUrlTemplate;
+    if (!template || !audio) return;
+    const safeQueue = saved.queue.map(track => {
+      const id = track?.playRecordingId || "";
+      const expected = template.replace("00000000-0000-0000-0000-000000000000", id);
+      return {
+        ...track,
+        playUrl: /^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i.test(id) &&
+          track.playUrl === expected ? expected : "",
+      };
+    });
+    const index = saved.queueIndex;
+    if (!safeQueue[index]?.playUrl) return;
+    setTimeout(() => {
+      if (ownsAudio || remoteState) return; // Another open tab already owns playback.
+      queue = safeQueue;
+      queueIndex = index;
+      queueContext = saved.queueContext || queueContext;
+      claimAudio();
+      setPlayerHidden(false);
+      setPlayerDetails(queue[index]);
+      updateQueueControls();
+      audio.volume = Number.isFinite(saved.volume) ? Math.max(0, Math.min(saved.volume, 1)) : 1;
+      audio.muted = Boolean(saved.muted);
+      if (playerVolume) playerVolume.value = String(audio.volume);
+      syncMute();
+      audio.dataset.playUrl = queue[index].playUrl;
+      audio.src = queue[index].playUrl;
+      playbackRequested = Boolean(saved.playing);
+      audio.addEventListener("loadedmetadata", () => {
+        const position = Math.max(0, Number(saved.time) || 0);
+        audio.currentTime = Math.min(position, audio.duration || position);
+        updatePlayerTime();
+        if (saved.playing) void audio.play().catch(() => {
+          playbackRequested = false;
+          notify(`Avspilling klar fra ${timeText(audio.currentTime)}. Trykk Spill for å fortsette.`, 0);
+          sendState(true);
+        });
+      }, {once: true});
+      audio.load();
+    }, 220);
+  };
+  restoreAfterReload();
   document.addEventListener("p7:playback-context-changed", syncPlayerAvailability);
   document.addEventListener("p7:page-changed", () => {
     syncPlayerAvailability();

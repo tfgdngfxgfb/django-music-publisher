@@ -67,6 +67,16 @@ class RadioPlaybackTests(TestCase):
         with override_settings(P7_MUSIC_ROOT=self.root, P7_NAS_ROOT=self.root):
             return self.client.get(self.url, **headers)
 
+    def test_global_player_has_recording_audio_route_for_reload(self):
+        response = self.client.get(
+            reverse("gui_v2:recording_detail", args=[self.recording.pk])
+        )
+        template_url = reverse(
+            "gui_v2:recording_audio",
+            args=["00000000-0000-0000-0000-000000000000"],
+        )
+        self.assertContains(response, f'data-audio-url-template="{template_url}"')
+
     def test_resolver_returns_one_current_radio_asset(self):
         result = resolve_current_radio_asset(self.recording)
         self.assertEqual(result.status, RadioPlaybackStatus.AVAILABLE)
