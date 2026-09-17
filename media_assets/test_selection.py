@@ -2,8 +2,8 @@ from django.test import TestCase
 
 from catalogue.models import Recording
 
-from .models import FileAsset, FileLocation, RecordingMediaSelection
-from .selection import establish_current_radio_if_unambiguous
+from media_assets.models import FileAsset, FileLocation, RecordingMediaSelection
+from media_assets.selection import establish_current_radio_if_unambiguous
 
 
 class CurrentRadioSelectionTests(TestCase):
