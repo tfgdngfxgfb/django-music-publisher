@@ -55,6 +55,36 @@
   let queueTransitioning = false;
   let lastFailedSource = "";
   let noticeTimer;
+  const tabId = crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`;
+  const channel = player?.dataset.playerScope && "BroadcastChannel" in window
+    ? new BroadcastChannel(`p7-v2-player:${player.dataset.playerScope}`) : null;
+  let ownsAudio = false;
+  let remoteState = null;
+  let remoteOwnerId = "";
+  let lastStateSent = 0;
+  const send = message => channel?.postMessage({...message, sender: tabId});
+  const sendState = (force = false) => {
+    if (!ownsAudio || !audio) return;
+    const now = Date.now();
+    if (!force && now - lastStateSent < 700) return;
+    lastStateSent = now;
+    send({type: "state", state: {
+      queue, queueIndex, queueContext, time: audio.currentTime || 0,
+      duration: Number.isFinite(audio.duration) ? audio.duration : 0,
+      playing: !audio.paused, volume: audio.volume, muted: audio.muted,
+    }});
+  };
+  const claimAudio = () => {
+    if (ownsAudio) return;
+    if (remoteState && audio) {
+      audio.volume = remoteState.volume ?? audio.volume;
+      audio.muted = remoteState.muted;
+    }
+    ownsAudio = true;
+    remoteState = null;
+    remoteOwnerId = "";
+    send({type: "claim"});
+  };
   const librarySignature = () => {
     const url = new URL(location.href);
     url.searchParams.delete("selected");
@@ -151,7 +181,7 @@
     return trigger && !trigger.disabled && trigger.dataset.playUrl ? trigger : null;
   };
   const syncPlayerAvailability = () => {
-    if (!playerToggle || audio?.src) return;
+    if (!playerToggle || audio?.src || remoteState) return;
     const trigger = primaryPlaybackTrigger();
     playerToggle.disabled = !trigger;
     playerToggle.setAttribute(
@@ -166,13 +196,14 @@
   };
   const updatePlaybackButtons = () => {
     document.querySelectorAll("[data-play-recording]").forEach(button => {
-      const active = button.dataset.playRecordingId === playingRecording && audio && !audio.paused;
+      const active = button.dataset.playRecordingId === playingRecording &&
+        (remoteState ? remoteState.playing : audio && !audio.paused);
       button.classList.toggle("playing", active);
       button.setAttribute("aria-pressed", String(active));
     });
   };
   const updatePlayerTime = () => {
-    if (!audio || !playerSubtitle || !playingRecording) return;
+    if (!audio || !playerSubtitle || !playingRecording || remoteState) return;
     const duration = Number.isFinite(audio.duration) ? audio.duration : 0;
     playerSubtitle.textContent = playingArtist || "Uavklart artist";
     if (playerElapsed) playerElapsed.textContent = timeText(audio.currentTime);
@@ -182,6 +213,7 @@
       playerProgress.value = String(audio.currentTime || 0);
       playerProgress.disabled = !duration;
     }
+    sendState();
   };
   const updatePlayerCover = trigger => {
     if (!playerCover) return;
@@ -198,42 +230,89 @@
     placeholder.setAttribute("aria-hidden", "true");
     playerCover.append(placeholder);
   };
+  const setPlayerDetails = details => {
+    playingRecording = details.playRecordingId || "";
+    playingArtist = details.playArtist || "";
+    playerTitle.textContent = details.playTitle || "Innspilling";
+    playerSubtitle.textContent = playingArtist || "Uavklart artist";
+    updatePlayerCover({dataset: details});
+    const urlTemplate = player?.dataset.recordingUrlTemplate;
+    recordingLinks.forEach(link => {
+      if (urlTemplate && /^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i.test(playingRecording)) {
+        link.href = urlTemplate.replace("00000000-0000-0000-0000-000000000000", playingRecording);
+        link.setAttribute("aria-label", `Åpne innspilling: ${details.playTitle || "Innspilling"}`);
+      } else link.removeAttribute("href");
+    });
+    playerToggle.disabled = false;
+  };
+  const applyRemoteState = state => {
+    if (ownsAudio || !state || !Array.isArray(state.queue)) return;
+    const safeQueue = state.queue.map(track => {
+      const url = track?.playUrl || "";
+      let safeUrl = "";
+      try {
+        if (url && new URL(url, location.origin).origin === location.origin) safeUrl = url;
+      } catch { /* An invalid URL cannot become a playback source. */ }
+      return {...track, playUrl: safeUrl};
+    });
+    if (!Number.isInteger(state.queueIndex) || state.queueIndex < 0 || state.queueIndex >= safeQueue.length) return;
+    remoteState = {...state, queue: safeQueue};
+    queue = safeQueue;
+    queueIndex = state.queueIndex;
+    queueContext = state.queueContext || queueContext;
+    setPlayerHidden(false);
+    setPlayerDetails(queue[queueIndex]);
+    updateQueueControls();
+    const duration = Number(state.duration) || 0;
+    const position = Math.min(Number(state.time) || 0, duration || Infinity);
+    if (playerElapsed) playerElapsed.textContent = timeText(position);
+    if (playerDuration) playerDuration.textContent = timeText(duration);
+    if (playerProgress) {
+      playerProgress.max = String(duration);
+      playerProgress.value = String(position);
+      playerProgress.disabled = !duration;
+    }
+    if (playerVolume) playerVolume.value = String(state.volume ?? 1);
+    syncMute();
+    playerToggle.textContent = state.playing ? "Ⅱ" : "▶";
+    playerToggle.setAttribute("aria-label", state.playing ? "Pause" : "Spill av");
+    updatePlaybackButtons();
+  };
   const startPlayback = async (trigger, preserveQueue = false) => {
     if (!audio || !trigger.dataset.playUrl) return false;
     if (!preserveQueue) captureQueue(trigger);
     const details = queue[queueIndex]?.playRecordingId === trigger.dataset.playRecordingId &&
       queue[queueIndex]?.playUrl === trigger.dataset.playUrl ? queue[queueIndex] : trigger.dataset;
+    const resumeAt = remoteState?.queue?.[remoteState.queueIndex]?.playUrl === details.playUrl
+      ? Number(remoteState.time) || 0 : 0;
+    claimAudio();
     setPlayerHidden(false);
     const recordingId = details.playRecordingId || "";
     if (playingRecording !== recordingId || audio.dataset.playUrl !== details.playUrl) {
       audio.pause();
-      playingRecording = recordingId;
-      playingArtist = details.playArtist || "";
       audio.dataset.playUrl = details.playUrl;
       audio.src = details.playUrl;
-      playerTitle.textContent = details.playTitle || "Innspilling";
-      playerSubtitle.textContent = playingArtist || "Uavklart artist";
-      updatePlayerCover({dataset: details});
-      const urlTemplate = player?.dataset.recordingUrlTemplate;
-      recordingLinks.forEach(link => {
-        if (urlTemplate && /^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i.test(recordingId)) {
-          link.href = urlTemplate.replace("00000000-0000-0000-0000-000000000000", recordingId);
-          link.setAttribute("aria-label", `Åpne innspilling: ${details.playTitle || "Innspilling"}`);
-        } else link.removeAttribute("href");
-      });
-      playerToggle.disabled = false;
+      setPlayerDetails(details);
       playerProgress.disabled = true;
       lastFailedSource = "";
+      if (resumeAt > 0) audio.addEventListener("loadedmetadata", () => {
+        audio.currentTime = Math.min(resumeAt, audio.duration || resumeAt);
+        sendState(true);
+      }, {once: true});
       audio.load();
+    } else if (resumeAt > 0) {
+      audio.currentTime = Math.min(resumeAt, audio.duration || resumeAt);
     }
     try {
       await audio.play();
     } catch {
       playerSubtitle.textContent = "Radiofilen kunne ikke leses eller spilles.";
       updatePlaybackButtons();
+      sendState(true);
       return false;
     }
     updatePlaybackButtons();
+    sendState(true);
     return true;
   };
   document.addEventListener("click", event => {
@@ -251,6 +330,11 @@
     if (libraryRow) void followLibraryRow(libraryRow);
   });
   playerToggle?.addEventListener("click", async () => {
+    if (remoteState) {
+      if (remoteState.playing) send({type: "command", action: "pause"});
+      else if (queue[queueIndex]?.playUrl) await startPlayback({dataset: queue[queueIndex]}, true);
+      return;
+    }
     if (!audio?.src) {
       const trigger = primaryPlaybackTrigger();
       if (trigger) await startPlayback(trigger);
@@ -261,11 +345,15 @@
     } else audio.pause();
   });
   playerProgress?.addEventListener("input", () => {
+    if (remoteState) {
+      send({type: "command", action: "seek", value: Number(playerProgress.value)});
+      return;
+    }
     if (audio && Number.isFinite(audio.duration)) audio.currentTime = Number(playerProgress.value);
   });
   const syncMute = () => {
     if (!audio || !playerMute) return;
-    const muted = audio.muted || audio.volume === 0;
+    const muted = remoteState ? remoteState.muted || remoteState.volume === 0 : audio.muted || audio.volume === 0;
     playerMute.textContent = muted ? "🔇" : "🔊";
     playerMute.setAttribute("aria-label", muted ? "Slå på lyd" : "Demp lyd");
     playerMute.setAttribute("title", muted ? "Slå på lyd" : "Demp lyd");
@@ -277,12 +365,21 @@
     audio.volume = Number.isFinite(savedVolume) && savedVolume >= 0 && savedVolume <= 1 ? savedVolume : 1;
     playerVolume.value = String(audio.volume);
     playerVolume.addEventListener("input", () => {
+      if (remoteState) {
+        send({type: "command", action: "volume", value: Number(playerVolume.value)});
+        return;
+      }
       audio.volume = Number(playerVolume.value);
       if (audio.volume > 0) audio.muted = false;
       localStorage.setItem("p7-v2-player-volume", String(audio.volume));
       syncMute();
+      sendState(true);
     });
     playerMute?.addEventListener("click", () => {
+      if (remoteState) {
+        send({type: "command", action: "mute"});
+        return;
+      }
       audio.muted = !audio.muted;
       if (!audio.muted && audio.volume === 0) {
         audio.volume = 1;
@@ -290,15 +387,19 @@
         localStorage.setItem("p7-v2-player-volume", "1");
       }
       syncMute();
+      sendState(true);
     });
     syncMute();
   }
   audio?.addEventListener("play", () => {
+    if (!ownsAudio) return;
     playerToggle.textContent = "Ⅱ";
     playerToggle.setAttribute("aria-label", "Pause");
     updatePlaybackButtons();
+    sendState(true);
   });
   audio?.addEventListener("pause", () => {
+    if (!ownsAudio) return;
     playerToggle.textContent = "▶";
     playerToggle.setAttribute("aria-label", "Spill av");
     updatePlaybackButtons();
@@ -369,9 +470,11 @@
   });
   audio?.addEventListener("ended", () => {
     updatePlaybackButtons();
+    sendState(true);
     void moveInQueue(1);
   });
   audio?.addEventListener("error", () => {
+    if (!ownsAudio) return;
     playerToggle.textContent = "▶";
     playerSubtitle.textContent = "Radiofilen kunne ikke leses eller spilles.";
     updatePlaybackButtons();
@@ -387,6 +490,51 @@
       void moveInQueue(1);
     }
   });
+  if (channel) {
+    channel.addEventListener("message", event => {
+      const message = event.data;
+      if (!message || message.sender === tabId) return;
+      if (message.type === "hello") {
+        sendState(true);
+      } else if (message.type === "claim") {
+        if (ownsAudio) {
+          ownsAudio = false;
+          audio?.pause();
+        }
+      } else if (message.type === "state") {
+        if (!ownsAudio) remoteOwnerId = message.sender;
+        applyRemoteState(message.state);
+      } else if (message.type === "goodbye") {
+        if (remoteState && remoteOwnerId === message.sender) {
+          applyRemoteState({...remoteState, playing: false});
+          remoteOwnerId = "";
+        }
+      } else if (message.type === "command" && ownsAudio) {
+        if (message.action === "pause") audio.pause();
+        if (message.action === "seek" && Number.isFinite(message.value) &&
+            Number.isFinite(audio.duration)) {
+          audio.currentTime = Math.max(0, Math.min(message.value, audio.duration));
+          sendState(true);
+        }
+        if (message.action === "volume" && Number.isFinite(message.value)) {
+          audio.volume = Math.max(0, Math.min(message.value, 1));
+          if (audio.volume > 0) audio.muted = false;
+          if (playerVolume) playerVolume.value = String(audio.volume);
+          localStorage.setItem("p7-v2-player-volume", String(audio.volume));
+          syncMute();
+          sendState(true);
+        }
+        if (message.action === "mute") {
+          audio.muted = !audio.muted;
+          syncMute();
+          sendState(true);
+        }
+      }
+    });
+    send({type: "hello"});
+    setInterval(() => sendState(true), 2000);
+    window.addEventListener("pagehide", () => { if (ownsAudio) send({type: "goodbye"}); });
+  }
   document.addEventListener("p7:playback-context-changed", syncPlayerAvailability);
   document.addEventListener("p7:page-changed", () => {
     syncPlayerAvailability();

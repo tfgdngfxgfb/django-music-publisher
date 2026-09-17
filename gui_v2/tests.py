@@ -947,6 +947,26 @@ class GuiV2WorkspaceTests(TestCase):
         self.assertEqual(claim.recording, self.recording)
         self.assertEqual(claim.right_type, RightsClaim.RightType.DISTRIBUTION)
 
+    def test_clicking_library_artist_searches_for_that_credit(self):
+        RecordingContribution.objects.create(
+            recording=self.recording,
+            role=RecordingContribution.Role.PRIMARY,
+            credited_as="Nordlys & Venner",
+        )
+        other = Recording.objects.create(title="Annen innspilling")
+        MusicLibraryEntry.objects.create(recording=other)
+        self._superuser()
+
+        library_url = reverse("gui_v2:music_library")
+        response = self.client.get(library_url)
+        self.assertContains(
+            response,
+            f'href="{library_url}?q=Nordlys%20%26%20Venner"',
+        )
+        filtered = self.client.get(library_url, {"q": "Nordlys & Venner"})
+        self.assertContains(filtered, "Eksisterende innspilling")
+        self.assertNotContains(filtered, "Annen innspilling")
+
     def test_recording_search_matches_credited_artist(self):
         RecordingContribution.objects.create(
             recording=self.recording,

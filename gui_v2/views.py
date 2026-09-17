@@ -124,7 +124,7 @@ PLAYBACK_PERMISSIONS = (
 )
 
 
-def _artist_text(recording):
+def _artist_names(recording):
     names = [
         item.display_credit
         for item in recording.contributions.all()
@@ -134,7 +134,11 @@ def _artist_text(recording):
             RecordingContribution.Role.FEATURED,
         }
     ]
-    return ", ".join(dict.fromkeys(names)) or "Uavklart artist"
+    return list(dict.fromkeys(names))
+
+
+def _artist_text(recording):
+    return ", ".join(_artist_names(recording)) or "Uavklart artist"
 
 
 def _duration(value):
@@ -409,6 +413,8 @@ def music_library(request):
             queryset = queryset.filter(
                 Q(recording__title__icontains=term)
                 | Q(recording__contributions__credited_as__icontains=term)
+                | Q(recording__contributions__artist_identity__display_name__icontains=term)
+                | Q(recording__contributions__party__name__icontains=term)
                 | Q(recording__identifiers__normalized_value__icontains=term)
             )
         selected_genres = [
@@ -663,7 +669,8 @@ def music_library(request):
         }
     for entry in page.object_list:
         entry.cover = covers_by_recording.get(entry.recording_id)
-        entry.artist_text = _artist_text(entry.recording)
+        entry.artist_names = _artist_names(entry.recording)
+        entry.artist_text = ", ".join(entry.artist_names) or "Uavklart artist"
         entry.playback = _playback_context(entry.recording, request.user)
         entry.isrc = next(
             (
