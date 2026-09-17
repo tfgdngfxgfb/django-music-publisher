@@ -196,6 +196,18 @@ def build_home_context(request):
                 }
             )
 
+    if request.user.has_perms(
+        ("managed_music.view_managedrecording", "catalogue.view_recording")
+    ):
+        workspaces.append(
+            {
+                "title": "Forvaltet musikk",
+                "description": "Forvaltningsgrunnlag, status og oppfølging.",
+                "icon": "♧",
+                "url": reverse("gui_v2:managed_music"),
+            }
+        )
+
     followups = []
     if can_view_digitization:
         open_count = DigitizationBatch.objects.filter(

@@ -1,0 +1,1 @@
+{% if basis.confirmed %}<span>{{ basis.confirmed }} bekreftede P7-grunnlag</span>{% if basis.release_scoped %}<small>{{ basis.release_scoped }} release-avgrenset</small>{% endif %}{% endif %}{% if basis.pending %}<span>{{ basis.pending }} uverifisert / bestridt</span>{% endif %}{% if not basis.confirmed and not basis.pending %}—{% endif %}

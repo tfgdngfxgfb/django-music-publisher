@@ -1,10 +1,28 @@
 from django.urls import path
 
-from . import views, digitization, rights_views
+from . import views, digitization, rights_views, managed_views
 
 app_name = "gui_v2"
 
 urlpatterns = [
+    path("forvaltet-musikk/", managed_views.index, name="managed_music"),
+    path(
+        "forvaltet-musikk/registrer/",
+        managed_views.onboard,
+        name="managed_onboard",
+    ),
+    path(
+        "forvaltet-musikk/<uuid:managed_id>/avklar/",
+        managed_views.action,
+        {"action": "correct"},
+        name="managed_correct",
+    ),
+    path(
+        "forvaltet-musikk/<uuid:managed_id>/tilbakefor/",
+        managed_views.action,
+        {"action": "return"},
+        name="managed_return",
+    ),
     path(
         "innspillinger/<uuid:recording_id>/rettigheter/",
         rights_views.overview,
