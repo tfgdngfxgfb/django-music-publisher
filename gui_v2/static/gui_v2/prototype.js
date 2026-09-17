@@ -558,6 +558,42 @@
     autoSubmitFilters.requestSubmit();
   });
 
+  const deliveryForm = document.querySelector("#delivery-selection");
+  const deliveryStart = document.querySelector("[data-delivery-start]");
+  const deliveryCancel = document.querySelector("[data-delivery-cancel]");
+  const deliveryStatus = document.querySelector("[data-delivery-status]");
+  const deliveryLayout = document.querySelector(".archive-layout");
+  const deliveryChoices = [...document.querySelectorAll("input[form='delivery-selection'][name='recording']")];
+  const setDeliverySelection = open => {
+    deliveryLayout?.classList.toggle("delivery-selecting", open);
+    deliveryStart?.setAttribute("aria-expanded", String(open));
+    if (deliveryStart) deliveryStart.textContent = open ? "Fortsett levering" : "Lever / last ned";
+    if (deliveryCancel) deliveryCancel.hidden = !open;
+    if (deliveryStatus) deliveryStatus.hidden = true;
+  };
+  deliveryStart?.addEventListener("click", event => {
+    if (deliveryLayout?.classList.contains("delivery-selecting")) return;
+    event.preventDefault();
+    setDeliverySelection(true);
+    deliveryChoices[0]?.focus();
+  });
+  deliveryCancel?.addEventListener("click", () => {
+    setDeliverySelection(false);
+    deliveryStart?.focus();
+  });
+  deliveryForm?.addEventListener("submit", event => {
+    if (!deliveryLayout?.classList.contains("delivery-selecting") ||
+        !deliveryChoices.some(choice => choice.checked)) {
+      event.preventDefault();
+      setDeliverySelection(true);
+      if (deliveryStatus) {
+        deliveryStatus.textContent = "Velg minst én innspilling for levering.";
+        deliveryStatus.hidden = false;
+      }
+      deliveryChoices[0]?.focus();
+    }
+  });
+
   const keyboardFocusKey = `p7-v2-library-keyboard:${location.pathname}`;
   document.querySelectorAll("[data-row-href]").forEach(row => row.addEventListener("click", event => {
     if (event.target.closest("a, button, input, select, textarea, label")) return;
