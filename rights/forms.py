@@ -1,7 +1,7 @@
 from django import forms
 from django.core.exceptions import ValidationError
 
-from catalogue.models import Recording
+from catalogue.models import Recording, Release
 from media_assets.models import FileAsset
 
 from .models import Agreement, AgreementDocument, AgreementParty, RightsClaim
@@ -13,6 +13,7 @@ class RightsClaimForm(forms.ModelForm):
         model = RightsClaim
         fields = (
             "right_type",
+            "release_scope",
             "rights_holder",
             "grantor",
             "share",
@@ -32,6 +33,14 @@ class RightsClaimForm(forms.ModelForm):
         }
         labels = {"territories": "Territorier"}
 
+    def __init__(self, *args, recording=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if recording:
+            self.instance.recording = recording
+            self.fields["release_scope"].queryset = Release.objects.filter(
+                tracks__recording=recording
+            ).distinct()
+
     def clean(self):
         data = super().clean()
         try:
@@ -44,6 +53,21 @@ class RightsClaimForm(forms.ModelForm):
 
 
 class ReleaseRightsClaimForm(RightsClaimForm):
+    legal_scope = forms.ChoiceField(
+        label="Juridisk utgivelsesscope",
+        required=False,
+        choices=(
+            ("general", "Generelt for innspillingen"),
+            ("release", "Bare denne utgivelsen"),
+        ),
+        initial="general",
+    )
+    allow_managed_registration = forms.BooleanField(
+        label="Registrer også valgte ikke-forvaltede innspillinger som PENDING",
+        required=False,
+        help_text="Eksplisitt onboarding krever administrator og lokalt P7-grunnlag.",
+    )
+    preview_token = forms.CharField(required=False, widget=forms.HiddenInput)
     recordings = forms.ModelMultipleChoiceField(
         queryset=Recording.objects.none(),
         label="Spor/innspillinger som omfattes",
@@ -56,6 +80,8 @@ class ReleaseRightsClaimForm(RightsClaimForm):
 
     def __init__(self, *args, release, **kwargs):
         super().__init__(*args, **kwargs)
+        self.release = release
+        self.fields.pop("release_scope")
         queryset = (
             Recording.objects.filter(release_tracks__release=release)
             .distinct()
@@ -64,6 +90,14 @@ class ReleaseRightsClaimForm(RightsClaimForm):
         self.fields["recordings"].queryset = queryset
         self.initial.setdefault("recordings", queryset)
         self.order_fields(("recordings", *self._meta.fields))
+
+    def registration_values(self):
+        data = self.cleaned_data.copy()
+        data.pop("preview_token", None)
+        data["release_scope"] = (
+            self.release if data.pop("legal_scope") == "release" else None
+        )
+        return data
 
 
 class RightsDecisionForm(forms.Form):
@@ -119,7 +153,13 @@ class AgreementDocumentForm(forms.ModelForm):
 
 
 class ClaimAgreementForm(forms.Form):
-    agreement = forms.ModelChoiceField(Agreement.objects.all(), label="Avtale")
+    agreement = forms.ModelChoiceField(
+        Agreement.objects.all(), label="Avtale", required=False
+    )
+    evidence_strength = forms.ChoiceField(
+        label="Dokumentasjonsstyrke",
+        choices=RightsClaim.EvidenceStrength.choices,
+    )
     note = forms.CharField(
         label="Begrunnelse",
         required=False,

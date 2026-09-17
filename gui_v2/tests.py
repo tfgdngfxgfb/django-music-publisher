@@ -992,7 +992,16 @@ class GuiV2WorkspaceTests(TestCase):
                 "rights-source_record": "",
                 "rights-agreement": "",
                 "rights-notes": "Testgrunnlag",
+                "rights-allow_managed_registration": "on",
             },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(RightsClaim.objects.exists())
+        form = response.context["rights_form"]
+        data = form.data.copy()
+        data["rights_stage"] = "apply"
+        response = self.client.post(
+            reverse("gui_v2:release_detail", args=[self.release.pk]), data
         )
         self.assertRedirects(
             response,

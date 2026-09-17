@@ -14,7 +14,7 @@ from .models import (
     RightsDecision,
     Territory,
 )
-from .services import decide_rights_claim
+from .workflows import decide_rights_claim
 
 
 class AgreementPartyInline(admin.TabularInline):
@@ -88,17 +88,27 @@ def confirm_claims(modeladmin, request, queryset):
 @admin.action(description="Marker valgte rettighetskrav som bestridt")
 def dispute_claims(modeladmin, request, queryset):
     for claim in queryset:
-        decide_rights_claim(
-            claim, VerificationStatus.DISPUTED, user=request.user
-        )
+        try:
+            decide_rights_claim(
+                claim, VerificationStatus.DISPUTED, user=request.user
+            )
+        except ValidationError as error:
+            modeladmin.message_user(
+                request, "; ".join(error.messages), messages.ERROR
+            )
 
 
 @admin.action(description="Avvis valgte rettighetskrav")
 def reject_claims(modeladmin, request, queryset):
     for claim in queryset:
-        decide_rights_claim(
-            claim, VerificationStatus.REJECTED, user=request.user
-        )
+        try:
+            decide_rights_claim(
+                claim, VerificationStatus.REJECTED, user=request.user
+            )
+        except ValidationError as error:
+            modeladmin.message_user(
+                request, "; ".join(error.messages), messages.ERROR
+            )
 
 
 @admin.register(RightsClaim)

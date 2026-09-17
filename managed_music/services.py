@@ -13,7 +13,8 @@ from catalogue.services import (
 from music_library.models import MusicLibraryEntry
 from provenance.models import SourceRecord, SourceSystem
 from rights.models import RightsClaim, RightsConfiguration
-from rights.services import create_rights_claim
+from rights.services import create_rights_claim, _validate_territory_scope
+from rights.scope import territory_scope_countries
 
 from .models import ManagedRecording, ManagedRelease
 from .lifecycle import management_state
@@ -57,6 +58,16 @@ def create_managed_recording(
     ownership_share=None,
     source_system=None,
     notes="",
+    grantor=None,
+    territory_mode=RightsClaim.TerritoryMode.WORLD,
+    territories=(),
+    valid_from=None,
+    valid_until=None,
+    release_scope=None,
+    evidence_strength=RightsClaim.EvidenceStrength.NOT_ASSESSED,
+    source_record=None,
+    agreement=None,
+    user=None,
 ):
     if relationship_type not in RightsClaim.RightType.values:
         raise ValueError(
@@ -67,6 +78,11 @@ def create_managed_recording(
             raise ValueError("Angi lokal organisasjons eierandel.")
     elif ownership_share is not None:
         raise ValueError("Andel brukes bare for mastereierskap.")
+    territories = _validate_territory_scope(territory_mode, territories)
+    if not territory_scope_countries(territory_mode, territories):
+        raise ValidationError(
+            "Onboarding krever et ikke-tomt territorielt grunnlag."
+        )
     configuration = RightsConfiguration.objects.select_related(
         "local_organization"
     ).first()
@@ -119,6 +135,12 @@ def create_managed_recording(
             )
         record_duplicate_candidates(recording, matches)
     Recording.objects.select_for_update().get(pk=recording.pk)
+    if ManagedRecording.objects.filter(
+        library_entry__recording=recording
+    ).exists():
+        raise ValidationError(
+            "Innspillingen finnes allerede i Forvaltet musikk."
+        )
     library_entry, _ = MusicLibraryEntry.objects.get_or_create(
         recording=recording
     )
@@ -128,7 +150,7 @@ def create_managed_recording(
         source_system=source_system,
         notes=notes,
     )
-    create_rights_claim(
+    claim = create_rights_claim(
         recording=recording,
         right_type=relationship_type,
         rights_holder=configuration.local_organization,
@@ -137,12 +159,29 @@ def create_managed_recording(
             if relationship_type == RightsClaim.RightType.OWNERSHIP
             else None
         ),
-        territory_mode=RightsClaim.TerritoryMode.WORLD,
+        grantor=grantor,
+        territory_mode=territory_mode,
+        territories=territories,
+        valid_from=valid_from,
+        valid_until=valid_until,
+        release_scope=release_scope,
+        evidence_strength=evidence_strength,
+        source_record=source_record,
+        agreement=agreement,
         notes=(
             "Opprettet som uttrykkelig grunnlag ved registrering i Forvaltet musikk. "
-            "Kravet må vurderes og bekreftes separat."
+            f"Kravet må vurderes og bekreftes separat. {notes}"
         ),
     )
+    if user is not None:
+        from rights.models import RightsDecision
+
+        RightsDecision.objects.create(
+            claim=claim,
+            decided_by=user,
+            decision=RightsDecision.Decision.DOCUMENTED,
+            note="Manuell registrering ved eksplisitt onboarding til Forvaltet musikk.",
+        )
     return managed
 
 

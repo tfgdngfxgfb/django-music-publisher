@@ -5,6 +5,9 @@ from catalogue.services import find_recording_candidates
 from parties.models import ArtistIdentity
 from provenance.models import SourceSystem
 from rights.models import RightsClaim
+from rights.forms import RightsClaimForm
+from rights.services import _validate_territory_scope
+from django.core.exceptions import ValidationError
 
 from .models import ManagedRelease
 
@@ -17,6 +20,24 @@ class ManagedReleaseForm(forms.ModelForm):
 
 
 class ManagedRecordingCreationForm(forms.Form):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        scope_fields = RightsClaimForm().fields
+        for name in (
+            "grantor",
+            "territory_mode",
+            "territories",
+            "valid_from",
+            "valid_until",
+            "release_scope",
+            "evidence_strength",
+            "source_record",
+            "agreement",
+        ):
+            self.fields[name] = scope_fields[name]
+        self.fields["territory_mode"].required = False
+        self.fields["evidence_strength"].required = False
+
     recording = forms.ModelChoiceField(
         Recording.objects.all(),
         label="Bruk eksisterende innspilling",
@@ -59,6 +80,19 @@ class ManagedRecordingCreationForm(forms.Form):
 
     def clean(self):
         data = super().clean()
+        data["territory_mode"] = (
+            data.get("territory_mode") or RightsClaim.TerritoryMode.WORLD
+        )
+        data["evidence_strength"] = (
+            data.get("evidence_strength")
+            or RightsClaim.EvidenceStrength.NOT_ASSESSED
+        )
+        try:
+            _validate_territory_scope(
+                data["territory_mode"], data.get("territories") or ()
+            )
+        except ValidationError as error:
+            self.add_error("territories", error)
         recording = data.get("recording")
         title = (data.get("new_recording_title") or "").strip()
         if bool(recording) == bool(title):

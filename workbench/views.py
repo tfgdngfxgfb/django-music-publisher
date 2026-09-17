@@ -50,7 +50,7 @@ from flac_ingest.services import (
 )
 from managed_music.forms import ManagedRecordingCreationForm
 from managed_music.models import ManagedRecording
-from managed_music.services import create_managed_recording
+from rights.workflows import onboard_managed_recording
 from media_assets.models import FileAsset, FileLocation
 from media_assets.storage import open_for_read, resolve_location
 from music_library.models import MusicLibraryEntry
@@ -80,12 +80,12 @@ from rights.help_content import (
     RIGHTS_HELP_SECTIONS,
 )
 from rights.models import Agreement, RightsClaim
-from rights.services import (
-    create_release_rights_claims,
-    create_rights_claim,
+from rights.services import get_local_organization
+from rights.workflow_forms import process_release_form
+from rights.workflows import (
+    register_rights_claim,
     decide_rights_claim,
-    get_local_organization,
-    link_claim_agreement,
+    document_rights_claim,
     supersede_rights_claim,
 )
 from rights.summaries import (
@@ -856,8 +856,10 @@ def managed_add(request):
     form = ManagedRecordingCreationForm(request.POST or None, initial=initial)
     if request.method == "POST" and form.is_valid():
         try:
-            managed = create_managed_recording(**form.cleaned_data)
-        except (ValueError, IntegrityError) as error:
+            managed = onboard_managed_recording(
+                user=request.user, **form.cleaned_data
+            )
+        except (ValueError, IntegrityError, ValidationError) as error:
             form.add_error(None, str(error))
         else:
             messages.success(
@@ -1029,6 +1031,7 @@ def release_rights_add(request, pk):
         request, reverse("workbench:release", args=(release.pk,))
     )
     form = ReleaseRightsClaimForm(request.POST or None, release=release)
+    rights_plan = None
     if not request.user.has_perm("rights.view_agreement"):
         form.fields["agreement"].queryset = Agreement.objects.none()
     if not request.user.has_perm("provenance.view_sourcerecord"):
@@ -1036,25 +1039,21 @@ def release_rights_add(request, pk):
             "source_record"
         ].queryset.none()
     if request.method == "POST" and form.is_valid():
-        data = form.cleaned_data.copy()
-        recordings = data.pop("recordings")
-        territories = data.pop("territories")
         try:
-            claims = create_release_rights_claims(
-                release=release,
-                recordings=recordings,
-                territories=territories,
-                allow_managed_registration=request.user.is_superuser,
-                **data,
+            rights_plan, claims = process_release_form(
+                form,
+                user=request.user,
+                apply=request.POST.get("rights_stage") == "apply",
             )
         except ValidationError as error:
-            form.add_error(None, error)
+            form.add_error(None, ValidationError(error.messages))
         else:
-            messages.success(
-                request,
-                f"{len(claims)} rettighetskrav ble registrert som ikke verifisert.",
-            )
-            return redirect(return_url)
+            if claims is not None:
+                messages.success(
+                    request,
+                    f"{len(claims)} rettighetskrav ble registrert som ikke verifisert.",
+                )
+                return redirect(return_url)
     return render(
         request,
         "workbench/form.html",
@@ -1067,7 +1066,8 @@ def release_rights_add(request, pk):
             ),
             form=form,
             form_help=RIGHTS_FORM_HELP,
-            submit_label="Registrer rettighetskrav",
+            submit_label="Forhåndsvis registrering",
+            rights_plan=rights_plan,
             cancel_url=return_url,
             return_url=return_url,
         ),
@@ -1306,7 +1306,7 @@ def rights_claim_add(request, pk):
         return HttpResponseForbidden(
             "Rettighetskrav håndteres i arbeidsflaten først når innspillingen er registrert i Forvaltet musikk."
         )
-    form = RightsClaimForm(request.POST or None)
+    form = RightsClaimForm(request.POST or None, recording=recording)
     if not request.user.has_perm("rights.view_agreement"):
         form.fields["agreement"].queryset = Agreement.objects.none()
     if not request.user.has_perm("provenance.view_sourcerecord"):
@@ -1317,8 +1317,11 @@ def rights_claim_add(request, pk):
         data = form.cleaned_data.copy()
         territories = data.pop("territories")
         try:
-            create_rights_claim(
-                recording=recording, territories=territories, **data
+            register_rights_claim(
+                user=request.user,
+                recording=recording,
+                territories=territories,
+                **data,
             )
         except ValidationError as error:
             form.add_error(None, error)
@@ -1402,6 +1405,7 @@ def rights_claim_supersede(request, pk):
     previous = get_object_or_404(RightsClaim, pk=pk)
     initial = {
         "right_type": previous.right_type,
+        "release_scope": previous.release_scope,
         "rights_holder": previous.rights_holder,
         "grantor": previous.grantor,
         "share": previous.share,
@@ -1414,7 +1418,9 @@ def rights_claim_supersede(request, pk):
         "agreement": previous.agreement,
         "notes": previous.notes,
     }
-    form = RightsClaimForm(request.POST or None, initial=initial)
+    form = RightsClaimForm(
+        request.POST or None, initial=initial, recording=previous.recording
+    )
     form.fields["right_type"].disabled = True
     if not request.user.has_perm("rights.view_agreement"):
         form.fields["agreement"].queryset = Agreement.objects.filter(
@@ -1473,36 +1479,49 @@ def rights_claim_supersede(request, pk):
     (
         "rights.view_rightsclaim",
         "rights.change_rightsclaim",
-        "rights.manage_agreement",
     ),
     raise_exception=True,
 )
 def rights_claim_link_agreement(request, pk):
     claim = get_object_or_404(RightsClaim, pk=pk)
-    form = ClaimAgreementForm(request.POST or None)
+    form = ClaimAgreementForm(
+        request.POST or None,
+        initial={
+            "agreement": claim.agreement_id,
+            "evidence_strength": claim.evidence_strength,
+        },
+    )
+    can_link = request.user.has_perm("rights.manage_agreement")
+    if not can_link:
+        form.fields["agreement"].disabled = True
+        form.fields["agreement"].queryset = Agreement.objects.filter(
+            pk=claim.agreement_id
+        )
     if request.method == "POST" and form.is_valid():
-        link_claim_agreement(
-            claim,
-            form.cleaned_data["agreement"],
-            user=request.user,
-            note=form.cleaned_data["note"],
-        )
-        messages.success(
-            request, "Avtalen ble knyttet til kravet og handlingen loggført."
-        )
-        return redirect(
-            reverse("workbench:recording", args=(claim.recording_id,))
-            + "?fane=rights"
-        )
+        values = form.cleaned_data.copy()
+        if not can_link:
+            values.pop("agreement")
+        try:
+            document_rights_claim(claim, user=request.user, **values)
+        except ValidationError as error:
+            form.add_error(None, ValidationError(error.messages))
+        else:
+            messages.success(
+                request, "Dokumentasjonen ble lagret og handlingen loggført."
+            )
+            return redirect(
+                reverse("workbench:recording", args=(claim.recording_id,))
+                + "?fane=rights"
+            )
     return render(
         request,
         "workbench/form.html",
         _page_context(
             "rights",
-            "Knytt avtale",
+            "Dokumenter rettighetskrav",
             form=form,
             form_help={"agreement": RIGHTS_HELP["agreement"]},
-            submit_label="Knytt avtale",
+            submit_label="Lagre dokumentasjon",
             cancel_url=reverse(
                 "workbench:recording", args=(claim.recording_id,)
             )

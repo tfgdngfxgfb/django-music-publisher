@@ -91,10 +91,8 @@ from music_library.models import (
 from provenance.models import MetadataAssertion
 from rights.forms import ReleaseRightsClaimForm
 from rights.models import RightsClaim
-from rights.services import (
-    create_release_rights_claims,
-    get_local_organization,
-)
+from rights.services import get_local_organization
+from rights.workflow_forms import process_release_form
 from rights.summaries import (
     OwnershipCategory,
     local_confirmed_right_recording_ids,
@@ -2075,6 +2073,7 @@ def release_detail(request, release_id):
         ("rights.view_rightsclaim", "rights.add_rightsclaim")
     )
     rights_form = None
+    rights_plan = None
     if can_manage_rights:
         rights_form = ReleaseRightsClaimForm(
             request.POST if action == "rights" else None,
@@ -2131,27 +2130,23 @@ def release_detail(request, release_id):
         if not can_manage_rights:
             raise PermissionDenied
         if rights_form.is_valid():
-            data = rights_form.cleaned_data.copy()
-            recordings = data.pop("recordings")
-            territories = data.pop("territories")
             try:
-                claims = create_release_rights_claims(
-                    release=release,
-                    recordings=recordings,
-                    territories=territories,
-                    allow_managed_registration=request.user.is_superuser,
-                    **data,
+                rights_plan, claims = process_release_form(
+                    rights_form,
+                    user=request.user,
+                    apply=request.POST.get("rights_stage") == "apply",
                 )
             except ValidationError as error:
-                rights_form.add_error(None, error)
+                rights_form.add_error(None, ValidationError(error.messages))
             else:
-                messages.success(
-                    request,
-                    f"{len(claims)} rettighetskrav ble registrert som ikke verifisert.",
-                )
-                return redirect(
-                    f"{reverse('gui_v2:release_detail', args=[release.pk])}?tab=rights"
-                )
+                if claims is not None:
+                    messages.success(
+                        request,
+                        f"{len(claims)} rettighetskrav ble registrert som ikke verifisert.",
+                    )
+                    return redirect(
+                        f"{reverse('gui_v2:release_detail', args=[release.pk])}?tab=rights"
+                    )
     elif request.method == "POST" and action == "tracks":
         if not settings.GUI_V2_WRITES_ENABLED:
             raise PermissionDenied(
@@ -2341,6 +2336,7 @@ def release_detail(request, release_id):
             "rights_claims": rights_claims,
             "rights_summary": rights_summary,
             "rights_form": rights_form,
+            "rights_plan": rights_plan,
             "can_manage_rights": can_manage_rights,
             "writes_enabled": settings.GUI_V2_WRITES_ENABLED,
             "return_query": request.GET.urlencode(),

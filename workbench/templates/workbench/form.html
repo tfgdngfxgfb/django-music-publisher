@@ -8,6 +8,7 @@
   {% for field in form %}
     {% include "workbench/_form_field.html" with field=field %}
   {% endfor %}
+  {% include "workbench/rights_registration_preview.html" %}
   <div class="form-actions">
     <button class="button primary" type="submit">{{ submit_label|default:"Lagre" }}</button>
     <a class="button" href="{{ cancel_url }}">Avbryt</a>

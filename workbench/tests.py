@@ -548,9 +548,21 @@ class ReleaseRightsWorkflowTests(WorkbenchTestCase):
     ):
         admin = self.create_user(superuser=True)
         self.login(admin)
+        data = {**self.post_data(), "allow_managed_registration": "on"}
         response = self.client.post(
             reverse("workbench:release_rights_add", args=(self.release.pk,)),
-            self.post_data(),
+            data,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(RightsClaim.objects.exists())
+        self.assertFalse(ManagedRecording.objects.exists())
+        data.update(
+            preview_token=response.context["rights_plan"].token,
+            rights_stage="apply",
+        )
+        response = self.client.post(
+            reverse("workbench:release_rights_add", args=(self.release.pk,)),
+            data,
         )
         self.assertRedirects(
             response,

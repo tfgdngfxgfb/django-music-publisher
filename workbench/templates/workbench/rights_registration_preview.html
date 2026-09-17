@@ -1,0 +1,10 @@
+{% if rights_plan %}
+<section aria-label="Forhåndsvisning av rettighetsregistrering">
+  <h3>Forhåndsvisning — {{ rights_plan.rows|length }} nye, uverifiserte krav</h3>
+  <p>{% if rights_plan.release_scoped %}Juridisk scope: bare denne utgivelsen.{% else %}Juridisk scope: generelt for innspillingen, innen angitt periode og territorium.{% endif %}</p>
+  <p>{{ rights_plan.onboarding_count }} innspillinger krever eksplisitt onboarding til PENDING.</p>
+  <ul>{% for row in rights_plan.rows %}<li>{{ row.recording.title }} — {% if row.managed %}allerede forvaltet ({{ row.status }}){% else %}ikke forvaltet{% endif %}</li>{% endfor %}</ul>
+  {% if rights_plan.blockers %}<ul class="form-errors">{% for error in rights_plan.blockers %}<li>{{ error }}</li>{% endfor %}</ul>
+  {% else %}<p>Kontroller rettighetshaver, type, andel, periode og territorier i skjemaet før bekreftelse. Endrede valg krever ny forhåndsvisning.</p><button class="button primary" type="submit" name="rights_stage" value="apply">Bekreft registrering</button>{% endif %}
+</section>
+{% endif %}

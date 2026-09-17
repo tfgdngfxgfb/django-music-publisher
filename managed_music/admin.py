@@ -1,5 +1,5 @@
 from django.contrib import admin, messages
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import redirect
 from django.template.response import TemplateResponse
 from django.urls import reverse
@@ -8,7 +8,7 @@ from rights_core.admin import CanonicalAdmin
 
 from .forms import ManagedRecordingCreationForm
 from .models import ManagedRecording, ManagedRelease
-from .services import create_managed_recording
+from rights.workflows import onboard_managed_recording
 
 
 @admin.register(ManagedRecording)
@@ -60,7 +60,23 @@ class ManagedRecordingAdmin(CanonicalAdmin):
             raise PermissionDenied
         form = ManagedRecordingCreationForm(request.POST or None)
         if request.method == "POST" and form.is_valid():
-            managed = create_managed_recording(**form.cleaned_data)
+            try:
+                managed = onboard_managed_recording(
+                    user=request.user, **form.cleaned_data
+                )
+            except (ValueError, ValidationError) as error:
+                form.add_error(
+                    None,
+                    (
+                        error
+                        if isinstance(error, ValidationError)
+                        else str(error)
+                    ),
+                )
+                managed = None
+        else:
+            managed = None
+        if managed is not None:
             self.message_user(
                 request,
                 f"«{managed.recording.title}» ble uttrykkelig lagt til i Forvaltet musikk.",

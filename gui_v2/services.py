@@ -76,9 +76,28 @@ def save_release_track_rows(*, release, rows):
         else nullcontext()
     )
     with context:
+        recording_ids = set(
+            release.tracks.values_list("recording_id", flat=True)
+        )
+        recording_ids.update(
+            row.get("recording_id") for row in rows if row.get("recording_id")
+        )
+        locked_ids = {
+            str(recording.pk)
+            for recording in Recording.objects.select_for_update()
+            .filter(pk__in=recording_ids)
+            .order_by("pk")
+        }
         existing = {
             str(item.pk): item for item in release.tracks.select_for_update()
         }
+        if any(
+            str(item.recording_id) not in locked_ids
+            for item in existing.values()
+        ):
+            raise ValidationError(
+                "Sporlisten er endret. Last siden på nytt før lagring."
+            )
         submitted_sequences = [
             row["sequence_number"] for row in rows if not row.get("remove")
         ]
