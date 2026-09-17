@@ -16,7 +16,7 @@ from catalogue.models import Recording, Release, ReleaseTrack
 from managed_music.models import ManagedRecording, ManagedRelease
 from music_library.models import MusicLibraryEntry
 from parties.models import Party
-from provenance.models import SourceRecord, SourceSystem
+from provenance.models import MetadataAssertion, SourceRecord, SourceSystem
 from rights import workflows, services
 from rights.models import (
     RightsClaim,
@@ -627,3 +627,122 @@ class ManagedMusicTests(TestCase):
             ).status_code,
             200,
         )
+
+    def catalogue_source(self, locator, *, recording_target=False):
+        system, _ = SourceSystem.objects.get_or_create(
+            name="Arkivimport", defaults={"kind": SourceSystem.Kind.IMPORT}
+        )
+        source = SourceRecord.objects.create(
+            source_system=system,
+            source_locator=locator,
+            raw_payload={"original": locator},
+        )
+        MetadataAssertion.objects.create(
+            source_record=source,
+            entity_type=(
+                "recording" if recording_target else "music_library_entry"
+            ),
+            entity_uuid=(
+                self.recording.pk
+                if recording_target
+                else self.recording.music_library_entry.pk
+            ),
+            field_name="title" if recording_target else "genre",
+            raw_value="Original verdi",
+        )
+        return source
+
+    def test_onboarding_defaults_reuse_original_source_after_rescan(self):
+        original = self.catalogue_source("Første import")
+        self.catalogue_source("Senere rescan")
+        before = list(
+            SourceRecord.objects.values(
+                "pk", "raw_payload", "revision", "updated_at"
+            )
+        )
+        with CaptureQueriesContext(connection) as captured:
+            response = self.client.get(
+                self.url("onboard"), {"recording": self.recording.pk}
+            )
+        self.assertEqual(
+            response.context["form"]["source_record"].value(), original.pk
+        )
+        self.assertEqual(
+            response.context["form"]["source_system"].value(),
+            original.source_system_id,
+        )
+        self.assertFalse(
+            any(
+                q["sql"]
+                .lstrip()
+                .upper()
+                .startswith(("INSERT", "UPDATE", "DELETE"))
+                for q in captured
+            )
+        )
+        response = self.client.post(
+            self.url("onboard"), self.payload(source_record="")
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(RightsClaim.objects.get().source_record, original)
+        self.assertEqual(
+            ManagedRecording.objects.get().source_system,
+            original.source_system,
+        )
+        self.assertEqual(
+            list(
+                SourceRecord.objects.values(
+                    "pk", "raw_payload", "revision", "updated_at"
+                )
+            ),
+            before,
+        )
+
+    def test_explicit_alternative_source_preserves_original_provenance(self):
+        original = self.catalogue_source("Opprinnelig katalogkilde")
+        alternative = SourceRecord.objects.create(
+            source_system=original.source_system,
+            source_locator="Eksisterende rettighetsdokumentasjon",
+        )
+        response = self.client.post(
+            self.url("onboard"),
+            self.payload(source_record=str(alternative.pk)),
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(RightsClaim.objects.get().source_record, alternative)
+        self.assertEqual(
+            MetadataAssertion.objects.get().source_record, original
+        )
+        self.assertEqual(SourceRecord.objects.count(), 2)
+
+    def test_recording_provenance_fallback_and_no_fabricated_source(self):
+        response = self.client.get(
+            self.url("onboard"), {"recording": self.recording.pk}
+        )
+        self.assertIsNone(response.context["form"].default_source)
+        source = self.catalogue_source(
+            "Recording-kilde", recording_target=True
+        )
+        response = self.client.get(
+            self.url("onboard"), {"recording": self.recording.pk}
+        )
+        self.assertEqual(response.context["form"].default_source, source)
+        self.assertEqual(SourceRecord.objects.count(), 1)
+
+    def test_ownership_default_100_and_explicit_lower_share(self):
+        response = self.client.get(
+            self.url("onboard"), {"recording": self.recording.pk}
+        )
+        self.assertEqual(
+            response.context["form"]["ownership_share"].value(), 100
+        )
+        response = self.client.post(
+            self.url("onboard"),
+            self.payload(
+                relationship_type="master_ownership", ownership_share="37.5"
+            ),
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(str(RightsClaim.objects.get().share), "37.50")
+        self.assertEqual(RightsClaim.objects.get().status, S.UNVERIFIED)
+        self.assertFalse(SourceRecord.objects.exists())

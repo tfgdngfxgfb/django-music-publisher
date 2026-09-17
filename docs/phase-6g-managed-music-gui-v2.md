@@ -100,8 +100,22 @@ Lagring går gjennom **`rights.workflows.onboard_managed_recording()`**.
 Release-scope. Administrasjon/distribusjon bruker ikke andel. Grantor,
 territorier, åpne datogrenser, release_scope og dokumentasjonsfelt beholdes.
 Forvaltningskilde, opprinnelig SourceRecord, Agreement og evidence strength er
-separate. SourceRecord angis valgfritt med eksisterende UUID for å unngå å laste
-hele arkivets provenance som en dropdown.
+separate. Eksisterende provenance gjenbrukes automatisk: den eldste eksplisitt
+tilknyttede SourceRecord velges deterministisk etter created_at/UUID, via
+MusicLibraryEntry-/Recording-assertions, RecordingContribution eller utført
+FLAC-ingest. Nyere rescans erstatter dermed ikke automatisk opprinnelsen.
+SourceSystem forhåndsutfylles fra samme kilde, men er fortsatt et separat valg.
+Brukeren kan overstyre med UUID til en annen eksisterende SourceRecord.
+Tomt kildefelt bruker standarden der en finnes. Ingen ny SourceRecord opprettes,
+og opprinnelige kildeposter, assertions og rådata endres aldri. Manglende kilde
+forblir manglende; katalogprovenance er ikke bevis for bekreftet masterrett.
+UUID-feltet unngår å laste hele arkivets provenance som en dropdown.
+
+Ved mastereierskap forhåndsutfylles lokal andel med 100 %. Brukeren må redusere
+den hvis faktisk andel er lavere. Innsendt andel valideres normalt; ingen
+automatisk bekreftelse følger av standardverdien. Andelsfeltet sendes ikke av
+GUI-et når administrasjon/distribusjon er valgt. Uten JavaScript må en eventuell
+andel tømmes manuelt ved disse typene; backend avviser fortsatt ulovlig andel.
 
 Resultatet forklares før lagring: PENDING-medlemskap og ett lokalt UNVERIFIED
 claim. Verifikasjon skjer separat i 6F. Ingen auto-confirm, auto-ACTIVE eller
@@ -149,13 +163,14 @@ tabellen får lokal scroll. Native lenker, labels, focus og tastatur beholdes.
 
 ## Verifikasjon og fasegrenser
 
-25 nye målrettede GUI-tester dekker membership/default/derived filtre,
+29 nye målrettede GUI-tester dekker membership/default/derived filtre,
 ownership/Release-scope, permissions, read-only GET/player-shell, onboarding
 scope/rollback/katalogvern, legacy-audit og separat return, return blockers,
-historikkbevaring, stale state og batchskalering. Full lokal SQLite-discovery,
+historikkbevaring, stale state, batchskalering, kildegjenbruk/overstyring uten
+provenance-mutasjon og ownership-default med eksplisitt lavere andel. Full lokal SQLite-discovery,
 Black 26.5.1, Django check, migration drift og diff check kjøres før commit.
-Sluttkontroll: full lokal SQLite-discovery kjørte 591 tester, 12 hoppet over
-(discovery rapporterte 599 før prosjektets testutvalg). Alle bestod.
+Sluttkontroll: full lokal SQLite-discovery kjørte 595 tester, 12 hoppet over
+(discovery rapporterte 603 før prosjektets testutvalg). Alle bestod.
 Black 26.5.1 på de seks nye/endrede Python-filene, Django systemcheck,
 `makemigrations --check --dry-run` og `git diff --check` var grønne.
 Browserkontroll med isolerte minnedata bekreftet hovedliste/inspector,

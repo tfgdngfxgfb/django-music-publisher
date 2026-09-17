@@ -2,11 +2,44 @@
 
 from django import forms
 from django.core.exceptions import ValidationError
+from django.db.models import Q
 from catalogue.models import Recording, Release
 from managed_music.forms import ManagedRecordingCreationForm
-from provenance.models import SourceSystem
+from provenance.models import MetadataAssertion, SourceRecord, SourceSystem
 from rights.scope import OwnershipCategory
 from gui_v2.managed_music import STATUS_LABELS
+
+
+def existing_catalogue_source(recording):
+    """Earliest explicitly linked source, never inferred from names or paths.
+
+    A UI default for origin, not evidence that a master right is confirmed.
+    Newer rescans must not silently replace the original source selection.
+    """
+    assertions = MetadataAssertion.objects.filter(
+        Q(
+            entity_type=MetadataAssertion.EntityType.RECORDING,
+            entity_uuid=recording.pk,
+        )
+        | Q(
+            entity_type=MetadataAssertion.EntityType.MUSIC_LIBRARY_ENTRY,
+            entity_uuid=recording.music_library_entry.pk,
+        )
+    )
+    return (
+        SourceRecord.objects.filter(
+            Q(pk__in=assertions.values("source_record_id"))
+            | Q(recording_contributions__recording=recording)
+            | Q(
+                flac_ingest_item__recording=recording,
+                flac_ingest_item__applied_at__isnull=False,
+            )
+        )
+        .select_related("source_system")
+        .distinct()
+        .order_by("created_at", "pk")
+        .first()
+    )
 
 
 class ManagedFilterForm(forms.Form):
@@ -95,6 +128,31 @@ class OnboardingForm(ManagedRecordingCreationForm):
         self.fields["recording"].queryset = Recording.objects.filter(
             pk__in=ids
         )
+        chosen = (
+            self.fields["recording"]
+            .queryset.select_related("music_library_entry")
+            .first()
+        )
+        self.default_source = (
+            existing_catalogue_source(chosen) if chosen else None
+        )
+        if self.default_source:
+            self.initial.setdefault("source_record", self.default_source.pk)
+            self.initial.setdefault(
+                "source_system", self.default_source.source_system_id
+            )
+            if self.is_bound:
+                self.data = self.data.copy()
+                if not self.data.get("source_record", "").strip():
+                    self.data["source_record"] = str(self.default_source.pk)
+                if not self.data.get("source_system", "").strip():
+                    self.data["source_system"] = str(
+                        self.default_source.source_system_id
+                    )
+        self.initial.setdefault("ownership_share", 100)
+        self.fields["ownership_share"].help_text = (
+            "Forhåndsutfylt 100 %. Endre andelen dersom P7 eier mindre. Brukes bare ved mastereierskap."
+        )
         self.fields["release_scope"].queryset = Release.objects.filter(
             tracks__recording_id__in=ids
         ).distinct()
@@ -107,7 +165,7 @@ class OnboardingForm(ManagedRecordingCreationForm):
         # SourceRecord can contain the entire archive: do not render all rows.
         self.fields["source_record"].widget = forms.TextInput()
         self.fields["source_record"].help_text = (
-            "Valgfri UUID til en eksisterende kildepost. Opprinnelig provenance beholdes."
+            "Eksisterende provenance gjenbrukes automatisk når den finnes. Du kan angi UUID til en annen eksisterende kildepost. Originalen bevares."
         )
 
 
