@@ -32,6 +32,7 @@ from django.db.models import (
     When,
 )
 from django.db.models.functions import Coalesce
+from django.utils import timezone
 from django.http import (
     FileResponse,
     Http404,
@@ -56,6 +57,7 @@ from catalogue.models import (
     Release,
     ReleaseTrack,
 )
+from delivery.models import DeliveryArtifact, DeliveryItem, DeliveryProfile
 from flac_ingest.models import FlacIngestItem
 from flac_ingest.services import (
     apply_batch,
@@ -105,6 +107,7 @@ from .recording_overview import (
 )
 from .recording_files import build_recording_files
 from .services import save_release_track_rows
+from workbench.forms import RadioMetadataForm
 
 from media_assets.mastering import (
     activate_candidate,
@@ -213,6 +216,83 @@ def _safe_return(request, default):
     ):
         return value
     return default
+
+
+def _recording_workspace_context(request, recording, header, active_tab):
+    """Use one return context and one set of tabs across Recording GUI v2."""
+    return_url = _safe_return(request, reverse("gui_v2:music_library"))
+    current_url = request.get_full_path()
+    tab_urls = {
+        name: f"{reverse(f'gui_v2:recording_{name}', args=[recording.pk])}?"
+        f"{urlencode({'return': return_url})}"
+        for name in ("files", "releases", "radio", "deliveries")
+    }
+    tab_urls["overview"] = (
+        f"{reverse('gui_v2:recording_detail', args=[recording.pk])}?"
+        f"{urlencode({'return': return_url})}"
+    )
+    workbench_url = reverse("workbench:recording", args=[recording.pk])
+    for name in ("contributors", "rights", "sources"):
+        tab_urls[name] = (
+            f"{workbench_url}?{urlencode({'fane': name, 'return': current_url})}"
+        )
+    return {
+        "section": "music_library",
+        "recording": recording,
+        "header": header,
+        "active_tab": active_tab,
+        "tab_urls": tab_urls,
+        "return_url": return_url,
+        "return_label": (
+            "Tilbake til Musikkarkiv"
+            if "/musikkarkiv/" in return_url
+            else (
+                "Tilbake til utgivelsen"
+                if "/utgivelser/" in return_url
+                else "Tilbake"
+            )
+        ),
+    }
+
+
+def _recording_header_recording(recording_id):
+    contributions = RecordingContribution.objects.select_related(
+        "party", "artist_identity"
+    ).order_by("display_order", "id")
+    return get_object_or_404(
+        Recording.objects.prefetch_related(
+            Prefetch("contributions", queryset=contributions), "identifiers"
+        ),
+        pk=recording_id,
+    )
+
+
+def _recording_header_data(request, recording, tracks=None):
+    isrc = next(
+        (
+            identifier.normalized_value
+            for identifier in recording.identifiers.all()
+            if identifier.scheme == ExternalIdentifier.Scheme.ISRC
+        ),
+        "",
+    )
+    cover = None
+    if request.user.is_staff and request.user.has_perms(
+        ("media_assets.view_fileasset", "music_library.view_musiclibraryentry")
+    ):
+        if tracks is None:
+            tracks = list(
+                recording_release_tracks_with_covers_queryset().filter(
+                    recording_id=recording.pk
+                )
+            )
+        cover = select_recording_cover(tracks)
+    return {
+        "artist_text": _artist_text(recording),
+        "isrc": isrc,
+        "duration": _duration(recording.duration_ms),
+        "cover": cover,
+    }
 
 
 def _entry_url(request, entry_id):
@@ -954,7 +1034,6 @@ def recording_detail(request, recording_id):
         recording_overview_queryset(), pk=recording_id
     )
     remember_object(request, "recording", recording.pk)
-    return_url = _safe_return(request, reverse("gui_v2:music_library"))
     current_url = request.get_full_path()
     can_view_releases = request.user.has_perm("catalogue.view_release")
     can_view_files = request.user.has_perms(
@@ -973,46 +1052,20 @@ def recording_detail(request, recording_id):
     overview["playback"] = _playback_context(recording, request.user)
     if overview["cover"] and not can_serve_cover:
         overview["cover"] = None
+    workspace = _recording_workspace_context(
+        request, recording, overview, "overview"
+    )
     for track in overview["releases"]:
         track.gui_v2_url = (
             f"{reverse('gui_v2:release_detail', args=[track.release_id])}?"
             f"{urlencode({'tab': 'tracks', 'track': track.pk, 'return': current_url})}"
         )
-    workbench_url = reverse("workbench:recording", args=[recording.pk])
-    tab_urls = {
-        name: f"{workbench_url}?{urlencode({'fane': name, 'return': current_url})}"
-        for name in (
-            "radio",
-            "releases",
-            "contributors",
-            "files",
-            "rights",
-            "sources",
-        )
-    }
-    tab_urls["files"] = (
-        f"{reverse('gui_v2:recording_files', args=[recording.pk])}?"
-        f"{urlencode({'return': return_url})}"
-    )
-    return_label = (
-        "Tilbake til Musikkarkiv"
-        if "/musikkarkiv/" in return_url
-        else (
-            "Tilbake til utgivelsen"
-            if "/utgivelser/" in return_url
-            else "Tilbake"
-        )
-    )
     return render(
         request,
         "gui_v2/recording_detail.html",
         {
-            "section": "music_library",
-            "recording": recording,
+            **workspace,
             "overview": overview,
-            "return_url": return_url,
-            "return_label": return_label,
-            "tab_urls": tab_urls,
             "can_view_files": can_view_files,
             "can_view_releases": can_view_releases,
         },
@@ -1034,52 +1087,211 @@ def recording_files(request, recording_id):
     recording = get_object_or_404(
         recording_overview_queryset(), pk=recording_id
     )
-    return_url = _safe_return(request, reverse("gui_v2:music_library"))
-    current_url = request.get_full_path()
     overview = build_recording_overview(
         recording,
         can_view_files=True,
         can_view_releases=request.user.has_perm("catalogue.view_release"),
     )
     overview["playback"] = _playback_context(recording, request.user)
+    if overview["cover"] and not (
+        request.user.is_staff
+        and request.user.has_perm("music_library.view_musiclibraryentry")
+    ):
+        overview["cover"] = None
     file_view = build_recording_files(
         recording, selected_asset_id=request.GET.get("selected_file")
     )
-    workbench_url = reverse("workbench:recording", args=[recording.pk])
-    tab_urls = {
-        name: f"{workbench_url}?{urlencode({'fane': name, 'return': current_url})}"
-        for name in ("radio", "releases", "contributors", "rights", "sources")
-    }
-    tab_urls["overview"] = (
-        f"{reverse('gui_v2:recording_detail', args=[recording.pk])}?"
-        f"{urlencode({'return': return_url})}"
-    )
-    tab_urls["files"] = current_url
-    return_label = (
-        "Tilbake til Musikkarkiv"
-        if "/musikkarkiv/" in return_url
-        else (
-            "Tilbake til utgivelsen"
-            if "/utgivelser/" in return_url
-            else "Tilbake"
-        )
-    )
+    workspace = _recording_workspace_context(request, recording, overview, "files")
     return render(
         request,
         "gui_v2/recording_files.html",
         {
-            "section": "music_library",
-            "recording": recording,
+            **workspace,
             "overview": overview,
             "file_view": file_view,
-            "return_url": return_url,
-            "return_label": return_label,
-            "tab_urls": tab_urls,
             "writes_enabled": settings.GUI_V2_WRITES_ENABLED,
             "can_select_master": settings.GUI_V2_WRITES_ENABLED
             and request.user.has_perms(MASTER_CHANGE_PERMISSIONS),
         },
     )
+
+
+@require_GET
+@login_required
+@permission_required(
+    ("catalogue.view_recording", "catalogue.view_release"),
+    raise_exception=True,
+)
+def recording_releases(request, recording_id):
+    recording = _recording_header_recording(recording_id)
+    remember_object(request, "recording", recording.pk)
+    tracks = list(
+        recording_release_tracks_with_covers_queryset()
+        .filter(recording_id=recording.pk)
+        .select_related("release__managed_release")
+        .annotate(release_track_count=Count("release__tracks", distinct=True))
+    )
+    can_view_management = request.user.has_perm("managed_music.view_managedrelease")
+    for track in tracks:
+        position = []
+        if track.disc_number:
+            position.append(f"Disc {track.disc_number}")
+        if track.side:
+            position.append(f"Side {track.side}")
+        position.append(f"Spor {track.track_number or track.sequence_number}")
+        track.position_text = " · ".join(position)
+        track.duration_text = _duration(track.duration_ms)
+        track.release_url = (
+            f"{reverse('gui_v2:release_detail', args=[track.release_id])}?"
+            f"{urlencode({'tab': 'tracks', 'track': track.pk, 'return': request.get_full_path()})}"
+        )
+        try:
+            track.management = (
+                track.release.managed_release if can_view_management else None
+            )
+        except ManagedRelease.DoesNotExist:
+            track.management = None
+    selected = next(
+        (track for track in tracks if str(track.pk) == request.GET.get("track")),
+        tracks[0] if tracks else None,
+    )
+    context = _recording_workspace_context(
+        request,
+        recording,
+        _recording_header_data(request, recording, tracks),
+        "releases",
+    )
+    context.update(
+        {
+            "tracks": tracks,
+            "selected_track": selected,
+            "can_view_management": can_view_management,
+        }
+    )
+    return render(request, "gui_v2/recording_releases.html", context)
+
+
+@login_required
+@permission_required(
+    ("catalogue.view_recording", "music_library.view_musiclibraryentry"),
+    raise_exception=True,
+)
+@require_http_methods(["GET", "POST"])
+def recording_radio(request, recording_id):
+    recording = _recording_header_recording(recording_id)
+    remember_object(request, "recording", recording.pk)
+    entry = (
+        MusicLibraryEntry.objects.filter(recording_id=recording.pk)
+        .prefetch_related("channels", "target_audiences")
+        .first()
+    )
+    can_edit = settings.GUI_V2_WRITES_ENABLED and request.user.has_perm(
+        "music_library.change_musiclibraryentry"
+    )
+    if request.method == "POST" and not can_edit:
+        raise PermissionDenied
+    if request.method == "POST" and entry is None:
+        raise Http404("Innspillingen har ingen musikkarkivpost.")
+    context = _recording_workspace_context(
+        request, recording, _recording_header_data(request, recording), "radio"
+    )
+    form = RadioMetadataForm(request.POST or None, instance=entry) if entry else None
+    if request.method == "POST" and form.is_valid():
+        with transaction.atomic():
+            form.save()
+        messages.success(request, "Radiometadata ble lagret.")
+        return redirect(context["tab_urls"]["radio"])
+    playback = _playback_context(recording, request.user)
+    resolution = resolve_current_radio_asset(recording)
+    context.update(
+        {
+            "entry": entry,
+            "form": form,
+            "can_edit_radio": can_edit,
+            "playback": playback,
+            "radio_asset": (
+                resolution.asset
+                if request.user.has_perms(PLAYBACK_PERMISSIONS)
+                else None
+            ),
+            "channels": list(entry.channels.all()) if entry else [],
+            "target_audiences": list(entry.target_audiences.all()) if entry else [],
+            "radio_language": radio_language_name(entry.language) if entry else "",
+        }
+    )
+    return render(request, "gui_v2/recording_radio.html", context)
+
+
+@require_GET
+@login_required
+@permission_required(
+    ("catalogue.view_recording", "delivery.view_delivery"),
+    raise_exception=True,
+)
+def recording_deliveries(request, recording_id):
+    recording = _recording_header_recording(recording_id)
+    remember_object(request, "recording", recording.pk)
+    items = list(
+        DeliveryItem.objects.filter(recording_id=recording.pk)
+        .select_related("delivery__created_by", "source_file_asset")
+        .order_by("-delivery__created_at", "-created_at")
+    )
+    selected = next(
+        (item for item in items if str(item.delivery_id) == request.GET.get("delivery")),
+        items[0] if items else None,
+    )
+    artifact = None
+    active_artifact = None
+    download_events = []
+    can_download = False
+    if selected:
+        artifact = (
+            DeliveryArtifact.objects.filter(delivery=selected.delivery)
+            .order_by("-created_at", "-id")
+            .first()
+        )
+        active_artifact = (
+            DeliveryArtifact.objects.filter(
+                delivery=selected.delivery, removed_at__isnull=True
+            )
+            .order_by("-created_at", "-id")
+            .first()
+        )
+        download_events = list(
+            selected.delivery.download_events.select_related("actor").order_by(
+                "-created_at"
+            )
+        )
+        ready_artifact = (
+            active_artifact and active_artifact.expires_at > timezone.now()
+        )
+        direct_internal = (
+            selected.delivery.profile == DeliveryProfile.INTERNAL_COMPLETE
+            and selected.status == DeliveryItem.Status.READY
+            and active_artifact is None
+            and selected.delivery.items.filter(status=DeliveryItem.Status.READY).count()
+            == 1
+        )
+        can_download = (
+            request.user.has_perm("delivery.download_delivery")
+            and selected.delivery.status
+            not in {selected.delivery.Status.FAILED, selected.delivery.Status.EXPIRED}
+            and bool(ready_artifact or direct_internal)
+        )
+    context = _recording_workspace_context(
+        request, recording, _recording_header_data(request, recording), "deliveries"
+    )
+    context.update(
+        {
+            "items": items,
+            "selected_item": selected,
+            "artifact": artifact,
+            "now": timezone.now(),
+            "download_events": download_events,
+            "can_download": can_download,
+        }
+    )
+    return render(request, "gui_v2/recording_deliveries.html", context)
 
 
 MASTER_VIEW_PERMISSIONS = (

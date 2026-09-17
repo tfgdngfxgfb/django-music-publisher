@@ -2,28 +2,7 @@
 {% block title %}{{ recording.title }}{% endblock %}
 {% block content %}
 <div class="recording-page">
-  <header class="recording-object-header">
-    <a class="recording-back" href="{{ return_url }}">← {{ return_label }}</a>
-    <div class="recording-heading">
-      <span class="eyebrow">Innspilling</span>
-      <h1>{{ recording.title }}</h1>
-      <p>{{ overview.artist_text }}</p>
-      <div class="recording-head-facts">
-        {% if overview.isrc %}<span>ISRC {{ overview.isrc }}</span>{% endif %}
-        {% if overview.duration %}<span>{{ overview.duration }}</span>{% endif %}
-        {% if recording.version_designation %}<span>{{ recording.version_designation }}</span>{% endif %}
-      </div>
-    </div>
-    <nav class="recording-tabs" aria-label="Innspillingens arbeidsområder">
-      <a aria-current="page" href="{% url 'gui_v2:recording_detail' recording.pk %}?return={{ return_url|urlencode }}">Oversikt</a>
-      <a href="{{ tab_urls.radio }}">Radio</a>
-      <a href="{{ tab_urls.releases }}">Utgivelser</a>
-      <a href="{{ tab_urls.contributors }}">Medvirkende og opphavere</a>
-      <a href="{{ tab_urls.files }}">Filer</a>
-      {% if perms.rights.view_rightsclaim %}<a href="{{ tab_urls.rights }}">Rettigheter</a>{% endif %}
-      {% if perms.provenance.view_metadataassertion %}<a href="{{ tab_urls.sources }}">Kilder og historikk</a>{% endif %}
-    </nav>
-  </header>
+  {% include "gui_v2/includes/recording_header.html" %}
 
   <div class="recording-overview-grid">
     <aside class="recording-identity" aria-label="Innspillingsidentitet">

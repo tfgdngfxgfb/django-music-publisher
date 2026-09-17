@@ -1,0 +1,26 @@
+<header class="recording-object-header">
+  <a class="recording-back" href="{{ return_url }}">← {{ return_label }}</a>
+  <div class="recording-heading">
+    <span class="eyebrow">Innspilling</span>
+    <div class="recording-heading-identity">
+      {% if header.cover %}<img class="recording-heading-cover" src="{% url 'workbench:cover_image' header.cover.asset.pk %}?size=128" alt="Omslag fra {{ header.cover.release.title }}">{% endif %}
+      <div><h1>{{ recording.title }}</h1><p>{{ header.artist_text }}</p></div>
+    </div>
+    <div class="recording-head-facts">
+      {% if header.isrc %}<span>ISRC {{ header.isrc }}</span>{% endif %}
+      <span>UUID {{ recording.pk }}</span>
+      {% if header.duration %}<span>{{ header.duration }}</span>{% endif %}
+      {% if recording.version_designation %}<span>{{ recording.version_designation }}</span>{% endif %}
+    </div>
+  </div>
+  <nav class="recording-tabs" aria-label="Innspillingens arbeidsområder">
+    <a {% if active_tab == 'overview' %}aria-current="page"{% endif %} href="{{ tab_urls.overview }}">Oversikt</a>
+    {% if perms.catalogue.view_release %}<a {% if active_tab == 'releases' %}aria-current="page"{% endif %} href="{{ tab_urls.releases }}">Utgivelser</a>{% endif %}
+    {% if perms.media_assets.view_fileasset and perms.media_assets.view_filelocation %}<a {% if active_tab == 'files' %}aria-current="page"{% endif %} href="{{ tab_urls.files }}">Filer</a>{% endif %}
+    {% if perms.music_library.view_musiclibraryentry %}<a {% if active_tab == 'radio' %}aria-current="page"{% endif %} href="{{ tab_urls.radio }}">Radio</a>{% endif %}
+    {% if perms.delivery.view_delivery %}<a {% if active_tab == 'deliveries' %}aria-current="page"{% endif %} href="{{ tab_urls.deliveries }}">Leveranser</a>{% endif %}
+    <a href="{{ tab_urls.contributors }}">Medvirkende og opphavere</a>
+    {% if perms.rights.view_rightsclaim %}<a href="{{ tab_urls.rights }}">Rettigheter</a>{% endif %}
+    {% if perms.provenance.view_metadataassertion %}<a href="{{ tab_urls.sources }}">Kilder og historikk</a>{% endif %}
+  </nav>
+</header>

@@ -1,0 +1,25 @@
+{% extends "gui_v2/base.html" %}
+{% block title %}Leveranser · {{ recording.title }}{% endblock %}
+{% block content %}
+<div class="recording-page recording-workspace-page">
+  {% include "gui_v2/includes/recording_header.html" %}
+  <div class="recording-workspace-layout">
+    <section class="recording-card recording-workspace-main">
+      <header class="recording-workspace-heading"><div><span class="eyebrow">Leveranser</span><h2>Leveringshistorikk</h2><p>{{ items|length }} leveranse{{ items|length|pluralize:"r" }} inneholder denne innspillingen. Historikken viser filversjonen som var kilde ved levering.</p></div>{% if perms.delivery.create_delivery %}<a class="button primary" href="{% url 'delivery:create' %}?recording={{ recording.pk }}">Ny leveranse</a>{% endif %}</header>
+      {% if items %}<div class="recording-workspace-table-wrap"><table class="recording-workspace-table"><thead><tr><th>Dato</th><th>Mottaker</th><th>Formål</th><th>Profil</th><th>Status</th><th>Kildefil ved levering</th></tr></thead><tbody>
+      {% for item in items %}<tr{% if selected_item.pk == item.pk %} class="selected"{% endif %}><td><a href="{{ tab_urls.deliveries }}&amp;delivery={{ item.delivery_id }}"{% if selected_item.pk == item.pk %} aria-current="true"{% endif %}>{{ item.delivery.created_at|date:"d.m.Y H:i" }}</a></td><td>{{ item.delivery.recipient_name }}{% if item.delivery.recipient_organization %}<small>{{ item.delivery.recipient_organization }}</small>{% endif %}</td><td>{{ item.delivery.get_purpose_display }}</td><td>{{ item.delivery.get_profile_display }}</td><td>{{ item.delivery.get_status_display }} · {{ item.get_status_display }}</td><td>{% if item.source_asset_uuid_snapshot %}<code>{{ item.source_asset_uuid_snapshot }}</code>{% else %}Ingen kildefil fryst{% endif %}</td></tr>{% endfor %}
+      </tbody></table></div>{% else %}<p class="recording-workspace-empty">Denne innspillingen har ingen registrerte leveranser.</p>{% endif %}
+    </section>
+    <aside class="recording-card recording-workspace-inspector" aria-label="Valgt leveranse">
+      {% if selected_item %}<span class="eyebrow">Valgt leveranse</span><h2>{{ selected_item.delivery.recipient_name }}</h2><p>{{ selected_item.delivery.created_at|date:"d.m.Y H:i" }} · {{ selected_item.delivery.get_status_display }}</p>
+      <dl class="detail-grid"><dt>Organisasjon</dt><dd>{{ selected_item.delivery.recipient_organization|default:"—" }}</dd><dt>Formål</dt><dd>{{ selected_item.delivery.get_purpose_display }}{% if selected_item.delivery.purpose_description %}<small>{{ selected_item.delivery.purpose_description }}</small>{% endif %}</dd><dt>Profil</dt><dd>{{ selected_item.delivery.get_profile_display }}</dd><dt>Opprettet av</dt><dd>{{ selected_item.delivery.created_by }}</dd><dt>Elementstatus</dt><dd>{{ selected_item.get_status_display }}{% if selected_item.message %}<small>{{ selected_item.message }}</small>{% endif %}</dd><dt>Kilde-ID ved levering</dt><dd><code>{{ selected_item.source_asset_uuid_snapshot|default:"—" }}</code></dd><dt>Kilde-SHA-256 ved levering</dt><dd><code>{{ selected_item.source_sha256_snapshot|default:"—" }}</code></dd><dt>Leveringsnavn</dt><dd>{{ selected_item.output_filename|default:"—" }}</dd></dl>
+      {% if selected_item.source_file_asset %}<p class="recording-workspace-note">Filnavn i dagens katalog: {{ selected_item.source_file_asset.filename }}. Historisk kilde-ID og kontrollsum står over.</p>{% endif %}
+      {% if artifact %}<p class="recording-workspace-note">Artefakt: {{ artifact.filename }} · {% if artifact.removed_at %}fjernet{% elif artifact.expires_at <= now %}utløpt{% else %}registrert{% endif %}. Leveringshistorikken beholdes.</p>{% endif %}
+      <div class="recording-workspace-actions"><a class="button full" href="{% url 'delivery:detail' selected_item.delivery_id %}">Åpne leveringsdetaljer</a>{% if can_download %}<a class="button primary full" href="{% url 'delivery:download' selected_item.delivery_id %}">Last ned</a>{% endif %}</div>
+      {% if download_events %}<h3>Nedlastingshendelser</h3><ul class="recording-workspace-events">{% for event in download_events %}<li>{{ event.created_at|date:"d.m.Y H:i" }} · {{ event.get_event_type_display }} · {{ event.actor }}</li>{% endfor %}</ul>{% endif %}
+      <p class="recording-workspace-note">En leveranse dokumenterer overlevering av en konkret fil. Den er ikke i seg selv rettighetsklarering eller bevis for at mottakeren har hentet filen.</p>
+      {% else %}<h2>Ingen leveranse valgt</h2><p>Historikken blir synlig her når innspillingen inngår i en Delivery.</p>{% endif %}
+    </aside>
+  </div>
+</div>
+{% endblock %}

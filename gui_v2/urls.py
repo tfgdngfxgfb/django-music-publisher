@@ -29,6 +29,21 @@ urlpatterns = [
         name="recording_files",
     ),
     path(
+        "innspillinger/<uuid:recording_id>/utgivelser/",
+        views.recording_releases,
+        name="recording_releases",
+    ),
+    path(
+        "innspillinger/<uuid:recording_id>/radio/",
+        views.recording_radio,
+        name="recording_radio",
+    ),
+    path(
+        "innspillinger/<uuid:recording_id>/leveranser/",
+        views.recording_deliveries,
+        name="recording_deliveries",
+    ),
+    path(
         "innspillinger/<uuid:recording_id>/filer/master/registrer/",
         views.recording_master_register,
         name="recording_master_register",
@@ -79,10 +94,6 @@ urlpatterns = [
         views.release_detail,
         name="release_detail",
     ),
-    path(
-        "api/innspillinger/", views.recording_search, name="recording_search"
-    ),
-    path(
-        "utgivelse-spor/", views.legacy_release_tracks, name="release_tracks"
-    ),
+    path("api/innspillinger/", views.recording_search, name="recording_search"),
+    path("utgivelse-spor/", views.legacy_release_tracks, name="release_tracks"),
 ]

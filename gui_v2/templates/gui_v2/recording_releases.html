@@ -1,0 +1,23 @@
+{% extends "gui_v2/base.html" %}
+{% block title %}Utgivelser · {{ recording.title }}{% endblock %}
+{% block content %}
+<div class="recording-page recording-workspace-page">
+  {% include "gui_v2/includes/recording_header.html" %}
+  <div class="recording-workspace-layout">
+    <section class="recording-card recording-workspace-main">
+      <header><div><span class="eyebrow">Utgivelser</span><h2>Hvor finnes denne innspillingen?</h2><p>{{ tracks|length }} utgivelsesforekomst{{ tracks|length|pluralize:"er" }}. Plasseringen gjelder utgivelsen, ikke Recording-identiteten.</p></div></header>
+      {% if tracks %}<div class="recording-workspace-table-wrap"><table class="recording-workspace-table"><thead><tr><th>Utgivelse</th><th>Label</th><th>År/dato</th><th>Plassering</th><th>Type</th><th>Forvaltning</th></tr></thead><tbody>
+        {% for track in tracks %}<tr{% if selected_track.pk == track.pk %} class="selected"{% endif %}><td><a href="{{ tab_urls.releases }}&amp;track={{ track.pk }}" {% if selected_track.pk == track.pk %}aria-current="true"{% endif %}>{% if track.cover_asset %}<img class="recording-workspace-thumb" src="{% url 'workbench:cover_image' track.cover_asset.pk %}?size=64" alt="">{% endif %}<span><strong>{{ track.release.title }}</strong>{% if track.title_override %}<small>På utgivelsen: {{ track.title_override }}</small>{% endif %}</span></a></td><td>{{ track.release.label.name|default:"—" }}</td><td>{{ track.release.release_date|date:"d.m.Y"|default:track.release.release_year|default:"—" }}</td><td>{{ track.position_text }}</td><td>{{ track.release.get_release_type_display|default:"—" }}</td><td>{% if can_view_management %}{% if track.management %}Forvaltet utgivelse · {{ track.management.get_status_display }}{% else %}Ikke registrert{% endif %}{% else %}—{% endif %}</td></tr>{% endfor %}
+      </tbody></table></div>{% else %}<p class="recording-workspace-empty">Ingen utgivelser er koblet til denne innspillingen. Innspillingen er fortsatt et gyldig katalogobjekt.</p>{% endif %}
+    </section>
+    <aside class="recording-card recording-workspace-inspector" aria-label="Valgt utgivelse">
+      {% if selected_track %}<span class="eyebrow">Valgt utgivelse</span><h2>{{ selected_track.release.title }}</h2>
+      {% if selected_track.cover_asset %}<img class="recording-workspace-cover" src="{% url 'workbench:cover_image' selected_track.cover_asset.pk %}?size=256" alt="Omslag fra {{ selected_track.release.title }}">{% endif %}
+      <dl class="detail-grid"><dt>Label</dt><dd>{{ selected_track.release.label.name|default:"—" }}</dd><dt>Katalognummer</dt><dd>{{ selected_track.release.catalogue_number|default:"—" }}</dd><dt>Dato/år</dt><dd>{{ selected_track.release.release_date|date:"d.m.Y"|default:selected_track.release.release_year|default:"—" }}</dd><dt>Type</dt><dd>{{ selected_track.release.get_release_type_display|default:"—" }}</dd><dt>Plassering</dt><dd>{{ selected_track.position_text }}</dd><dt>Tittel på utgivelsen</dt><dd>{{ selected_track.title_override|default:recording.title }}</dd><dt>Utgivelsesspesifikk varighet</dt><dd>{{ selected_track.duration_text|default:"Ikke registrert" }}</dd><dt>Spor på utgivelsen</dt><dd>{{ selected_track.release_track_count }}</dd>{% if selected_track.management %}<dt>Forvaltning</dt><dd>{{ selected_track.management.get_status_display }} · {{ selected_track.management.get_relationship_display }}</dd>{% endif %}</dl>
+      {% if selected_track.management %}<p class="recording-workspace-note">Forvaltet utgivelse sier ikke hvem som eier eller forvalter masteren til denne innspillingen.</p>{% endif %}
+      <a class="button primary full" href="{{ selected_track.release_url }}">Åpne utgivelse</a>
+      {% else %}<h2>Ingen utgivelse valgt</h2><p>Ingen ReleaseTrack er koblet til denne Recording-en.</p>{% endif %}
+    </aside>
+  </div>
+</div>
+{% endblock %}

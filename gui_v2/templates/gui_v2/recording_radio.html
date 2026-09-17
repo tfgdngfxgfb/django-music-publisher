@@ -1,0 +1,37 @@
+{% extends "gui_v2/base.html" %}
+{% block title %}Radio · {{ recording.title }}{% endblock %}
+{% block content %}
+<div class="recording-page recording-workspace-page">
+  {% include "gui_v2/includes/recording_header.html" %}
+  <div class="recording-workspace-layout">
+    <div class="recording-workspace-main">
+      <section class="recording-card recording-workspace-section">
+        <span class="eyebrow">Radio</span><h2>Radioprofil for innspillingen</h2>
+        <p>Redaksjonelle data fra Musikkarkivet. Mastervalg, kandidat og gjeldende fil håndteres på Filer.</p>
+        {% if entry %}<div class="recording-radio-summary">
+          <div><small>Radiosjanger</small><strong>{{ entry.genre|default:"Ikke registrert" }}</strong></div>
+          <div><small>Språk</small><strong>{{ radio_language|default:"Ikke registrert" }}</strong></div>
+          <div><small>Energy</small><strong>{% if entry.energy %}{{ entry.energy }} av 5{% else %}Ikke registrert{% endif %}</strong></div>
+          <div><small>Vokalklassifisering</small><strong>{{ entry.get_gender_display|default:"Ikke registrert" }}</strong></div>
+          <div><small>Rotasjonsvurdering</small><strong>{{ entry.get_rotation_suitability_display|default:"Ikke vurdert" }}</strong></div>
+          <div><small>Verifikasjon</small><strong>{{ entry.get_verification_status_display }}</strong></div>
+        </div>{% else %}<p class="recording-workspace-empty">Denne innspillingen har ingen post i Musikkarkivet. Radiometadata er derfor ikke registrert.</p>{% endif %}
+      </section>
+      {% if entry %}<section class="recording-card recording-workspace-section">
+        <h2>Registrerte radiodata</h2>
+        <dl class="detail-grid"><dt>Kanaler</dt><dd>{% for channel in channels %}<span class="recording-workspace-chip">{{ channel.name }}</span>{% empty %}Ingen registrert{% endfor %}</dd><dt>Målgrupper</dt><dd>{% for audience in target_audiences %}<span class="recording-workspace-chip">{{ audience.name }}</span>{% empty %}Ingen registrert{% endfor %}</dd><dt>Merknader</dt><dd>{{ entry.notes|linebreaksbr|default:"Ingen merknader" }}</dd></dl>
+      </section>
+      {% if can_edit_radio %}<section class="recording-card recording-workspace-section"><details class="recording-radio-editor"{% if form.errors %} open{% endif %}><summary>Rediger radiodata</summary><form method="post" action="{{ tab_urls.radio }}">{% csrf_token %}{{ form.non_field_errors }}<div class="recording-radio-fields">{% for field in form %}<div><label for="{{ field.id_for_label }}"><strong>{{ field.label }}</strong></label>{{ field }}{% if field.errors %}<span class="recording-form-error">{{ field.errors }}</span>{% endif %}</div>{% endfor %}</div><button class="button primary" type="submit">Lagre radiodata</button></form></details></section>{% endif %}
+      {% endif %}
+    </div>
+    <aside class="recording-card recording-workspace-inspector" aria-label="Radiofil og snarveier">
+      <span class="eyebrow">Gjeldende radiofil</span><h2>{% if radio_asset %}{{ radio_asset.filename }}{% else %}Ingen entydig radiofil{% endif %}</h2>
+      <p>{{ playback.message }}</p>
+      {% if radio_asset %}<dl class="detail-grid"><dt>Format</dt><dd>{{ radio_asset.mime_type|default:"Ukjent" }}</dd><dt>Samplingsfrekvens</dt><dd>{{ radio_asset.technical_metadata.sample_rate|default:"—" }} Hz</dd><dt>Bitdybde</dt><dd>{{ radio_asset.technical_metadata.bits_per_sample|default:"—" }} bit</dd></dl>{% endif %}
+      {% if playback.url %}<button class="playback-button recording-workspace-play" type="button" data-player-primary data-play-recording data-play-url="{{ playback.url }}" data-play-recording-id="{{ playback.recording_id }}" data-play-title="{{ playback.title }}" data-play-artist="{{ playback.artist }}"{% if header.cover %} data-play-cover-url="{% url 'workbench:cover_image' header.cover.asset.pk %}?size=128" data-play-cover-alt="Omslag fra {{ header.cover.release.title }}"{% endif %}>▶ Spill gjeldende radiofil</button>{% endif %}
+      {% if perms.media_assets.view_fileasset and perms.media_assets.view_filelocation %}<a class="button full" href="{{ tab_urls.files }}">Gå til Filer</a>{% endif %}
+      <p class="recording-workspace-note">Filstatus og masterarbeid vises på Filer. Radioklassifisering er ikke en rettighetsvurdering.</p>
+    </aside>
+  </div>
+</div>
+{% endblock %}

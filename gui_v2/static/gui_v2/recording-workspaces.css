@@ -1,0 +1,44 @@
+.recording-heading-identity{display:flex;align-items:center;gap:10px;min-width:0}
+.recording-heading-identity h1{margin:1px 0 0}
+.recording-heading-identity p{margin:2px 0;color:var(--muted);font-size:14px}
+.recording-heading-cover{width:46px;height:46px;flex:none;object-fit:cover;border-radius:5px;border:1px solid var(--line2)}
+.recording-workspace-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,340px);gap:12px;max-width:1600px;margin:0 auto;padding:14px}
+.recording-workspace-main{min-width:0;align-self:start}
+.recording-workspace-main>header,.recording-workspace-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px;border-bottom:1px solid var(--line)}
+.recording-workspace-main h2,.recording-workspace-section h2,.recording-workspace-inspector h2{margin:3px 0 5px;font-size:17px}
+.recording-workspace-main p,.recording-workspace-inspector p{margin:4px 0;color:var(--muted)}
+.recording-workspace-table-wrap{overflow-x:auto}
+.recording-workspace-table{width:100%;border-collapse:collapse;text-align:left}
+.recording-workspace-table th,.recording-workspace-table td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+.recording-workspace-table th{color:var(--muted);font-size:10px;white-space:nowrap}
+.recording-workspace-table tr.selected{background:color-mix(in srgb,var(--accent) 11%,transparent)}
+.recording-workspace-table td a{display:flex;align-items:center;gap:8px;color:var(--text);text-decoration:none}
+.recording-workspace-table td a:hover,.recording-workspace-table td a:focus-visible{color:var(--accent);text-decoration:underline}
+.recording-workspace-table td small,.recording-workspace-inspector dd small{display:block;color:var(--muted)}
+.recording-workspace-table code,.recording-workspace-inspector code{overflow-wrap:anywhere}
+.recording-workspace-thumb{width:34px;height:34px;object-fit:cover;border-radius:4px}
+.recording-workspace-cover{display:block;width:min(180px,100%);max-height:180px;object-fit:cover;border-radius:6px;margin:10px 0}
+.recording-workspace-inspector{align-self:start;position:sticky;top:calc(var(--head) + var(--strip) + 12px);padding:16px;max-height:calc(100vh - var(--head) - var(--strip) - var(--player) - 24px);overflow:auto}
+.recording-workspace-inspector .detail-grid{grid-template-columns:110px minmax(0,1fr);margin:14px 0}
+.recording-workspace-inspector .button{margin-top:10px}
+.recording-workspace-empty{padding:20px!important}
+.recording-workspace-note{padding:10px;border-left:2px solid var(--accent);background:var(--surface2);font-size:11px}
+.recording-workspace-section{padding:16px;margin-bottom:12px}
+.recording-workspace-section>p{margin:5px 0 14px}
+.recording-radio-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.recording-radio-summary>div{display:grid;gap:5px;padding:12px;background:var(--surface2);border:1px solid var(--line);border-radius:6px}
+.recording-radio-summary small{color:var(--muted)}
+.recording-radio-summary strong{font-size:14px}
+.recording-workspace-chip{display:inline-block;padding:4px 8px;margin:0 5px 5px 0;border-radius:12px;background:var(--surface3);border:1px solid var(--line2)}
+.recording-radio-editor summary{cursor:pointer;color:var(--accent)}
+.recording-radio-editor form{margin-top:12px}
+.recording-radio-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:14px}
+.recording-radio-fields>div{display:grid;gap:5px}
+.recording-radio-fields input:not([type=checkbox]),.recording-radio-fields select,.recording-radio-fields textarea{width:100%;max-width:100%;box-sizing:border-box}
+.recording-radio-fields .radio-choice-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px}
+.recording-form-error{color:var(--danger)}
+.recording-workspace-play{width:100%;margin:12px 0}
+.recording-workspace-events{padding-left:20px;color:var(--muted)}
+.recording-workspace-events li{margin:5px 0}
+@media(max-width:980px){.recording-workspace-layout{grid-template-columns:1fr}.recording-workspace-inspector{position:static;max-height:none}.recording-radio-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:620px){.recording-radio-summary,.recording-radio-fields{grid-template-columns:1fr}.recording-workspace-heading{align-items:flex-start;flex-direction:column}.recording-workspace-layout{padding:8px}}
