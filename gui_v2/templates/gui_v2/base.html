@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="{% static 'gui_v2/light-theme.css' %}">
   <link rel="stylesheet" href="{% static 'gui_v2/managed-music.css' %}">
   <link rel="stylesheet" href="{% static 'gui_v2/release-rights.css' %}">
+  <link rel="stylesheet" href="{% static 'gui_v2/followup.css' %}">
 </head>
 <body class="{% block body_class %}{% endblock %}" data-p7-shell="gui-v2">
   <a class="skip-link" href="#v2-main">Hopp til innhold</a>
@@ -23,6 +24,7 @@
       {% if perms.delivery.view_delivery %}<a {% if section == 'delivery' %}aria-current="page"{% endif %} href="{% url 'delivery:history' %}">Leveranser</a>{% endif %}
       {% if perms.managed_music.view_managedrecording and perms.catalogue.view_recording %}<a {% if section == 'managed' %}aria-current="page"{% endif %} href="{% url 'gui_v2:managed_music' %}">Forvaltet musikk</a>{% endif %}
       {% if perms.parties.view_party %}<a href="{% url 'workbench:parties' %}">Artister/personer</a>{% endif %}
+      {% if perms.rights.view_rightsclaim %}<a {% if section == 'followup' %}aria-current="page"{% endif %} href="{% url 'gui_v2:followup' %}">Oppfølging</a>{% endif %}
       {% if perms.media_assets.view_fileasset %}<a href="{% url 'workbench:files' %}">Filer</a>{% endif %}
       {% if perms.flac_ingest.preview_library_cleanup or perms.flac_ingest.preview_library_rebuild %}<a href="{% url 'workbench:library_maintenance' %}">Kontroll</a>{% endif %}
     </nav>

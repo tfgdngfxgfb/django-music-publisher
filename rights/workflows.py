@@ -14,6 +14,7 @@ from managed_music.models import ManagedRecording
 from rights_core.models import VerificationStatus
 
 from . import services
+from .positions import legal_position_identity
 from .models import RightsClaim, RightsConfiguration, RightsDecision, Territory
 from .scope import (
     find_ownership_conflict,
@@ -291,21 +292,8 @@ def _position_blocker(proposal, existing):
     of that identity. Potentially additive overlapping positions for the same
     holder/type require explicit individual review in Recording Rights.
     """
-    fields = (
-        "recording_id",
-        "right_type",
-        "rights_holder_id",
-        "grantor_id",
-        "share",
-        "territory_mode",
-        "valid_from",
-        "valid_until",
-        "release_scope_id",
-    )
     for claim in existing:
-        if all(getattr(claim, f) == getattr(proposal, f) for f in fields) and {
-            t.pk for t in claim.territories.all()
-        } == {t.pk for t in proposal.territories.all()}:
+        if legal_position_identity(claim) == legal_position_identity(proposal):
             return "Eksisterende tilsvarende posisjon. Behandle dokumentasjon eller korreksjon i Recording → Rettigheter."
     for claim in existing:
         if (

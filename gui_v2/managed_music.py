@@ -1,6 +1,7 @@
 """Read-only, bounded batch presentation of actual management memberships."""
 
 from collections import defaultdict
+from uuid import UUID
 
 from django.core.exceptions import ValidationError
 from django.db.models import Prefetch, Q
@@ -38,24 +39,38 @@ def memberships(filters):
         ),
     )
     if term := filters.get("q"):
-        queryset = queryset.filter(
-            Q(library_entry__recording__title__icontains=term)
-            | Q(
-                library_entry__recording__identifiers__normalized_value__icontains=term
+        try:
+            recording_id = UUID(term)
+        except (ValueError, TypeError):
+            recording_id = None
+        # Stable deep links from follow-up must also work for identical titles.
+        if recording_id:
+            queryset = queryset.filter(
+                library_entry__recording_id=recording_id
             )
-            | Q(
-                library_entry__recording__contributions__credited_as__icontains=term
-            )
-            | Q(
-                library_entry__recording__contributions__party__name__icontains=term
-            )
-            | Q(
-                library_entry__recording__contributions__artist_identity__display_name__icontains=term
-            )
-        ).distinct()
+        else:
+            queryset = _search_memberships(queryset, term)
     if source := filters.get("source"):
         queryset = queryset.filter(source_system=source)
     return queryset.order_by("library_entry__recording__title", "pk")
+
+
+def _search_memberships(queryset, term):
+    return queryset.filter(
+        Q(library_entry__recording__title__icontains=term)
+        | Q(
+            library_entry__recording__identifiers__normalized_value__icontains=term
+        )
+        | Q(
+            library_entry__recording__contributions__credited_as__icontains=term
+        )
+        | Q(
+            library_entry__recording__contributions__party__name__icontains=term
+        )
+        | Q(
+            library_entry__recording__contributions__artist_identity__display_name__icontains=term
+        )
+    ).distinct()
 
 
 def present_batch(records, *, can_view_rights, on_date=None):

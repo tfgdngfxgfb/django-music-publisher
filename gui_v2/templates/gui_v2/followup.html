@@ -1,0 +1,35 @@
+{% extends "gui_v2/base.html" %}
+{% load static %}
+{% block title %}Oppfølging{% endblock %}
+{% block content %}
+<div class="followup-page" data-followup>
+  <header class="managed-heading"><div><span class="eyebrow">Forvaltet katalog</span><h1>Oppfølging</h1><p>Rettighetsgrunnlag, avklaringer og datakvalitet som trenger oppmerksomhet.</p></div><details class="followup-help"><summary>Om oppfølging</summary><p>Listen beregnes fra dagens opplysninger. Den endrer ingen data. Et signal forsvinner når forholdet er avklart i sin ordinære arbeidsflate; andre signaler på samme objekt kan bestå. Forvaltning og katalogvern er ikke bruksautorisasjon.</p></details></header>
+  {% if not configured %}<p role="status" class="managed-notice">Lokal organisasjon må konfigureres før P7-grunnlag kan vurderes. Ingen fraværssignaler beregnes.</p>{% endif %}
+  <div class="followup-cards">{% for category in categories %}{% if category.key != 'all' %}<a href="{{ category.url }}" class="followup-card {{ category.key }}"{% if category.active %} aria-current="page"{% endif %}><span>{{ category.label }}</span><strong>{{ category.count }}</strong></a>{% endif %}{% endfor %}</div>
+  <div class="followup-layout">
+    <section class="followup-results" aria-label="Oppfølgingsliste">
+      <nav class="followup-tabs" aria-label="Oppfølgingskategorier">{% for category in categories %}<a href="{{ category.url }}"{% if category.active %} aria-current="page"{% endif %}>{{ category.label }} <span>{{ category.count }}</span></a>{% endfor %}</nav>
+      <form method="get" class="followup-filters">
+        {{ form.non_field_errors }}<input type="hidden" name="category" value="{{ form.category.value }}">{{ form.category.errors }}
+        <div class="followup-filter-row"><div>{{ form.q.label_tag }}{{ form.q }}{{ form.q.errors }}</div><div>{{ form.target.label_tag }}{{ form.target }}{{ form.target.errors }}</div><div>{{ form.status.label_tag }}{{ form.status }}{{ form.status.errors }}</div><div>{{ form.horizon.label_tag }}{{ form.horizon }}{{ form.horizon.errors }}</div></div>
+        <button type="button" data-open-followup-filters>Flere filtre{% if form.right_type.value or form.signal.value or form.source.value %} · aktive{% endif %}</button>
+        <dialog class="followup-drawer" data-followup-filters aria-labelledby="followup-filter-heading"><div class="managed-heading"><h2 id="followup-filter-heading">Flere filtre</h2><button type="button" data-close-followup-filters aria-label="Lukk filtre">×</button></div><p>Filtrer avledede punkter. Ingen opplysninger endres.</p><div class="followup-filter-row"><div>{{ form.right_type.label_tag }}{{ form.right_type }}{{ form.right_type.errors }}</div><div>{{ form.signal.label_tag }}{{ form.signal }}{{ form.signal.errors }}</div><div>{{ form.source.label_tag }}{{ form.source }}{{ form.source.errors }}</div><div>{{ form.sort.label_tag }}{{ form.sort }}{{ form.sort.errors }}</div></div><button type="submit">Bruk filtre</button></dialog>
+        <div class="followup-filter-actions"><button type="submit">Vis resultater</button><a href="{% url 'gui_v2:followup' %}">Nullstill filtre</a><span>{{ page.paginator.count }} treff</span></div>
+      </form>
+      <div class="followup-table-scroll"><table class="data-table"><thead><tr><th>Type</th><th>Objekt</th><th>Problem</th><th>Status / dato</th><th>Neste steg</th></tr></thead><tbody>
+        {% for row in rows %}<tr{% if row.item.key == selected.item.key %} class="selected"{% endif %}><td><span class="followup-label {{ row.item.primary.tone }}">{{ row.type_label }}</span></td><td><a href="{{ row.select_url }}"{% if row.item.key == selected.item.key %} aria-current="true"{% endif %}>{{ row.item.title }}</a></td><td>{{ row.item.primary.reason }}{% if row.item.signals|length > 1 %}<small>+ {{ row.item.signals|length|add:'-1' }} andre signaler</small>{% endif %}</td><td>{% if row.item.relevant_date %}{{ row.item.relevant_date|date:'d.m.Y' }}{% else %}Nå{% endif %}</td><td>{% for label,url in row.links %}{% if forloop.first %}<a href="{{ url }}">{{ label }} →</a>{% endif %}{% endfor %}</td></tr>
+        {% empty %}<tr><td colspan="5">Ingen oppfølgingspunkter passer til valgte filtre og dine tilganger.</td></tr>{% endfor %}
+      </tbody></table></div>
+      <nav class="pagination" aria-label="Resultatsider">{% if page.has_previous %}<a href="?{{ page_query }}&amp;page={{ page.previous_page_number }}">← Forrige</a>{% endif %}<span>Side {{ page.number }} av {{ page.paginator.num_pages }}</span>{% if page.has_next %}<a href="?{{ page_query }}&amp;page={{ page.next_page_number }}">Neste →</a>{% endif %}</nav>
+    </section>
+    <aside class="followup-inspector" aria-label="Valgt oppfølgingspunkt">{% if selected %}<span class="eyebrow">{{ selected.type_label }}</span><h2>{{ selected.item.title }}</h2>
+      <section><h3>Problem</h3><ul>{% for signal in selected.item.signals %}<li class="followup-reason {{ signal.tone }}">{{ signal.reason }}{% if signal.relevant_date %} · {{ signal.relevant_date|date:'d.m.Y' }}{% endif %}</li>{% endfor %}</ul></section>
+      <section><h3>Kontekst</h3><dl>{% for label,value in selected.item.details %}<dt>{{ label }}</dt><dd>{{ value }}</dd>{% endfor %}</dl></section>
+      {% for claim in selected.claims %}<section><h3>Rettighetsposisjon {{ forloop.counter }}</h3><dl>{% for label,value in claim.details %}<dt>{{ label }}</dt><dd>{{ value }}</dd>{% endfor %}</dl><a href="{{ claim.url }}">Åpne rettighetskrav →</a></section>{% endfor %}
+      <section><h3>Neste steg</h3><p>{{ selected.next_step }}</p><div class="followup-links">{% for label,url in selected.links %}<a class="button" href="{{ url }}">{{ label }} →</a>{% endfor %}</div></section>
+      {% else %}<h2>Detaljer</h2><p>Velg et oppfølgingspunkt for å se grunnlag og neste steg.</p>{% endif %}
+    </aside>
+  </div>
+</div>
+<script src="{% static 'gui_v2/followup.js' %}"></script>
+{% endblock %}

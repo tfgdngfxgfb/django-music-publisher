@@ -10,10 +10,10 @@ from rights.models import RightsClaim
 from rights.scope import (
     claim_applies_to_release,
     claim_applies_to_date,
-    claim_countries,
     OwnershipCategory,
 )
 from rights.services import get_local_organization
+from rights.positions import claims_applicable_in_release_context
 from rights.summaries import classify_ownership
 from rights_core.models import VerificationStatus as Status
 from gui_v2.recording_rights import claim_presentation
@@ -39,13 +39,8 @@ def release_tracks(release):
 def contextual_basis(claims, kind, release, local, day):
     relevant = [
         c
-        for c in claims
+        for c in claims_applicable_in_release_context(claims, release, local)
         if c.right_type == kind
-        and local
-        and c.rights_holder_id == local.pk
-        and claim_applies_to_release(c, release)
-        and c.status in (Status.CONFIRMED, Status.UNVERIFIED, Status.DISPUTED)
-        and claim_countries(c)
     ]
     current = [c for c in relevant if claim_applies_to_date(c, day)]
     return {

@@ -6,11 +6,13 @@ from . import (
     rights_views,
     managed_views,
     release_rights_views,
+    followup_views,
 )
 
 app_name = "gui_v2"
 
 urlpatterns = [
+    path("oppfolging/", followup_views.index, name="followup"),
     path(
         "utgivelser/<uuid:release_id>/rettigheter/registrering/",
         release_rights_views.bulk,

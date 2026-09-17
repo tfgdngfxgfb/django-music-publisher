@@ -153,6 +153,13 @@ def build_home_context(request):
     workspaces = []
     for permission, title, description, icon, url_name in (
         (
+            "rights.view_rightsclaim",
+            "Oppfølging",
+            "Avklar rettighetsgrunnlag og datakvalitet i forvaltet katalog.",
+            "☷",
+            "gui_v2:followup",
+        ),
+        (
             "music_library.view_musiclibraryentry",
             "Musikkarkiv",
             "Søk og arbeid med innspillinger.",

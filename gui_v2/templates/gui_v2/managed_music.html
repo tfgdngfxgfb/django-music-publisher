@@ -1,6 +1,7 @@
 {% extends "gui_v2/base.html" %}
 {% block title %}Forvaltet musikk{% endblock %}
 {% block content %}<div class="managed-page">
+{% if request.GET.return %}<a href="{{ return_url }}">← Tilbake til forrige arbeidsflate</a>{% endif %}
 <header class="managed-heading"><div><span class="eyebrow">P7s forvaltningsforhold</span><h1>Forvaltet musikk</h1><p>Innspillinger med forvaltningsgrunnlag, status og oppfølging.</p></div>{% if writes_enabled and can_onboard %}<a class="button primary" href="{% url 'gui_v2:managed_onboard' %}?return={{ request.get_full_path|urlencode }}">＋ Registrer forvaltning</a>{% endif %}</header>
 <div class="managed-layout">
 <aside class="managed-filters"><div class="panel-heading"><h2>Filtre</h2><a href="{% url 'gui_v2:managed_music' %}">Nullstill alle</a></div><form method="get" class="filter-form">{{ form.non_field_errors }}{% for field in form %}<label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{{ field.errors }}{% endfor %}<button type="submit" class="primary">Vis innspillinger</button></form><p class="managed-hint">Standardlisten viser aktive og pågående forhold, samt historiske forhold som krever oppfølging.</p></aside>
