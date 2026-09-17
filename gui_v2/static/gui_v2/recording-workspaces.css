@@ -42,3 +42,21 @@
 .recording-workspace-events li{margin:5px 0}
 @media(max-width:980px){.recording-workspace-layout{grid-template-columns:1fr}.recording-workspace-inspector{position:static;max-height:none}.recording-radio-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:620px){.recording-radio-summary,.recording-radio-fields{grid-template-columns:1fr}.recording-workspace-heading{align-items:flex-start;flex-direction:column}.recording-workspace-layout{padding:8px}}
+/* Recording Rights shares the app palette, typography, tables and footer. */
+.rights-content{display:grid;gap:14px;padding:16px 20px 24px;max-width:1800px;margin:auto;min-width:0}
+.rights-heading,.rights-actions,.rights-chips{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.rights-heading h2{margin:5px 0}.rights-summaries{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.rights-card-body{padding:12px;margin:0}.rights-card-body p{margin:8px 0}.rights-card-body small{display:block;margin-top:6px}.rights-card-body small,.rights-note{color:var(--muted)}
+.rights-groups,.rights-detail-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:start}
+.rights-page table{width:100%}.rights-page td{white-space:normal;overflow-wrap:anywhere}.rights-page .recording-table-wrap td{height:auto;vertical-align:top}
+.rights-page .recording-facts{grid-template-columns:minmax(100px,auto) minmax(0,1fr)}.rights-page dd{overflow-wrap:anywhere}
+.rights-status{display:inline-block;padding:3px 7px;border:1px solid var(--line2);border-radius:5px;font-size:11px}.rights-status.ok{color:var(--ok)}.rights-status.warning{color:var(--warn)}.rights-status.error{color:var(--danger)}.rights-status.info{color:var(--accent)}.rights-status.neutral{color:var(--muted)}
+.rights-chips{justify-content:flex-start}.rights-chips>*{padding:4px 8px;border:1px solid var(--line);border-radius:5px}.rights-note{padding:12px;border:1px solid var(--line);border-radius:5px}
+.rights-replace-grid{display:grid;grid-template-columns:minmax(260px,.7fr) minmax(0,1.3fr);gap:18px;align-items:start}.rights-form{padding:16px}.rights-form fieldset{min-width:0;border:0;padding:0;margin:0}.rights-form legend{font-weight:700;margin-bottom:12px}
+.rights-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-bottom:16px}.rights-fields>div{min-width:0}.rights-fields label:not([for*="territories_"]){display:block;margin-bottom:5px}.rights-fields select,.rights-fields textarea,.rights-fields input:not([type=checkbox]):not([type=radio]){width:100%;max-width:100%;box-sizing:border-box}.rights-fields textarea{min-height:75px;resize:vertical}.rights-fields [data-rights-field=territories]>div{max-height:200px;overflow:auto}.rights-fields small{color:var(--muted)}.rights-fields [hidden]{display:none}.rights-form .errorlist{color:var(--danger)}
+.rights-actions{justify-content:flex-end;margin-top:14px}.rights-replacement{padding:12px;border:1px solid var(--line2);border-radius:6px;margin-bottom:12px;background:var(--surface2)}.rights-confirm{display:flex;gap:8px;align-items:start;margin:16px 0}.rights-form>fieldset>textarea{width:100%;box-sizing:border-box}
+.rights-page :is(a,button,input,select,textarea,summary):focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.rights-form :is(select,textarea,input:not([type=checkbox]):not([type=radio]):not([type=hidden])){padding:8px 10px;border:1px solid var(--line2);border-radius:5px;background:var(--surface2);color:var(--text)}.rights-form input:is([type=checkbox],[type=radio]){accent-color:var(--accent)}.rights-form :disabled{opacity:.65}
+@media(max-width:1400px){.rights-groups{grid-template-columns:1fr}.rights-detail-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:900px){.rights-summaries{grid-template-columns:repeat(2,minmax(0,1fr))}.rights-detail-grid,.rights-replace-grid{grid-template-columns:1fr}.rights-content{padding:12px}}
+@media(max-width:600px){.rights-summaries,.rights-fields{grid-template-columns:1fr}.rights-content{padding:8px}}

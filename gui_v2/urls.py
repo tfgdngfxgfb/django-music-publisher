@@ -1,10 +1,44 @@
 from django.urls import path
 
-from . import views, digitization
+from . import views, digitization, rights_views
 
 app_name = "gui_v2"
 
 urlpatterns = [
+    path(
+        "innspillinger/<uuid:recording_id>/rettigheter/",
+        rights_views.overview,
+        name="recording_rights",
+    ),
+    path(
+        "innspillinger/<uuid:recording_id>/rettigheter/registrer/",
+        rights_views.action,
+        {"action": "register"},
+        name="recording_rights_register",
+    ),
+    path(
+        "innspillinger/<uuid:recording_id>/rettigheter/<uuid:claim_id>/",
+        rights_views.detail,
+        name="recording_rights_claim",
+    ),
+    path(
+        "innspillinger/<uuid:recording_id>/rettigheter/<uuid:claim_id>/dokumenter/",
+        rights_views.action,
+        {"action": "document"},
+        name="recording_rights_document",
+    ),
+    path(
+        "innspillinger/<uuid:recording_id>/rettigheter/<uuid:claim_id>/vurder/",
+        rights_views.action,
+        {"action": "decide"},
+        name="recording_rights_decide",
+    ),
+    path(
+        "innspillinger/<uuid:recording_id>/rettigheter/<uuid:claim_id>/erstatt/",
+        rights_views.action,
+        {"action": "replace"},
+        name="recording_rights_replace",
+    ),
     path("digitalisering/", digitization.index, name="digitization_index"),
     path(
         "digitalisering/utgivelser/<uuid:release_id>/matrise/",

@@ -1,0 +1,20 @@
+{% extends "gui_v2/base.html" %}
+{% block title %}Rettighetskrav · {{ recording.title }}{% endblock %}
+{% block content %}<div class="recording-page rights-page">
+{% include "gui_v2/includes/recording_header.html" %}
+<div class="rights-content">
+<a href="{{ tab_urls.rights }}">← Til rettighetsoversikten</a>
+<div class="rights-heading"><div><span class="eyebrow">Rettighetskrav · {{ claim.pk }}</span><h2>{{ claim.get_right_type_display }} · {{ claim.rights_holder.name }}</h2></div><span class="rights-status {{ position.tone }}">{{ position.status }}</span></div>
+<div class="rights-detail-grid">
+<section class="recording-card"><h2>Juridisk scope</h2>{% include "gui_v2/includes/rights_scope.html" %}</section>
+<section class="recording-card"><h2>Dokumentasjon</h2><dl class="recording-facts"><dt>Dokumentasjonsstyrke</dt><dd>{{ claim.get_evidence_strength_display }}</dd>
+{% if perms.rights.view_agreement %}<dt>Avtale</dt><dd>{{ claim.agreement.title|default:"Ingen avtale koblet" }}</dd>{% endif %}
+{% if perms.provenance.view_sourcerecord %}<dt>Original SourceRecord</dt><dd>{% if claim.source_record_id %}{{ claim.source_record_id }}<br>{{ claim.source_record.source_locator }}{% else %}Ingen kilde registrert{% endif %}</dd><dt>SourceSystem</dt><dd>{{ claim.source_record.source_system.name|default:"Ikke registrert" }}</dd>{% endif %}
+<dt>Merknader</dt><dd>{{ claim.notes|linebreaksbr|default:"Ingen merknader" }}</dd></dl>
+{% if documents %}<div class="rights-card-body"><h3>Dokumenter via avtalen</h3><ul>{% for document in documents %}<li>{{ document.file_asset.filename }}{% if document.description %} · {{ document.description }}{% endif %}</li>{% endfor %}</ul></div>{% endif %}
+{% if action_urls.document %}<a class="section-link" href="{{ action_urls.document }}">Dokumenter kravet →</a>{% endif %}</section>
+<section class="recording-card"><h2>Erstatningsrelasjoner</h2><div class="rights-card-body"><h3>Erstatter</h3>{% if previous_url %}<a href="{{ previous_url }}">{{ claim.supersedes_id }}</a>{% else %}<p>Ingen tidligere posisjon.</p>{% endif %}<h3>Erstattet av</h3><ul>{% for row in replacements %}<li><a href="{{ row.url }}">{{ row.claim.pk }}</a></li>{% empty %}<li>Ingen erstatningsposisjoner.</li>{% endfor %}</ul></div>{% if action_urls.replace %}<a class="section-link" href="{{ action_urls.replace }}">Erstatt / splitt kravet →</a>{% endif %}</section>
+</div>
+<section class="recording-card"><h2>Historikk og beslutninger</h2><p class="rights-card-body">Krav registrert {{ claim.created_at|date:"d.m.Y H:i" }}. Hendelsene nedenfor er lagret revisjonshistorikk.</p><div class="recording-table-wrap"><table><thead><tr><th scope="col">Dato/tid</th><th scope="col">Beslutning</th><th scope="col">Utført av</th><th scope="col">Merknad</th></tr></thead><tbody>{% for decision in claim.decisions.all %}<tr><td>{{ decision.created_at|date:"d.m.Y H:i" }}</td><td>{{ decision.get_decision_display }}</td><td>{{ decision.decided_by.get_username }}</td><td>{{ decision.note|linebreaksbr }}</td></tr>{% empty %}<tr><td colspan="4">Ingen lagrede beslutninger.</td></tr>{% endfor %}</tbody></table></div></section>
+{% if action_urls.decide %}<div class="rights-actions">{% for decision in position.decisions %}<a class="button" href="{{ action_urls.decide }}&amp;decision={% if decision.value == 'confirmed' %}confirm{% elif decision.value == 'disputed' %}dispute{% else %}reject{% endif %}">{{ decision.label }}</a>{% endfor %}</div>{% endif %}
+</div></div>{% endblock %}

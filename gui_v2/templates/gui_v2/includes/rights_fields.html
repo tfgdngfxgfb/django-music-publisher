@@ -1,0 +1,2 @@
+{{ form.non_field_errors }}
+<div class="rights-fields">{% for field in form %}{% if field.is_hidden %}{{ field }}{{ field.errors }}{% else %}<div data-rights-field="{{ field.name }}"{% if field.errors %} data-has-errors{% endif %}><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{{ field.errors }}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}</div>{% endif %}{% endfor %}</div>

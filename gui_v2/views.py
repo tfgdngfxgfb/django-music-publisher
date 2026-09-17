@@ -228,14 +228,14 @@ def _recording_workspace_context(request, recording, header, active_tab):
     tab_urls = {
         name: f"{reverse(f'gui_v2:recording_{name}', args=[recording.pk])}?"
         f"{urlencode({'return': return_url})}"
-        for name in ("files", "releases", "radio", "deliveries")
+        for name in ("files", "releases", "radio", "deliveries", "rights")
     }
     tab_urls["overview"] = (
         f"{reverse('gui_v2:recording_detail', args=[recording.pk])}?"
         f"{urlencode({'return': return_url})}"
     )
     workbench_url = reverse("workbench:recording", args=[recording.pk])
-    for name in ("contributors", "rights", "sources"):
+    for name in ("contributors", "sources"):
         tab_urls[name] = (
             f"{workbench_url}?{urlencode({'fane': name, 'return': current_url})}"
         )

@@ -1,0 +1,11 @@
+<dl class="recording-facts">
+<dt>Rettighetstype</dt><dd>{{ claim.get_right_type_display }}</dd>
+<dt>Rettighetshaver</dt><dd>{{ claim.rights_holder.name }}</dd>
+<dt>Rettighetsgiver</dt><dd>{{ claim.grantor.name|default:"Ikke registrert" }}</dd>
+{% if claim.right_type == 'master_ownership' %}<dt>Eierandel</dt><dd>{% if claim.share != None %}{{ claim.share }} %{% else %}Ukjent andel{% endif %}</dd>{% endif %}
+<dt>Territorium</dt><dd>{{ position.territory }}</dd>
+<dt>Gyldig fra</dt><dd>{{ claim.valid_from|date:"d.m.Y"|default:"Åpen nedre grense" }}</dd>
+<dt>Gyldig til</dt><dd>{{ claim.valid_until|date:"d.m.Y"|default:"Åpen øvre grense" }}</dd>
+<dt>Release-scope</dt><dd>{% if claim.release_scope_id %}Kun «{{ claim.release_scope.title }}»{% else %}Generell Recording-kontekst{% endif %}</dd>
+<dt>Status</dt><dd><span class="rights-status {{ position.tone }}">{{ position.status }}</span></dd>
+</dl>

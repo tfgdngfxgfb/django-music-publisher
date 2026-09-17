@@ -20,7 +20,7 @@
     {% if perms.music_library.view_musiclibraryentry %}<a {% if active_tab == 'radio' %}aria-current="page"{% endif %} href="{{ tab_urls.radio }}">Radio</a>{% endif %}
     {% if perms.delivery.view_delivery %}<a {% if active_tab == 'deliveries' %}aria-current="page"{% endif %} href="{{ tab_urls.deliveries }}">Leveranser</a>{% endif %}
     <a href="{{ tab_urls.contributors }}">Medvirkende og opphavere</a>
-    {% if perms.rights.view_rightsclaim %}<a href="{{ tab_urls.rights }}">Rettigheter</a>{% endif %}
+    {% if perms.rights.view_rightsclaim %}<a {% if active_tab == 'rights' %}aria-current="page"{% endif %} href="{{ tab_urls.rights }}">Rettigheter</a>{% endif %}
     {% if perms.provenance.view_metadataassertion %}<a href="{{ tab_urls.sources }}">Kilder og historikk</a>{% endif %}
   </nav>
 </header>

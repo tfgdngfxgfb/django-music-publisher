@@ -1,0 +1,15 @@
+{% extends "gui_v2/base.html" %}{% load static %}
+{% block title %}{{ action_title }} · {{ recording.title }}{% endblock %}
+{% block content %}<div class="recording-page rights-page">
+{% include "gui_v2/includes/recording_header.html" %}
+<div class="rights-content"><a href="{% if claim_url %}{{ claim_url }}{% else %}{{ tab_urls.rights }}{% endif %}">← Tilbake</a><h2>{{ action_title }}</h2>
+{% if action == 'register' or action == 'replace' %}<p>Nye posisjoner registreres som <strong>Uverifisert</strong> og må vurderes separat.</p>{% endif %}
+{% if not writes_enabled %}<p class="rights-note">Redigering er deaktivert i dette miljøet.</p>{% endif %}
+{% if action_error %}<div class="recording-form-error" role="alert">{{ action_error }}</div>{% endif %}
+<div class="{% if action == 'replace' %}rights-replace-grid{% endif %}">
+{% if action == 'replace' %}<section class="recording-card"><h2>Opprinnelig rettighetskrav · låst</h2>{% include "gui_v2/includes/rights_scope.html" %}<p class="rights-card-body">Recording og rettighetstype er låst. Hvis typen var feil, avvis det gamle kravet og registrer et nytt separat uverifisert krav med korrekt type.</p></section>{% endif %}
+<form method="post" class="recording-card rights-form" data-rights-form>{% csrf_token %}<input type="hidden" name="return" value="{{ return_url }}"><fieldset{% if not writes_enabled %} disabled{% endif %}><legend>{{ action_title }}</legend>
+{% if formset %}{{ formset.management_form }}{{ formset.non_form_errors }}<div data-replacements>{% for form in formset %}<section class="rights-replacement" data-claim-fields><h3>Ny posisjon {{ forloop.counter }}</h3>{% include "gui_v2/includes/rights_fields.html" %}</section>{% endfor %}</div><template data-empty-replacement><section class="rights-replacement" data-claim-fields><h3>Ny posisjon</h3>{% include "gui_v2/includes/rights_fields.html" with form=formset.empty_form %}</section></template><button type="button" class="button" data-add-replacement>+ Legg til posisjon</button><p>Det opprinnelige kravet blir permanent historisk som «Erstattet». De nye posisjonene må vurderes og bekreftes separat.</p><label class="rights-confirm"><input type="checkbox" name="confirm_replace" value="yes" required> Jeg bekrefter at det opprinnelige kravet erstattes permanent.</label><label for="replacement-note">Merknad (valgfritt)</label><textarea id="replacement-note" name="note" rows="2">{{ request.POST.note }}</textarea>
+{% else %}<div data-claim-fields>{% include "gui_v2/includes/rights_fields.html" %}</div>{% endif %}
+<div class="rights-actions"><a class="button" href="{% if claim_url %}{{ claim_url }}{% else %}{{ tab_urls.rights }}{% endif %}">Avbryt</a><button class="button primary" type="submit">{% if action == 'replace' %}Bekreft erstatning{% elif action == 'register' %}Opprett uverifisert posisjon{% else %}Lagre{% endif %}</button></div>
+</fieldset></form></div></div></div><script src="{% static 'gui_v2/rights.js' %}"></script>{% endblock %}
