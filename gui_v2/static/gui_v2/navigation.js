@@ -70,7 +70,6 @@
       if (!options.popstate) {
         history.replaceState({...history.state, p7Scroll: scrollY}, "", location.href);
       }
-      const wasHidden = document.body.classList.contains("player-hidden");
       document.querySelector(".app-header").replaceWith(header);
       document.querySelector(".prototype-strip").replaceWith(strip);
       document.querySelector("#v2-main").replaceWith(main);
@@ -79,7 +78,6 @@
       const messages = page.querySelector(".messages");
       if (messages) main.before(messages);
       document.body.className = page.body.className;
-      if (wasHidden) document.body.classList.add("player-hidden");
       document.title = page.title;
       if (!options.popstate) history.pushState({p7Scroll: 0}, "", response.url);
       window.P7_V2.initPage();

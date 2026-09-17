@@ -76,6 +76,9 @@ class RadioPlaybackTests(TestCase):
             args=["00000000-0000-0000-0000-000000000000"],
         )
         self.assertContains(response, f'data-audio-url-template="{template_url}"')
+        self.assertContains(response, "gui_v2/player.css")
+        self.assertNotContains(response, "data-player-hide")
+        self.assertNotContains(response, "data-player-show")
 
     def test_resolver_returns_one_current_radio_asset(self):
         result = resolve_current_radio_asset(self.recording)

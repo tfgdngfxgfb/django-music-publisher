@@ -15,18 +15,6 @@
   });
 
   const player = document.querySelector("#v2-player");
-  const playerShow = document.querySelector("[data-player-show]");
-  const playerHiddenKey = "p7-v2-player-hidden";
-  const setPlayerHidden = hidden => {
-    if (!player || !playerShow) return;
-    player.hidden = hidden;
-    playerShow.hidden = !hidden;
-    document.body.classList.toggle("player-hidden", hidden);
-    localStorage.setItem(playerHiddenKey, String(hidden));
-  };
-  document.querySelector("[data-player-hide]")?.addEventListener("click", () => setPlayerHidden(true));
-  playerShow?.addEventListener("click", () => setPlayerHidden(false));
-  if (localStorage.getItem(playerHiddenKey) === "true") setPlayerHidden(true);
 
   const audio = document.querySelector("#v2-audio");
   const playerToggle = document.querySelector("[data-player-toggle]");
@@ -41,6 +29,7 @@
   const playerElapsed = document.querySelector("[data-player-elapsed]");
   const playerDuration = document.querySelector("[data-player-duration]");
   const playerQueue = document.querySelector("[data-player-queue]");
+  const playerQueueText = document.querySelector("[data-player-queue-text]");
   const queuePanel = document.querySelector("[data-player-queue-panel]");
   const queueList = document.querySelector("[data-player-queue-list]");
   const queueLabel = document.querySelector("[data-player-queue-context]");
@@ -160,6 +149,7 @@
     if (playerPrevious) playerPrevious.disabled = queueIndex < 0 || !queue.slice(0, queueIndex).some(track => track.playUrl);
     if (playerNext) playerNext.disabled = queueIndex < 0 || !queue.slice(queueIndex + 1).some(track => track.playUrl);
     if (playerQueue) playerQueue.disabled = !queue.length;
+    if (playerQueueText) playerQueueText.textContent = queue.length ? `Spillekø (${queue.length})` : "Spillekø";
     renderQueue();
   };
   const captureQueue = trigger => {

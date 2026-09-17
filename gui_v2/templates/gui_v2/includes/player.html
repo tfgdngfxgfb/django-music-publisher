@@ -8,15 +8,13 @@
     </div>
   </div>
   <div class="player-transport">
-    <div class="player-controls"><button type="button" data-player-previous disabled aria-label="Forrige spor" title="Forrige spor">◀</button><button class="play" type="button" data-player-toggle disabled aria-label="Spill av">▶</button><button type="button" data-player-next disabled aria-label="Neste spor" title="Neste spor">▶|</button></div>
+    <div class="player-controls"><button type="button" data-player-previous disabled aria-label="Forrige spor" title="Forrige spor">|◀</button><button class="play" type="button" data-player-toggle disabled aria-label="Spill av">▶</button><button type="button" data-player-next disabled aria-label="Neste spor" title="Neste spor">▶|</button></div>
     <div class="player-timeline"><span data-player-elapsed>0:00</span><input class="player-progress" data-player-progress type="range" min="0" max="0" value="0" step="0.1" aria-label="Avspillingsposisjon" disabled><span data-player-duration>0:00</span></div>
   </div>
   <div class="player-utilities">
     <div class="player-sound"><button type="button" data-player-mute aria-label="Demp lyd" aria-pressed="false" title="Demp lyd">🔊</button><input data-player-volume type="range" min="0" max="1" step="0.01" value="1" aria-label="Volum"></div>
-    <button type="button" data-player-queue disabled aria-label="Vis kø" aria-expanded="false" aria-controls="player-queue-panel" title="Vis kø">Kø</button>
-    <button class="player-hide" type="button" data-player-hide aria-label="Skjul avspilleren" title="Skjul avspilleren">×</button>
+    <button type="button" data-player-queue disabled aria-label="Vis spillekø" aria-expanded="false" aria-controls="player-queue-panel" title="Vis spillekø"><span class="player-queue-icon" aria-hidden="true">☷</span><span data-player-queue-text>Spillekø</span><span class="player-queue-chevron" aria-hidden="true">⌃</span></button>
   </div>
   <div class="player-queue-panel" id="player-queue-panel" data-player-queue-panel hidden><header><strong data-player-queue-context>Kø</strong><button type="button" data-player-queue-close aria-label="Lukk kø">×</button></header><ol data-player-queue-list></ol></div>
   <span class="player-notice" data-player-notice role="status" hidden></span>
 </div>
-<button class="player-show" type="button" data-player-show aria-label="Vis avspilleren" title="Vis avspilleren" hidden>♫</button>

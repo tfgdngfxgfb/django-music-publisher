@@ -1,0 +1,160 @@
+/* Shared GUI v2 footer player. Keep playback state and controls in prototype.js. */
+:root { --player: 68px; }
+
+.player-footer,
+.music-library-page .player-footer {
+  justify-content: stretch;
+  padding: 0;
+  background: linear-gradient(180deg, #0d2533, #081a26);
+  border-top: 1px solid var(--line2);
+  box-shadow: 0 -6px 24px #0007;
+  pointer-events: auto;
+}
+
+.global-player.player,
+.music-library-page .global-player.player {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-columns: minmax(180px, 270px) minmax(280px, 1fr) minmax(230px, 320px);
+  align-items: center;
+  gap: clamp(14px, 2vw, 32px);
+  padding: 7px clamp(14px, 1.4vw, 25px);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  pointer-events: auto;
+}
+
+.global-player .player-identity { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.global-player .player-cover,
+.music-library-page .global-player .player-cover {
+  flex: none;
+  width: 50px;
+  height: 50px;
+  border: 1px solid var(--line2);
+  border-radius: 5px;
+  text-decoration: none;
+}
+.global-player .player-cover:not([href]) { cursor: default; }
+.global-player .player-title { min-width: 0; gap: 2px; }
+.global-player .player-title a { min-width: 0; text-decoration: none; }
+.global-player .player-title a:not([href]) { cursor: default; }
+.global-player .player-title a[href]:hover strong { color: var(--accent); }
+.global-player .player-title strong { font-size: 13px; }
+.global-player .player-title span { font-size: 11px; }
+
+.global-player .player-transport {
+  display: grid;
+  grid-template-columns: auto minmax(100px, 1fr);
+  grid-template-rows: 1fr;
+  align-items: center;
+  gap: clamp(14px, 2vw, 32px);
+  min-width: 0;
+}
+.global-player .player-controls,
+.global-player .player-sound,
+.global-player .player-utilities { display: flex; align-items: center; min-width: 0; }
+.global-player .player-controls { gap: 8px; }
+.global-player .player-controls button {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  font-size: 14px;
+}
+.global-player .player-controls .play {
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 17px;
+}
+.global-player .player-controls .play:not(:disabled):hover,
+.global-player .player-controls .play:not(:disabled):focus-visible {
+  background: var(--accent);
+  color: #002632;
+}
+.global-player .player-timeline {
+  display: grid;
+  grid-template-columns: 34px minmax(70px, 1fr) 34px;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.global-player .player-progress {
+  position: static;
+  display: block;
+  width: 100%;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.global-player .player-progress:disabled { opacity: .35; cursor: default; }
+
+.global-player .player-utilities { height: 100%; justify-content: flex-end; gap: 10px; }
+.global-player .player-sound { flex: 1; gap: 8px; max-width: 170px; }
+.global-player .player-sound input { width: 100%; min-width: 36px; accent-color: var(--accent); }
+.global-player [data-player-queue] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 130px;
+  height: 100%;
+  padding: 0 8px 0 16px;
+  border-left: 1px solid var(--line2);
+  border-radius: 0;
+  white-space: nowrap;
+  color: var(--text);
+}
+.global-player .player-queue-icon { font-size: 18px; color: var(--accent); }
+.global-player .player-queue-chevron { margin-left: auto; color: var(--muted); }
+.global-player button:disabled { opacity: .4; cursor: not-allowed; }
+.global-player .player-cover:focus-visible,
+.global-player .player-title a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+@media (max-width: 1050px) {
+  .global-player.player,
+  .music-library-page .global-player.player {
+    grid-template-columns: minmax(150px, 220px) minmax(270px, 1fr) auto;
+    gap: 12px;
+  }
+  .global-player .player-sound input { display: none; }
+  .global-player .player-sound { flex: none; }
+  .global-player [data-player-queue] { min-width: 105px; padding-left: 10px; }
+}
+
+@media (max-width: 700px) {
+  :root { --player: 62px; }
+  .global-player.player,
+  .music-library-page .global-player.player {
+    grid-template-columns: minmax(100px, 1fr) minmax(160px, 1.5fr) auto;
+    gap: 7px;
+    padding-inline: 8px;
+  }
+  .global-player .player-cover,
+  .music-library-page .global-player .player-cover { width: 38px; height: 38px; }
+  .global-player .player-identity { gap: 6px; }
+  .global-player .player-title strong { font-size: 11px; }
+  .global-player .player-title span { font-size: 9px; }
+  .global-player .player-transport { grid-template-columns: 1fr; grid-template-rows: 28px 16px; gap: 1px; }
+  .global-player .player-controls { justify-content: center; gap: 4px; }
+  .global-player .player-controls button { width: 25px; height: 25px; }
+  .global-player .player-controls .play { width: 30px; height: 30px; font-size: 14px; }
+  .global-player .player-timeline { grid-template-columns: 1fr; gap: 0; }
+  .global-player .player-timeline span { display: none; }
+  .global-player .player-utilities { gap: 2px; }
+  .global-player [data-player-queue] { min-width: 30px; padding: 0 3px; }
+  .global-player [data-player-queue-text],
+  .global-player .player-queue-chevron,
+  .global-player .player-sound,
+}
