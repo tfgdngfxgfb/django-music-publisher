@@ -1,23 +1,26 @@
-"""Conservative, derived summaries for current master-rights claims."""
+"""Conservative all-territory overviews built on the common scope evaluator."""
 
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import date
 from decimal import Decimal
 
-from django.db import models
+from django.utils import timezone
 
 from rights_core.models import VerificationStatus
-
 from .models import RightsClaim
-
-
-class OwnershipCategory(models.TextChoices):
-    FULL = "full", "Heleid av lokal organisasjon"
-    PARTIAL = "partial", "Deleid av lokal organisasjon"
-    NOT_OWNED = "not_owned", "Ikke eid av lokal organisasjon"
-    UNRESOLVED = "unresolved", "Eierskap uavklart"
-    DISPUTED = "disputed", "Eierskap bestridt"
+from .scope import (
+    COUNTRY_CODES,
+    OwnershipCategory,
+    ScopeContext,
+    claim_applies_to_date,
+    claim_countries,
+    claims_for_recordings,
+    evaluate_management_basis,
+    evaluate_ownership,
+    evaluate_right,
+    prepare_claims,
+    RELEVANT_STATUSES,
+)
 
 
 @dataclass(frozen=True)
@@ -44,197 +47,138 @@ class OwnershipSummary:
 
     @property
     def local_share(self):
-        if not self.local_claims or any(
-            claim.share is None for claim in self.local_claims
-        ):
+        if not self.local_claims or self.has_unknown_local_share:
             return None
-        return sum((claim.share for claim in self.local_claims), Decimal("0"))
+        # Never add territorially disjoint interests into a fictitious global sum.
+        totals = {
+            sum(
+                (
+                    c.share
+                    for c in self.local_claims
+                    if code in claim_countries(c)
+                ),
+                Decimal("0"),
+            )
+            for code in COUNTRY_CODES
+        }
+        return totals.pop() if len(totals) == 1 else None
 
     @property
     def has_unknown_local_share(self):
-        return bool(self.local_claims) and any(
-            claim.share is None for claim in self.local_claims
-        )
-
-
-def _is_current(claim, on_date):
-    return (claim.valid_from is None or claim.valid_from <= on_date) and (
-        claim.valid_until is None or claim.valid_until >= on_date
-    )
+        return any(claim.share is None for claim in self.local_claims)
 
 
 def classify_ownership(claims, local_organization, *, on_date=None):
-    """Classify current ownership without inventing missing rights information.
+    """Global overview, never a substitute for a concrete territorial decision.
 
-    The overview deliberately only concludes full or absent ownership for
-    worldwide confirmed claims. Territory-specific combinations remain partial
-    or unresolved until a later scope-aware rights engine exists.
+    FULL/NOT_OWNED require the same positive result in every supported country.
+    Known local ownership in only part of the world is PARTIAL. Unknown confirmed
+    shares remain UNRESOLVED; a conflict in any country remains DISPUTED.
     """
-
-    on_date = on_date or date.today()
+    day = on_date or timezone.localdate()
     active = tuple(
-        claim
-        for claim in claims
-        if claim.right_type == RightsClaim.RightType.OWNERSHIP
-        and claim.status
-        not in (VerificationStatus.REJECTED, VerificationStatus.SUPERSEDED)
-        and _is_current(claim, on_date)
+        c
+        for c in prepare_claims(claims)
+        if c.right_type == RightsClaim.RightType.OWNERSHIP
+        and c.release_scope_id is None
+        and c.status in RELEVANT_STATUSES
+        and claim_applies_to_date(c, day)
+        and claim_countries(c)
     )
     local_id = getattr(local_organization, "pk", None)
-    if any(claim.status == VerificationStatus.DISPUTED for claim in active):
-        return OwnershipSummary(
-            OwnershipCategory.DISPUTED, active, (), (), local_organization
-        )
-
     confirmed = tuple(
-        claim
-        for claim in active
-        if claim.status == VerificationStatus.CONFIRMED
+        c for c in active if c.status == VerificationStatus.CONFIRMED
     )
-    if not confirmed or local_id is None:
-        return OwnershipSummary(
-            OwnershipCategory.UNRESOLVED,
-            active,
-            (),
-            confirmed,
-            local_organization,
+    local = tuple(
+        c
+        for c in confirmed
+        if local_id is not None and c.rights_holder_id == local_id
+    )
+    other = tuple(c for c in confirmed if c.rights_holder_id != local_id)
+    results = []
+    # Countries with the same applicable claims have the same result.
+    seen = set()
+    countries = {c.pk: claim_countries(c) for c in active}
+    for code in sorted(COUNTRY_CODES):
+        signature = tuple(c.pk for c in active if code in countries[c.pk])
+        if signature in seen:
+            continue
+        seen.add(signature)
+        context = ScopeContext(
+            active[0].recording_id if active else None,
+            RightsClaim.RightType.OWNERSHIP,
+            code,
+            day,
         )
-
-    local_claims = tuple(
-        claim for claim in confirmed if claim.rights_holder_id == local_id
-    )
-    other_claims = tuple(
-        claim for claim in confirmed if claim.rights_holder_id != local_id
-    )
-
-    # A worldwide 100 % claim and a simultaneous confirmed claim for another
-    # holder is a clear conflict even without a full territory-overlap engine.
-    local_world_total = sum(
-        (
-            claim.share
-            for claim in local_claims
-            if claim.territory_mode == RightsClaim.TerritoryMode.WORLD
-            and claim.share is not None
-        ),
-        Decimal("0"),
-    )
-    other_world_total = sum(
-        (
-            claim.share
-            for claim in other_claims
-            if claim.territory_mode == RightsClaim.TerritoryMode.WORLD
-            and claim.share is not None
-        ),
-        Decimal("0"),
-    )
-    if (
-        local_world_total + other_world_total > Decimal("100")
-        or (local_world_total >= 100 and other_claims)
-        or (other_world_total >= 100 and local_claims)
-    ):
-        return OwnershipSummary(
-            OwnershipCategory.DISPUTED,
-            active,
-            local_claims,
-            other_claims,
-            local_organization,
+        results.append(
+            evaluate_ownership(
+                evaluate_right(active, context, local_organization=local_id)
+            )
         )
-
-    if local_claims:
-        all_local_world = all(
-            claim.territory_mode == RightsClaim.TerritoryMode.WORLD
-            for claim in local_claims
-        )
-        local_known = all(claim.share is not None for claim in local_claims)
-        if (
-            all_local_world
-            and local_known
-            and not other_claims
-            and sum((claim.share for claim in local_claims), Decimal("0"))
-            == Decimal("100")
-        ):
-            category = OwnershipCategory.FULL
-        else:
-            category = OwnershipCategory.PARTIAL
-        return OwnershipSummary(
-            category, active, local_claims, other_claims, local_organization
-        )
-
-    other_world = tuple(
-        claim
-        for claim in other_claims
-        if claim.territory_mode == RightsClaim.TerritoryMode.WORLD
-    )
-    if (
-        other_world
-        and len(other_world) == len(other_claims)
-        and all(claim.share is not None for claim in other_world)
-        and sum((claim.share for claim in other_world), Decimal("0"))
-        == Decimal("100")
-    ):
+    categories = {r.category for r in results}
+    if OwnershipCategory.DISPUTED in categories:
+        category = OwnershipCategory.DISPUTED
+    elif categories == {OwnershipCategory.FULL}:
+        category = OwnershipCategory.FULL
+    elif categories == {OwnershipCategory.NOT_OWNED}:
         category = OwnershipCategory.NOT_OWNED
+    elif any(c.share is None for c in confirmed):
+        category = OwnershipCategory.UNRESOLVED
+    elif any(r.known_local_share > 0 for r in results):
+        category = OwnershipCategory.PARTIAL
     else:
         category = OwnershipCategory.UNRESOLVED
-    return OwnershipSummary(
-        category, active, local_claims, other_claims, local_organization
-    )
+    return OwnershipSummary(category, active, local, other, local_organization)
 
 
 def ownership_summaries_for_recordings(recording_ids, local_organization):
-    """Return summaries using a bounded set of claims and no per-row queries."""
-
-    recording_ids = tuple(recording_ids)
+    ids = tuple(recording_ids)
     grouped = defaultdict(list)
-    if recording_ids:
-        claims = (
-            RightsClaim.objects.filter(
-                recording_id__in=recording_ids,
-                right_type=RightsClaim.RightType.OWNERSHIP,
-            )
-            .select_related("rights_holder")
-            .prefetch_related("territories")
-        )
-        for claim in claims:
-            grouped[claim.recording_id].append(claim)
+    for claim in claims_for_recordings(ids).filter(
+        right_type=RightsClaim.RightType.OWNERSHIP
+    ):
+        grouped[claim.recording_id].append(claim)
     return {
-        recording_id: classify_ownership(
-            grouped[recording_id], local_organization
-        )
-        for recording_id in recording_ids
+        pk: classify_ownership(grouped[pk], local_organization) for pk in ids
     }
 
 
-def has_local_confirmed_right(claims, local_organization, right_type):
-    local_id = getattr(local_organization, "pk", None)
-    today = date.today()
-    return bool(local_id) and any(
-        claim.right_type == right_type
-        and claim.rights_holder_id == local_id
-        and claim.status == VerificationStatus.CONFIRMED
-        and _is_current(claim, today)
-        for claim in claims
+def has_local_confirmed_right(
+    claims, local_organization, right_type, *, on_date=None
+):
+    """Legacy overview flag: general claim in some country, not use permission.
+
+    Release-only interests use resolve_management_basis or resolve_right with
+    explicit release instead of implying general distribution/administration.
+    """
+    return any(
+        c.right_type == right_type
+        and c.release_scope_id is None
+        and c.status == VerificationStatus.CONFIRMED
+        for c in evaluate_management_basis(
+            prepare_claims(claims),
+            local_organization=local_organization,
+            on_date=on_date or timezone.localdate(),
+        )
     )
 
 
 def local_confirmed_right_recording_ids(
     recording_ids, local_organization, right_type, *, on_date=None
 ):
-    local_id = getattr(local_organization, "pk", None)
-    if not local_id:
+    if local_organization is None:
         return set()
-    on_date = on_date or date.today()
-    return set(
-        RightsClaim.objects.filter(
-            recording_id__in=recording_ids,
-            right_type=right_type,
-            rights_holder_id=local_id,
-            status=VerificationStatus.CONFIRMED,
-        )
-        .filter(
-            models.Q(valid_from__isnull=True)
-            | models.Q(valid_from__lte=on_date),
-            models.Q(valid_until__isnull=True)
-            | models.Q(valid_until__gte=on_date),
-        )
-        .values_list("recording_id", flat=True)
+    claims = claims_for_recordings(tuple(recording_ids)).filter(
+        right_type=right_type,
+        status=VerificationStatus.CONFIRMED,
+        release_scope__isnull=True,
+        rights_holder=local_organization,
     )
+    return {
+        c.recording_id
+        for c in evaluate_management_basis(
+            claims,
+            local_organization=local_organization,
+            on_date=on_date or timezone.localdate(),
+        )
+    }

@@ -2246,6 +2246,7 @@ def release_detail(request, release_id):
         rights_claims = list(
             RightsClaim.objects.filter(recording_id__in=recording_ids)
             .select_related(
+                "release_scope",
                 "recording",
                 "rights_holder",
                 "grantor",

@@ -1230,6 +1230,7 @@ def recording_detail(request, pk):
         rights_claims = list(
             RightsClaim.objects.filter(recording=recording)
             .select_related(
+                "release_scope",
                 "rights_holder",
                 "grantor",
                 "agreement",

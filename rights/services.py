@@ -1,5 +1,3 @@
-from decimal import Decimal
-
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
@@ -12,6 +10,7 @@ from .models import (
     RightsConfiguration,
     RightsDecision,
 )
+from .scope import find_ownership_conflict, prepare_claims
 
 
 def _validate_territory_scope(mode, territories):
@@ -25,36 +24,24 @@ def _validate_territory_scope(mode, territories):
     return territories
 
 
-def _territory_signature(claim):
-    return claim.territory_mode, frozenset(
-        claim.territories.values_list("id", flat=True)
-    )
-
-
 def validate_confirmed_ownership_total(claim):
     if (
         claim.right_type != RightsClaim.RightType.OWNERSHIP
         or claim.share is None
     ):
         return
-    total = Decimal(claim.share)
-    signature = _territory_signature(claim)
     others = RightsClaim.objects.filter(
         recording=claim.recording,
         right_type=RightsClaim.RightType.OWNERSHIP,
         status=VerificationStatus.CONFIRMED,
-        valid_from=claim.valid_from,
-        valid_until=claim.valid_until,
     ).exclude(pk=claim.pk)
-    for other in others.prefetch_related("territories"):
-        if (
-            other.share is not None
-            and _territory_signature(other) == signature
-        ):
-            total += other.share
-    if total > Decimal("100"):
+    conflict = find_ownership_conflict(
+        prepare_claims((claim, *others.prefetch_related("territories")))
+    )
+    if conflict:
         raise ValidationError(
-            "Bekreftede eierandeler overstiger 100 % for samme territorieomfang og periode."
+            f"Bekreftede eierandeler overstiger 100 % i {conflict.territory} "
+            f"på {conflict.on_date}: {conflict.total} %."
         )
 
 
@@ -122,6 +109,10 @@ def supersede_rights_claim(
         )
     )
     previous = RightsClaim.objects.select_for_update().get(pk=previous.pk)
+    # Legacy forms do not expose legal release scope. Omission must not widen
+    # an existing position; callers can explicitly pass None to make it general.
+    if "release_scope" not in values and "release_scope_id" not in values:
+        values["release_scope_id"] = previous.release_scope_id
     values.update(
         recording=previous.recording,
         right_type=previous.right_type,
@@ -178,6 +169,12 @@ def create_release_rights_claims(
     **claim_values,
 ):
     """Create recording claims from one release-level registration workflow."""
+    scope = claim_values.get("release_scope")
+    scope_id = claim_values.get("release_scope_id", getattr(scope, "pk", None))
+    if scope_id is not None and str(scope_id) != str(release.pk):
+        raise ValidationError(
+            "Rettighetens utgivelsesscope må være denne utgivelsen."
+        )
     recording_ids = {recording.pk for recording in recordings}
     if not recording_ids:
         raise ValidationError("Velg minst én innspilling fra utgivelsen.")

@@ -5,7 +5,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from music_metadata.territories.territory import Territory as IndustryTerritory
 
-from catalogue.models import Recording
+from catalogue.models import Recording, Release, ReleaseTrack
 from media_assets.models import FileAsset
 from parties.models import Party
 from provenance.models import SourceRecord
@@ -227,6 +227,15 @@ class RightsClaim(CanonicalModel):
     right_type = models.CharField(
         "rettighetstype", max_length=30, choices=RightType.choices
     )
+    release_scope = models.ForeignKey(
+        Release,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="scoped_rights_claims",
+        verbose_name="rettighet avgrenset til utgivelse",
+        help_text="Tomt betyr generell innspillingsrett innenfor øvrig scope.",
+    )
     rights_holder = models.ForeignKey(
         Party,
         on_delete=models.PROTECT,
@@ -333,10 +342,47 @@ class RightsClaim(CanonicalModel):
                 | models.Q(valid_until__gte=models.F("valid_from")),
                 name="rights_claim_valid_period",
             ),
+            models.CheckConstraint(
+                condition=models.Q(release_scope__isnull=True)
+                | models.Q(
+                    right_type__in=("master_administration", "distribution")
+                ),
+                name="rights_release_scope_type",
+            ),
         ]
 
     def clean(self):
         super().clean()
+        if (
+            self.share is not None
+            and self.right_type != self.RightType.OWNERSHIP
+        ):
+            raise ValidationError(
+                {"share": "Andel brukes bare for mastereierskap."}
+            )
+        if self.release_scope_id:
+            if self.right_type not in {
+                self.RightType.ADMINISTRATION,
+                self.RightType.DISTRIBUTION,
+            }:
+                raise ValidationError(
+                    {
+                        "release_scope": "Mastereierskap kan ikke avgrenses til en utgivelse."
+                    }
+                )
+            if (
+                self._state.adding
+                and self.recording_id
+                and not ReleaseTrack.objects.filter(
+                    release_id=self.release_scope_id,
+                    recording_id=self.recording_id,
+                ).exists()
+            ):
+                raise ValidationError(
+                    {
+                        "release_scope": "Innspillingen må forekomme på utgivelsen ved registrering."
+                    }
+                )
         if (
             self.valid_from
             and self.valid_until
@@ -360,6 +406,7 @@ class RightsClaim(CanonicalModel):
                 .objects.filter(pk=self.pk)
                 .values(
                     "recording_id",
+                    "release_scope_id",
                     "right_type",
                     "rights_holder_id",
                     "grantor_id",
@@ -387,6 +434,7 @@ class RightsClaim(CanonicalModel):
                 )
             protected_fields = (
                 "recording_id",
+                "release_scope_id",
                 "right_type",
                 "rights_holder_id",
                 "grantor_id",
@@ -410,6 +458,15 @@ class RightsClaim(CanonicalModel):
                 raise ValidationError(
                     "Et registrert rettighetskrav må korrigeres ved å opprette et erstatningskrav."
                 )
+
+    @property
+    def scope_display(self):
+        release = (
+            f"Kun på utgivelsen «{self.release_scope.title}»"
+            if self.release_scope_id
+            else "Generelt for innspillingen"
+        )
+        return f"{self.territory_display} · {release}"
 
     @property
     def territory_display(self):

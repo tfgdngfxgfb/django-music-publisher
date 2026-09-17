@@ -106,6 +106,7 @@ class RightsClaimAdmin(CanonicalAdmin):
     list_display = (
         "recording",
         "right_type",
+        "release_scope",
         "rights_holder",
         "share",
         "territory_mode",

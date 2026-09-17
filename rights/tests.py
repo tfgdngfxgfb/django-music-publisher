@@ -191,15 +191,18 @@ class RightsDomainTests(TestCase):
         self.assertEqual(second.status, VerificationStatus.UNVERIFIED)
         self.assertFalse(second.decisions.exists())
 
+        separate = Recording.objects.create(title="Separate country interests")
         norway = Territory.objects.get(code="NO")
         sweden = Territory.objects.get(code="SE")
         norwegian_claim = self.claim(
+            recording=separate,
             rights_holder=self.owner_b,
             share=Decimal("80"),
             territory_mode=RightsClaim.TerritoryMode.INCLUDE,
             territories=(norway,),
         )
         swedish_claim = self.claim(
+            recording=separate,
             share=Decimal("80"),
             territory_mode=RightsClaim.TerritoryMode.INCLUDE,
             territories=(sweden,),
@@ -308,7 +311,7 @@ class RightsDomainTests(TestCase):
         )
         unknown.refresh_from_db()
         summary = classify_ownership([unknown], self.owner_a)
-        self.assertEqual(summary.category, OwnershipCategory.PARTIAL)
+        self.assertEqual(summary.category, OwnershipCategory.UNRESOLVED)
         self.assertTrue(summary.has_unknown_local_share)
 
     def test_disputed_claim_wins_and_other_right_types_do_not_imply_ownership(

@@ -11,7 +11,7 @@
   {% for claim in claims %}<tr>
     <td><strong>{{ claim.rights_holder.name }}</strong>{% if claim.grantor %}<small><span class="term-label">Fra {{ claim.grantor.name }} {% include "workbench/_help_tip.html" with tip_id=claim.pk help_term=rights_help.grantor %}</span></small>{% endif %}</td>
     <td>{% if claim.share is not None %}{{ claim.share }} %{% else %}Ukjent{% endif %}</td>
-    <td>{{ claim.territory_display }}</td>
+    <td>{{ claim.scope_display }}</td>
     <td>{{ claim.valid_from|default:"Ukjent start" }} – {{ claim.valid_until|default:"Ingen registrert sluttdato" }}</td>
     <td><span class="evidence evidence-{{ claim.evidence_strength }}">{{ claim.get_evidence_strength_display }}</span></td>
     <td>{% if claim.agreement %}{% if perms.rights.view_agreement %}<a href="{% url 'workbench:agreement' claim.agreement.pk %}">{{ claim.agreement.title }}</a>{% else %}{{ claim.agreement.title }}{% endif %}{% endif %}{% if claim.source_record %}<small>{{ claim.source_record.source_system }}</small>{% endif %}{% if not claim.agreement and not claim.source_record %}Ikke registrert{% endif %}</td>
