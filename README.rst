@@ -1,6 +1,19 @@
 P7 Archive & Rights / P7 Arkiv og rettigheter
 +++++++++++++++++++++++++++++++++++++++++++++++
 
+About P7 Arkiv og rettigheter
+================================
+
+P7 Arkiv og rettigheter is a Django-based workbench for cataloguing music
+recordings and releases, managing registered media files and their provenance,
+and reviewing master and rights information. Its GUI brings catalogue, file,
+radio metadata and master workflows together while keeping a Recording as the
+canonical audio object.
+
+Managing a release or possessing a file does not establish ownership of its
+recordings. The application builds on Django Music Publisher, whose separate
+publishing workflows for Works, Writers and CWR remain available.
+
 Running P7 Arkiv og rettigheter locally
 ========================================
 
