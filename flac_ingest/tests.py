@@ -121,7 +121,7 @@ class FlacAdapterTests(FlacTestMixin, TestCase):
         self.assertEqual(snapshot.technical["sample_rate"], 44100)
         self.assertEqual(snapshot.technical["bits_per_sample"], 16)
         self.assertEqual(snapshot.technical["channels"], 1)
-        self.assertEqual(snapshot.technical["tag_adapter_version"], 4)
+        self.assertEqual(snapshot.technical["tag_adapter_version"], 3)
 
     def test_onetagger_percentage_rating_maps_to_p7_energy(self):
         for raw_rating, expected_energy in (
@@ -515,7 +515,7 @@ class FlacIngestTests(FlacTestMixin, TestCase):
         entry.rotation_suitability = ""
         entry.save(update_fields=("rotation_suitability",))
         asset = first_item.file_asset
-        asset.technical_metadata["tag_adapter_version"] = 3
+        asset.technical_metadata.pop("tag_adapter_version", None)
         asset.save(update_fields=("technical_metadata",))
 
         second = self.scan()

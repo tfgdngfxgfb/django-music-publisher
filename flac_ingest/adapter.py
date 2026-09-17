@@ -11,7 +11,7 @@ from django.conf import settings
 from mutagen import MutagenError
 from mutagen.flac import FLAC, FLACNoHeaderError
 
-TAG_ADAPTER_VERSION = 4
+TAG_ADAPTER_VERSION = 3
 
 TAG_ALIASES = {
     "title": ("TITLE",),
