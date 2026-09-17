@@ -250,7 +250,20 @@ def home(request):
     "music_library.view_musiclibraryentry", raise_exception=True
 )
 def music_library(request):
+    session_key = "gui_v2_music_library_query"
+    if "reset" in request.GET:
+        request.session.pop(session_key, None)
+        return redirect("gui_v2:music_library")
+    if not request.GET and (saved_query := request.session.get(session_key)):
+        return redirect(f"{reverse('gui_v2:music_library')}?{saved_query}")
     form = MusicLibraryFilterForm(request.GET or None)
+    if request.GET and form.is_valid():
+        remembered = request.GET.copy()
+        for name in list(remembered):
+            if name not in MusicLibraryFilterForm.base_fields and name != "page":
+                remembered.pop(name)
+        if remembered:
+            request.session[session_key] = remembered.urlencode()
     selected_id = request.GET.get("selected")
     fragment_mode = (
         request.headers.get("X-Requested-With") == "XMLHttpRequest"

@@ -516,7 +516,9 @@ class GuiV2WorkspaceTests(TestCase):
             self.channel.logo.save(
                 "p7-test.png", ContentFile(b"custom-channel-logo")
             )
-            response = self.client.get(reverse("gui_v2:music_library"))
+            response = self.client.get(
+                reverse("gui_v2:music_library"), follow=True
+            )
             self.assertContains(
                 response,
                 reverse("gui_v2:channel_logo", args=[self.channel.pk]),
@@ -614,8 +616,39 @@ class GuiV2WorkspaceTests(TestCase):
         self.assertEqual(explicit.context["page_size"], "40")
 
         self.client.cookies["p7-v2-library-per-page"] = "invalid"
-        invalid = self.client.get(reverse("gui_v2:music_library"))
+        invalid = self.client.get(reverse("gui_v2:music_library"), follow=True)
         self.assertEqual(invalid.context["page_size"], "40")
+
+    def test_library_remembers_filters_in_session_until_reset(self):
+        self._superuser()
+        url = reverse("gui_v2:music_library")
+        filters = {
+            "q": "Spillbar",
+            "genre": "Pop",
+            "ordering": "-artist",
+            "per_page": "100",
+            "channels": [str(self.channel.pk)],
+            "selected": str(self.entry.pk),
+        }
+        self.client.get(url, filters)
+
+        remembered = self.client.get(url)
+        self.assertEqual(remembered.status_code, 302)
+        self.assertIn("q=Spillbar", remembered.url)
+        self.assertIn("genre=Pop", remembered.url)
+        self.assertIn("ordering=-artist", remembered.url)
+        self.assertIn("per_page=100", remembered.url)
+        self.assertIn(f"channels={self.channel.pk}", remembered.url)
+        self.assertNotIn("selected=", remembered.url)
+
+        other_session = Client()
+        other_session.force_login(self.user)
+        self.assertEqual(other_session.get(url).status_code, 200)
+
+        reset = self.client.get(f"{url}?reset=1", follow=True)
+        self.assertEqual(reset.status_code, 200)
+        self.assertEqual(reset.redirect_chain, [(url, 302)])
+        self.assertEqual(self.client.get(url).status_code, 200)
 
     def test_library_uses_table_headers_for_sorting_and_keeps_filters(self):
         self._superuser()
