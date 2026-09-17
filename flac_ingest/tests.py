@@ -110,6 +110,7 @@ class FlacAdapterTests(FlacTestMixin, TestCase):
         snapshot = read_flac(path)
         self.assertEqual(snapshot.parsed["energy"], 4)
         self.assertEqual(snapshot.parsed["channels"], ["P7 Riks", "P7 Ung"])
+        self.assertEqual(snapshot.parsed["rotation_suitability"], "suitable")
         self.assertEqual(
             snapshot.parsed["target_audiences"], ["Ung voksen", "Voksen"]
         )
@@ -120,7 +121,7 @@ class FlacAdapterTests(FlacTestMixin, TestCase):
         self.assertEqual(snapshot.technical["sample_rate"], 44100)
         self.assertEqual(snapshot.technical["bits_per_sample"], 16)
         self.assertEqual(snapshot.technical["channels"], 1)
-        self.assertEqual(snapshot.technical["tag_adapter_version"], 3)
+        self.assertEqual(snapshot.technical["tag_adapter_version"], 4)
 
     def test_onetagger_percentage_rating_maps_to_p7_energy(self):
         for raw_rating, expected_energy in (
@@ -172,7 +173,39 @@ class FlacAdapterTests(FlacTestMixin, TestCase):
         )
         self.assertEqual(snapshot.raw_tags["comment"], comments)
 
-    def test_onetagger_not_assessed_rotation_maps_to_empty_state(self):
+    def test_txxx_channel_implies_rotation_without_explicit_assessment(self):
+        self.make_flac(
+            "channel-only.flac",
+            TITLE="Kanaltilknyttet",
+            COMMENT="TXXX:Kanal - P7 Riks",
+        )
+        with override_settings(P7_MUSIC_ROOT=str(self.root)):
+            batch = scan_directory(
+                relative_root=".", recursive=True, user=self.user
+            )
+            item = batch.items.get()
+            self.assertEqual(item.parsed_metadata["channels"], ["P7 Riks"])
+            self.assertEqual(
+                item.parsed_metadata["rotation_suitability"], "suitable"
+            )
+            apply_batch(batch, user=self.user)
+        item.refresh_from_db()
+        entry = MusicLibraryEntry.objects.get(recording=item.recording)
+        self.assertEqual(
+            list(entry.channels.values_list("name", flat=True)), ["P7 Riks"]
+        )
+        self.assertEqual(entry.rotation_suitability, "suitable")
+
+    def test_explicit_unassessed_rotation_overrides_txxx_channel(self):
+        path = self.make_flac(
+            "channel-unassessed.flac",
+            COMMENT=["TXXX:Kanal - P7 Riks", "TXXX:Rotasjon - Ikke vurdert"],
+        )
+        snapshot = read_flac(path)
+        self.assertEqual(snapshot.parsed["channels"], ["P7 Riks"])
+        self.assertEqual(snapshot.parsed["rotation_suitability"], "unassessed")
+
+    def test_onetagger_not_assessed_rotation_maps_to_unassessed_state(self):
         path = self.make_flac(
             "not-assessed.flac",
             TITLE="Ikke rotasjonsvurdert",
@@ -476,10 +509,13 @@ class FlacIngestTests(FlacTestMixin, TestCase):
             list(entry.channels.values_list("name", flat=True)),
             ["P7 Evangelisk"],
         )
+        self.assertEqual(entry.rotation_suitability, "suitable")
 
         entry.channel_links.all().delete()
+        entry.rotation_suitability = ""
+        entry.save(update_fields=("rotation_suitability",))
         asset = first_item.file_asset
-        asset.technical_metadata.pop("tag_adapter_version", None)
+        asset.technical_metadata["tag_adapter_version"] = 3
         asset.save(update_fields=("technical_metadata",))
 
         second = self.scan()
@@ -493,6 +529,8 @@ class FlacIngestTests(FlacTestMixin, TestCase):
             list(entry.channels.values_list("name", flat=True)),
             ["P7 Evangelisk"],
         )
+        entry.refresh_from_db()
+        self.assertEqual(entry.rotation_suitability, "suitable")
 
     def test_release_context_version_backfills_structure_for_existing_file(
         self,

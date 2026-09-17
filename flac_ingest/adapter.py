@@ -11,7 +11,7 @@ from django.conf import settings
 from mutagen import MutagenError
 from mutagen.flac import FLAC, FLACNoHeaderError
 
-TAG_ADAPTER_VERSION = 3
+TAG_ADAPTER_VERSION = 4
 
 TAG_ALIASES = {
     "title": ("TITLE",),
@@ -304,6 +304,14 @@ def read_flac(path):
             parsed[field] = _language(_first(values))
         else:
             parsed[field] = _first(values)
+    # A channel assignment is an affirmative rotation assessment only when
+    # the file does not carry an explicit (or invalid) rotation value.
+    if (
+        parsed.get("channels")
+        and not parsed.get("rotation_suitability")
+        and not parsed.get("rotation_suitability_invalid")
+    ):
+        parsed["rotation_suitability"] = "suitable"
     p7uuid = parsed.get("p7uuid")
     if p7uuid:
         try:
