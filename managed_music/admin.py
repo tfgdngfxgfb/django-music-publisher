@@ -44,7 +44,11 @@ class ManagedRecordingAdmin(CanonicalAdmin):
 
     def get_readonly_fields(self, request, obj=None):
         fields = list(super().get_readonly_fields(request, obj))
-        return (*fields, "library_entry") if obj else tuple(fields)
+        return (*fields, "library_entry", "status") if obj else tuple(fields)
+
+    def has_delete_permission(self, request, obj=None):
+        # Membership may only end through the explicit, audited domain service.
+        return False
 
     def has_add_permission(self, request):
         return request.user.is_superuser and super().has_add_permission(
@@ -87,7 +91,11 @@ class ManagedRecordingAdmin(CanonicalAdmin):
 @admin.register(ManagedRelease)
 class ManagedReleaseAdmin(CanonicalAdmin):
     list_display = (
-        "release", "status", "relationship", "source_system", "updated_at"
+        "release",
+        "status",
+        "relationship",
+        "source_system",
+        "updated_at",
     )
     list_filter = ("status", "relationship", "source_system")
     search_fields = (
@@ -99,6 +107,8 @@ class ManagedReleaseAdmin(CanonicalAdmin):
     autocomplete_fields = ("release", "source_system")
 
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related(
-            "release", "release__label", "source_system"
+        return (
+            super()
+            .get_queryset(request)
+            .select_related("release", "release__label", "source_system")
         )

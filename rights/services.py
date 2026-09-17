@@ -1,8 +1,7 @@
-from datetime import date
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
-from django.db import models, transaction
+from django.db import transaction
 
 from catalogue.models import Recording
 from rights_core.models import VerificationStatus
@@ -61,6 +60,12 @@ def validate_confirmed_ownership_total(claim):
 
 @transaction.atomic
 def create_rights_claim(*, territories=(), **values):
+    recording_id = (
+        values["recording"].pk
+        if "recording" in values
+        else values["recording_id"]
+    )
+    Recording.objects.select_for_update().get(pk=recording_id)
     values.pop("status", None)
     selected = _validate_territory_scope(
         values.get("territory_mode", RightsClaim.TerritoryMode.WORLD),
@@ -83,12 +88,16 @@ def decide_rights_claim(claim, decision, *, user, note=""):
         VerificationStatus.REJECTED,
     }:
         raise ValueError("Ugyldig beslutning for rettighetskrav.")
+    recording = Recording.objects.select_for_update().get(
+        pk=RightsClaim.objects.values_list("recording_id", flat=True).get(
+            pk=claim.pk
+        )
+    )
     claim = (
         RightsClaim.objects.select_for_update()
         .prefetch_related("territories")
         .get(pk=claim.pk)
     )
-    Recording.objects.select_for_update().get(pk=claim.recording_id)
     if decision == VerificationStatus.CONFIRMED:
         validate_confirmed_ownership_total(claim)
     result = RightsDecision.objects.create(
@@ -97,37 +106,9 @@ def decide_rights_claim(claim, decision, *, user, note=""):
     claim.status = decision
     claim._allow_status_transition = True
     claim.save(update_fields=("status",))
-    configuration = RightsConfiguration.objects.first()
-    if configuration:
-        from managed_music.models import ManagedRecording
+    from managed_music.lifecycle import refresh_management_status
 
-        managed = ManagedRecording.objects.filter(
-            library_entry__recording_id=claim.recording_id
-        ).first()
-        if managed:
-            has_current_local_basis = (
-                RightsClaim.objects.filter(
-                    recording_id=claim.recording_id,
-                    rights_holder_id=configuration.local_organization_id,
-                    right_type__in=RightsClaim.RightType.values,
-                    status=VerificationStatus.CONFIRMED,
-                )
-                .filter(
-                    models.Q(valid_from__isnull=True)
-                    | models.Q(valid_from__lte=date.today()),
-                    models.Q(valid_until__isnull=True)
-                    | models.Q(valid_until__gte=date.today()),
-                )
-                .exists()
-            )
-            next_status = (
-                ManagedRecording.Status.ACTIVE
-                if has_current_local_basis
-                else ManagedRecording.Status.PENDING
-            )
-            if managed.status != next_status:
-                managed.status = next_status
-                managed.save(update_fields=("status",))
+    refresh_management_status(recording)
     return result
 
 
@@ -135,6 +116,11 @@ def decide_rights_claim(claim, decision, *, user, note=""):
 def supersede_rights_claim(
     previous, *, user, territories=(), note="", **values
 ):
+    recording = Recording.objects.select_for_update().get(
+        pk=RightsClaim.objects.values_list("recording_id", flat=True).get(
+            pk=previous.pk
+        )
+    )
     previous = RightsClaim.objects.select_for_update().get(pk=previous.pk)
     values.update(
         recording=previous.recording,
@@ -151,6 +137,9 @@ def supersede_rights_claim(
     previous.status = VerificationStatus.SUPERSEDED
     previous._allow_status_transition = True
     previous.save(update_fields=("status",))
+    from managed_music.lifecycle import refresh_management_status
+
+    refresh_management_status(recording)
     return replacement
 
 
@@ -209,7 +198,9 @@ def create_release_rights_claims(
     from music_library.models import MusicLibraryEntry
 
     selected_recordings = list(
-        Recording.objects.filter(pk__in=recording_ids).order_by("pk")
+        Recording.objects.select_for_update()
+        .filter(pk__in=recording_ids)
+        .order_by("pk")
     )
     managed_recording_ids = set(
         ManagedRecording.objects.filter(

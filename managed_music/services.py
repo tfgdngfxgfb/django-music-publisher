@@ -1,3 +1,4 @@
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 
 from catalogue.models import (
@@ -10,10 +11,12 @@ from catalogue.services import (
     record_duplicate_candidates,
 )
 from music_library.models import MusicLibraryEntry
+from provenance.models import SourceRecord, SourceSystem
 from rights.models import RightsClaim, RightsConfiguration
 from rights.services import create_rights_claim
 
 from .models import ManagedRecording, ManagedRelease
+from .lifecycle import management_state
 
 
 @transaction.atomic
@@ -115,6 +118,7 @@ def create_managed_recording(
                 credited_as=artist_identity.display_name,
             )
         record_duplicate_candidates(recording, matches)
+    Recording.objects.select_for_update().get(pk=recording.pk)
     library_entry, _ = MusicLibraryEntry.objects.get_or_create(
         recording=recording
     )
@@ -140,3 +144,61 @@ def create_managed_recording(
         ),
     )
     return managed
+
+
+@transaction.atomic
+def return_to_music_library(managed, *, user, reason):
+    """Explicitly close rejected/abandoned onboarding; retain all source history.
+
+    No current, plausible or historical local basis may remain. This service is
+    deliberately not exposed as a GUI action in phase 6A.
+    """
+    if not user.has_perm("managed_music.delete_managedrecording"):
+        raise PermissionDenied
+    if not reason.strip():
+        raise ValidationError("Begrunn tilbakeføringen til Musikkarkivet.")
+    recording_id = ManagedRecording.objects.values_list(
+        "library_entry__recording_id", flat=True
+    ).get(pk=managed.pk)
+    Recording.objects.select_for_update().get(pk=recording_id)
+    managed = ManagedRecording.objects.select_for_update().get(pk=managed.pk)
+    state = management_state(managed)
+    if (
+        managed.status != ManagedRecording.Status.PENDING
+        or state.status != ManagedRecording.Status.PENDING
+        or state.has_pending_basis
+    ):
+        raise ValidationError(
+            "Bare onboarding uten gjenstående P7-grunnlag og uten tidligere "
+            "aktiv forvaltning kan tilbakeføres."
+        )
+    source_system, _ = SourceSystem.objects.get_or_create(
+        name="P7 forvaltningshistorikk",
+        defaults={"kind": SourceSystem.Kind.MANUAL},
+    )
+    audit = SourceRecord.objects.create(
+        source_system=source_system,
+        source_locator=f"Recording {recording_id}",
+        raw_payload={
+            "action": "return_to_music_library",
+            "recording_id": str(recording_id),
+            "library_entry_id": str(managed.library_entry_id),
+            "performed_by_id": str(user.pk),
+            "reason": reason.strip(),
+            "managed_recording": {
+                "id": str(managed.pk),
+                "status": managed.status,
+                "source_system_id": (
+                    str(managed.source_system_id)
+                    if managed.source_system_id
+                    else None
+                ),
+                "notes": managed.notes,
+                "revision": managed.revision,
+                "created_at": managed.created_at.isoformat(),
+                "updated_at": managed.updated_at.isoformat(),
+            },
+        },
+    )
+    managed.delete()
+    return audit

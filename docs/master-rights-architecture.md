@@ -4,6 +4,11 @@ Date: 12 September 2026
 Status: proposed architecture; no application implementation or schema changes
 Audience: P7 product owners, developers and future data-migration partners
 
+Current management lifecycle contract: [Phase 6A – management semantics and
+invariants](phase-6a-management-semantics.md). This later contract takes precedence
+for management membership, lifecycle and the boundary of the rights workflow;
+the assessment below remains the original architectural baseline.
+
 ## 1. Recommendation and scope
 
 Build a modular Django application around the existing `music_publisher` app. Keep DMP as the authority for publishing works, writers, manuscript shares, CWR and acknowledgements. Add an independent recording catalogue and master-rights domain, connected through an optional integration app. Start with one PostgreSQL database and one deployment; separate services would add unnecessary synchronization and operational complexity at this stage.
