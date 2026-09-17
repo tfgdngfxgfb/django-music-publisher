@@ -1,5 +1,13 @@
 (() => {
   let requestNumber = 0;
+  let pendingRequest;
+  let loadingTimer;
+  const loadingStatus = document.createElement("span");
+  loadingStatus.className = "navigation-loading";
+  loadingStatus.setAttribute("role", "status");
+  loadingStatus.setAttribute("aria-live", "polite");
+  loadingStatus.hidden = true;
+  document.body.append(loadingStatus);
 
   const eligible = value => {
     const url = new URL(value, location.href);
@@ -30,11 +38,18 @@
       return;
     }
     const currentRequest = ++requestNumber;
+    pendingRequest?.abort();
+    pendingRequest = new AbortController();
+    clearTimeout(loadingTimer);
+    loadingStatus.textContent = `Åpner ${options.label || "siden"} …`;
+    loadingTimer = setTimeout(() => { loadingStatus.hidden = false; }, 180);
+    document.querySelector("#v2-main")?.setAttribute("aria-busy", "true");
     let contentReplaced = false;
     try {
       const response = await fetch(url.href, {
         credentials: "same-origin",
         headers: {Accept: "text/html"},
+        signal: pendingRequest.signal,
       });
       if (currentRequest !== requestNumber) return;
       if (!response.ok || !response.headers.get("content-type")?.includes("text/html")) {
@@ -76,6 +91,13 @@
       if (currentRequest !== requestNumber) return;
       if (!contentReplaced) location.assign(url.href);
       else console.error("Kunne ikke fullføre sideoppdateringen.", error);
+    } finally {
+      if (currentRequest === requestNumber) {
+        clearTimeout(loadingTimer);
+        loadingStatus.hidden = true;
+        document.querySelector("#v2-main")?.removeAttribute("aria-busy");
+        pendingRequest = null;
+      }
     }
   };
 
@@ -90,7 +112,7 @@
     const url = new URL(link.href);
     if (url.pathname === location.pathname && url.search === location.search && url.hash) return;
     event.preventDefault();
-    void navigate(url.href);
+    void navigate(url.href, {label: link.textContent.trim() || "siden"});
   });
 
   document.addEventListener("submit", event => {

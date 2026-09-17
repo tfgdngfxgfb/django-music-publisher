@@ -7,7 +7,9 @@ from uuid import uuid4
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.core.files.base import ContentFile
+from django.db import connection
 from django.test import Client, TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from mutagen.flac import FLAC
 
@@ -646,10 +648,12 @@ class GuiV2WorkspaceTests(TestCase):
             )
             MusicLibraryEntry.objects.create(recording=recording)
 
-        response = self.client.get(reverse("gui_v2:music_library"))
+        with CaptureQueriesContext(connection) as queries:
+            response = self.client.get(reverse("gui_v2:music_library"))
         content = response.content
 
         self.assertEqual(response.context["page"].paginator.num_pages, 2)
+        self.assertLess(len(queries), 50)
         self.assertEqual(content.count(b"pagination pagination-top"), 1)
         self.assertLess(
             content.index(b"pagination pagination-top"),
@@ -953,6 +957,11 @@ class GuiV2WorkspaceTests(TestCase):
             role=RecordingContribution.Role.PRIMARY,
             credited_as="Nordlys & Venner",
         )
+        RecordingContribution.objects.create(
+            recording=self.recording,
+            role=RecordingContribution.Role.FEATURED,
+            credited_as="Nordlys & Venner",
+        )
         other = Recording.objects.create(title="Annen innspilling")
         MusicLibraryEntry.objects.create(recording=other)
         self._superuser()
@@ -966,6 +975,7 @@ class GuiV2WorkspaceTests(TestCase):
         filtered = self.client.get(library_url, {"q": "Nordlys & Venner"})
         self.assertContains(filtered, "Eksisterende innspilling")
         self.assertNotContains(filtered, "Annen innspilling")
+        self.assertEqual(filtered.context["page"].paginator.count, 1)
 
     def test_recording_search_matches_credited_artist(self):
         RecordingContribution.objects.create(

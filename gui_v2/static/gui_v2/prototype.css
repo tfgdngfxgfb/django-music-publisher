@@ -115,6 +115,7 @@ body.music-library-page .archive-layout>.inspector{align-self:start;margin-top:v
 .inspector .cover{overflow:hidden}.inspector .cover img{display:block;width:100%;height:100%;object-fit:cover}
 .library-cover-cell{width:28px;padding-inline:2px!important}.library-cover-thumb,.library-cover-placeholder{display:grid!important;place-items:center;width:24px;height:24px;border-radius:3px}.library-cover-thumb{object-fit:cover}.library-cover-placeholder{background:var(--surface3);color:var(--muted)!important;font-size:11px!important}
 .artist-search-link{text-decoration:none;border-bottom:1px solid transparent}.artist-search-link:hover,.artist-search-link:focus-visible{color:var(--accent);border-bottom-color:currentColor}
+.navigation-loading{position:fixed;top:68px;right:18px;z-index:50;padding:7px 12px;border:1px solid var(--line2);border-radius:6px;background:var(--surface2);color:var(--text);box-shadow:var(--shadow);font-size:12px;pointer-events:none}.navigation-loading[hidden]{display:none}
 
 /* Read-only preview for repairing a radio file attached to the wrong Recording. */
 .file-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:5px}.file-actions form{margin:0}.warning-action{border-color:color-mix(in srgb,var(--warn) 60%,var(--line));color:var(--warn)}

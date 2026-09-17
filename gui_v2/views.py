@@ -31,6 +31,7 @@ from django.db.models import (
     Value,
     When,
 )
+from django.db.models.functions import Coalesce
 from django.http import (
     FileResponse,
     Http404,
@@ -267,6 +268,16 @@ def music_library(request):
     radio_assets = FileAsset.objects.filter(
         recording_id=OuterRef("recording_id"), role=FileAsset.Role.RADIO_FLAC
     )
+    radio_counts = (
+        FileAsset.objects.filter(
+            recording_id=OuterRef("recording_id"),
+            role=FileAsset.Role.RADIO_FLAC,
+        )
+        .order_by()
+        .values("recording_id")
+        .annotate(total=Count("pk"))
+        .values("total")[:1]
+    )
     artist_sort = (
         RecordingContribution.objects.filter(
             recording_id=OuterRef("recording_id"),
@@ -307,13 +318,16 @@ def music_library(request):
         .values("target_audience__name")[:1]
     )
     queryset = (
-        MusicLibraryEntry.objects.select_related("recording")
+        MusicLibraryEntry.objects.select_related(
+            "recording__media_selection__current_radio"
+        )
         .prefetch_related(
             artist_prefetch,
             "channels",
             "target_audiences",
             "recording__identifiers",
             "recording__file_assets__locations",
+            "recording__media_selection__current_radio__locations",
             "recording__release_tracks__release",
         )
         .annotate(
@@ -326,13 +340,7 @@ def music_library(request):
                     library_entry_id=OuterRef("pk")
                 )
             ),
-            radio_file_count=Count(
-                "recording__file_assets",
-                filter=Q(
-                    recording__file_assets__role=FileAsset.Role.RADIO_FLAC
-                ),
-                distinct=True,
-            ),
+            radio_file_count=Coalesce(Subquery(radio_counts), Value(0)),
             has_radio_file=Exists(radio_assets),
             has_active_radio_location=Exists(
                 FileLocation.objects.filter(
@@ -405,17 +413,27 @@ def music_library(request):
             ),
         )
     )
+    needs_distinct = False
     if form.is_valid():
         data = form.cleaned_data
         page_size = data.get("per_page") or "40"
         term = (data.get("q") or "").strip()
         if term:
+            matching_contributions = RecordingContribution.objects.filter(
+                recording_id=OuterRef("recording_id")
+            ).filter(
+                Q(credited_as__icontains=term)
+                | Q(artist_identity__display_name__icontains=term)
+                | Q(party__name__icontains=term)
+            )
+            matching_identifiers = ExternalIdentifier.objects.filter(
+                recording_id=OuterRef("recording_id"),
+                normalized_value__icontains=term,
+            )
             queryset = queryset.filter(
                 Q(recording__title__icontains=term)
-                | Q(recording__contributions__credited_as__icontains=term)
-                | Q(recording__contributions__artist_identity__display_name__icontains=term)
-                | Q(recording__contributions__party__name__icontains=term)
-                | Q(recording__identifiers__normalized_value__icontains=term)
+                | Q(Exists(matching_contributions))
+                | Q(Exists(matching_identifiers))
             )
         selected_genres = [
             value for value in request.GET.getlist("genre") if value
@@ -444,6 +462,7 @@ def music_library(request):
             if value
         ]
         if rotations:
+            needs_distinct = True
             rotation_query = Q(pk__in=[])
             for rotation in rotations:
                 if rotation == MusicLibraryEntry.RotationSuitability.SUITABLE:
@@ -485,9 +504,11 @@ def music_library(request):
             ),
         ):
             if chosen and data.get(mode_name) == "all":
+                needs_distinct = True
                 for value in chosen:
                     queryset = queryset.filter(**{relation: value})
             elif chosen:
+                needs_distinct = True
                 queryset = queryset.filter(**{f"{relation}__in": chosen})
         file_statuses = set(request.GET.getlist("file_status")) & {
             "available",
@@ -497,6 +518,7 @@ def music_library(request):
         }
         radio = Q(recording__file_assets__role=FileAsset.Role.RADIO_FLAC)
         if file_statuses:
+            needs_distinct = True
             file_query = Q(pk__in=[])
             if "available" in file_statuses:
                 file_query |= radio & Q(
@@ -642,7 +664,8 @@ def music_library(request):
         queryset = queryset.order_by("recording__title", "id")
     if fragment_mode:
         queryset = queryset.filter(pk=selected_id)
-    queryset = queryset.distinct()
+    if needs_distinct:
+        queryset = queryset.distinct()
     paginator_size = (
         max(queryset.count(), 1) if page_size == "all" else int(page_size)
     )
@@ -686,7 +709,7 @@ def music_library(request):
             for item in entry.recording.file_assets.all()
             if item.role == FileAsset.Role.RADIO_FLAC
         ]
-        entry.is_managed = hasattr(entry, "managed_recording")
+        entry.is_managed = entry.sort_managed
         entry.language_display = radio_language_name(entry.language)
         channel_values = list(entry.channels.all())
         target_values = list(entry.target_audiences.all())
