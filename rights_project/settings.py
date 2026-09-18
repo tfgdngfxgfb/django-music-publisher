@@ -106,6 +106,22 @@ P7_GENERATED_MEDIA_RELATIVE_ROOT = os.getenv(
 )
 
 P7_STORAGE_ROOTS = {}
+for key, setting_name, client_setting in (
+    ("raw_sources", "P7_RAW_SOURCE_ROOT", "P7_RAW_SOURCE_CLIENT_ROOT"),
+    (
+        "edited_masters",
+        "P7_MASTER_SOURCE_ROOT",
+        "P7_MASTER_SOURCE_CLIENT_ROOT",
+    ),
+):
+    configured = os.getenv(setting_name, "")
+    if configured:
+        P7_STORAGE_ROOTS[key] = {
+            "server_root": configured,
+            "client_root": os.getenv(client_setting, ""),
+            "backend": "filesystem",
+            "read_only": True,
+        }
 if P7_GENERATED_MEDIA_ROOT:
     P7_STORAGE_ROOTS[P7_GENERATED_MEDIA_ROOT_KEY] = {
         "server_root": P7_GENERATED_MEDIA_ROOT,

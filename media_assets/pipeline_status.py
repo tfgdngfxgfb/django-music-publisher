@@ -34,6 +34,42 @@ class GenerationState(StrEnum):
     CANDIDATE_FROM_OTHER_MASTER = "candidate_from_other_master"
 
 
+class RadioWorkState(StrEnum):
+    NO_SELECTED_MASTER = "no_selected_master"
+    MISSING_RADIO_FLAC = "missing_radio_flac"
+    CURRENT_MATCHES_SELECTED_MASTER = "current_matches_selected_master"
+    CURRENT_FROM_PREVIOUS_MASTER = "current_from_previous_master"
+    CURRENT_LINEAGE_UNKNOWN = "current_lineage_unknown"
+    CANDIDATE_FROM_SELECTED_MASTER = "candidate_from_selected_master"
+    CANDIDATE_FROM_OTHER_MASTER = "candidate_from_other_master"
+    GENERATING = "generating"
+    GENERATION_FAILED = "generation_failed"
+
+
+def radio_work_state(status):
+    """One read-only priority order shared by all radio work surfaces."""
+    if status.master_state == MasterState.NO_MASTER:
+        return RadioWorkState.NO_SELECTED_MASTER
+    if (
+        status.generation_state
+        == GenerationState.CANDIDATE_FROM_SELECTED_MASTER
+    ):
+        return RadioWorkState.CANDIDATE_FROM_SELECTED_MASTER
+    if status.generation_state == GenerationState.IN_PROGRESS:
+        return RadioWorkState.GENERATING
+    if status.generation_state == GenerationState.FAILED:
+        return RadioWorkState.GENERATION_FAILED
+    if status.generation_state == GenerationState.CANDIDATE_FROM_OTHER_MASTER:
+        return RadioWorkState.CANDIDATE_FROM_OTHER_MASTER
+    if status.current_state == CurrentRadioState.NO_RADIO:
+        return RadioWorkState.MISSING_RADIO_FLAC
+    if status.current_state == CurrentRadioState.FROM_PREVIOUS_MASTER:
+        return RadioWorkState.CURRENT_FROM_PREVIOUS_MASTER
+    if status.current_state == CurrentRadioState.LINEAGE_UNKNOWN:
+        return RadioWorkState.CURRENT_LINEAGE_UNKNOWN
+    return RadioWorkState.CURRENT_MATCHES_SELECTED_MASTER
+
+
 @dataclass(frozen=True)
 class RecordingMediaPipelineStatus:
     selected_master: FileAsset | None

@@ -7,11 +7,14 @@ from . import (
     managed_views,
     release_rights_views,
     followup_views,
+    radio_work_views,
 )
 
 app_name = "gui_v2"
 
 urlpatterns = [
+    path("radio-flac/", radio_work_views.index, name="radio_workbench"),
+    path("radio-flac/bulk/", radio_work_views.bulk, name="radio_workbench_bulk"),
     path("oppfolging/", followup_views.index, name="followup"),
     path(
         "utgivelser/<uuid:release_id>/rettigheter/registrering/",
@@ -71,6 +74,7 @@ urlpatterns = [
         name="recording_rights_replace",
     ),
     path("digitalisering/", digitization.index, name="digitization_index"),
+    path("digitalisering/start/", digitization.start, name="digitization_start"),
     path(
         "digitalisering/utgivelser/<uuid:release_id>/matrise/",
         digitization.release_matrix,
@@ -80,6 +84,11 @@ urlpatterns = [
         "digitalisering/<uuid:batch_id>/",
         digitization.detail,
         name="digitization_detail",
+    ),
+    path(
+        "digitalisering/<uuid:batch_id>/filer/",
+        digitization.browse_files,
+        name="digitization_browse_files",
     ),
     path("", views.home, name="home"),
     path("musikkarkiv/", views.music_library, name="music_library"),

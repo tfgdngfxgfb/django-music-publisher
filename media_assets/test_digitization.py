@@ -1,6 +1,7 @@
 import hashlib
 import tempfile
 from pathlib import Path
+from urllib.parse import quote
 from unittest.mock import patch
 
 import numpy as np
@@ -138,6 +139,131 @@ class DigitizationWorkflowTests(TestCase):
             },
         )
         return tracks
+
+    def test_raw_and_edited_master_are_separate_browsers(self):
+        self.client.force_login(self.user)
+        url = reverse("gui_v2:digitization_detail", args=[self.batch.pk])
+        with self.settings(P7_MUSIC_ROOT=str(self.root)):
+            before = FileAsset.objects.count()
+            page = self.client.get(url)
+            self.assertContains(page, "Finn RAW-filer")
+            self.assertContains(page, "Finn redigerte mastere")
+            self.assertContains(page, 'id="raw-picker"')
+            self.assertContains(page, 'id="master-picker"')
+            browsed = self.client.get(
+                url,
+                {
+                    "browse": "1",
+                    "role": FileAsset.Role.EDITED_WAV_MASTER,
+                    "root_key": "music_library",
+                    "relative_path": "edited",
+                },
+            )
+            self.assertContains(browsed, "01 Sang en.wav")
+            self.assertContains(browsed, "Størrelse")
+            self.assertEqual(FileAsset.objects.count(), before)
+            fragment = self.client.get(
+                reverse(
+                    "gui_v2:digitization_browse_files",
+                    args=[self.batch.pk],
+                ),
+                {
+                    "browse": "1",
+                    "role": FileAsset.Role.EDITED_WAV_MASTER,
+                    "root_key": "music_library",
+                    "relative_path": "edited",
+                    "file_q": "01 Sang",
+                },
+            )
+            self.assertContains(fragment, 'id="master-picker"')
+            self.assertContains(fragment, "01 Sang en.wav")
+            self.assertNotContains(fragment, "02 Sang to.wav")
+            self.assertNotContains(fragment, "v2-player")
+            self.assertEqual(FileAsset.objects.count(), before)
+            preview = self.client.post(
+                url,
+                {
+                    "operation": "register",
+                    "selection_mode": "selected",
+                    "root_key": "music_library",
+                    "role": FileAsset.Role.EDITED_WAV_MASTER,
+                    "relative_path": "edited",
+                    "filenames": ["01 Sang en.wav"],
+                },
+            )
+            self.assertContains(preview, "Forhåndsvisning")
+            self.assertNotContains(preview, "02 Sang to.wav")
+            self.assertEqual(FileAsset.objects.count(), before)
+
+    def test_digitization_can_finish_without_radio_flac(self):
+        raw, masters = self.prepare()
+        self.link(masters)
+        self.apply(
+            "raw_link",
+            {
+                "assets": [str(master.pk) for master in masters],
+                "source": str(raw[0].pk),
+            },
+        )
+        self.apply(
+            "select_master", {"assets": [str(master.pk) for master in masters]}
+        )
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("gui_v2:digitization_detail", args=[self.batch.pk]),
+            {"operation": "finish"},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.batch.refresh_from_db()
+        self.assertEqual(self.batch.status, DigitizationBatch.Status.COMPLETE)
+        self.assertEqual(
+            FileAsset.objects.filter(role=FileAsset.Role.RADIO_FLAC).count(), 0
+        )
+
+    def test_start_uses_existing_or_new_release_and_returns_to_tracks(self):
+        self.client.force_login(self.user)
+        url = reverse("gui_v2:digitization_start")
+        existing = self.client.post(
+            url, {"mode": "existing", "release_id": str(self.release.pk)}
+        )
+        self.assertEqual(existing.status_code, 302)
+        self.assertIn("tab=tracks", existing.url)
+        self.assertIn("return=", existing.url)
+        self.assertEqual(
+            DigitizationBatch.objects.filter(release=self.release).count(), 2
+        )
+        new = self.client.post(
+            url,
+            {
+                "mode": "new",
+                "release-title": "Ny kassett",
+                "release-release_type": Release.Type.CASSETTE,
+                "release-release_year": 1986,
+            },
+        )
+        self.assertEqual(new.status_code, 302)
+        created = Release.objects.get(title="Ny kassett")
+        self.assertIn(str(created.pk), new.url)
+        self.assertTrue(
+            DigitizationBatch.objects.filter(release=created).exists()
+        )
+        destination = reverse(
+            "gui_v2:digitization_detail",
+            args=[DigitizationBatch.objects.get(release=created).pk],
+        )
+        saved = self.client.post(
+            f"{reverse('gui_v2:release_detail', args=[created.pk])}"
+            f"?tab=details&return={quote(destination, safe='')}",
+            {
+                "action": "release",
+                "release-title": "Ny kassett",
+                "release-release_type": Release.Type.CASSETTE,
+                "release-release_year": "1986",
+                "release-verification_status": "unverified",
+            },
+        )
+        self.assertEqual(saved.status_code, 302)
+        self.assertIn("return=", saved.url)
 
     def test_registration_preview_and_apply_read_only_and_idempotent(self):
         paths = list(self.root.rglob("*.wav"))
@@ -406,8 +532,9 @@ class DigitizationWorkflowTests(TestCase):
         self.assertContains(response, "Gjelder 2 utgivelser")
         self.assertContains(response, "Masteropprinnelse ukjent")
         index = self.client.get(reverse("gui_v2:digitization_index"))
-        self.assertContains(index, "data-use-release-title")
-        self.assertContains(index, "Bruk utgivelsestittel")
+        self.assertContains(index, "Start ny digitalisering")
+        start = self.client.get(reverse("gui_v2:digitization_start"))
+        self.assertContains(start, "Opprett ny utgivelse")
 
     def test_redigitization_and_partial_replacement_preserve_previous_choice(
         self,

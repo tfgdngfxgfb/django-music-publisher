@@ -1,0 +1,21 @@
+{% extends "gui_v2/base.html" %}{% load static %}
+{% block title %}Radio-FLAC · Bulkgenerering{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{% static 'gui_v2/digitization.css' %}">
+<div class="digitization-page">
+  <header class="recording-object-header"><a href="{% url 'gui_v2:radio_workbench' %}">← Radio-FLAC</a><div><span class="eyebrow">Felles arbeidsflate</span><h1>Generer Radio-FLAC</h1><p>Kontroller alle valgte innspillinger før filene genereres. Kandidater aktiveres separat.</p></div></header>
+  {% if error %}<p class="notice error" role="alert">{{ error }}</p>{% endif %}
+  {% if rows %}
+    <form method="post">{% csrf_token %}<input type="hidden" name="mode" value="apply"><input type="hidden" name="plan" value="{{ plan }}">
+      <section class="recording-card"><header><h2>Forhåndsvisning · {{ rows|length }} innspillinger</h2></header>
+        <div class="digitization-table"><table><thead><tr><th>Innspilling</th><th>Valgt master</th><th>Gjeldende radiofil</th><th>Ny kandidatfil</th><th>Bekreftelse</th></tr></thead><tbody>
+          {% for row in rows %}<tr><td>{{ row.recording.title }}</td><td>{{ row.master }}</td><td>{{ row.current }}</td><td>{{ row.target }}</td><td>{% if row.first_radio %}<label><input type="checkbox" name="metadata_{{ row.recording.pk }}" value="yes" required> Databaseopplysninger kontrollert mot fysisk medium</label>{% else %}Gjeldende radiofil beholdes til kandidaten aktiveres{% endif %}</td></tr>{% endfor %}
+        </tbody></table></div>
+      </section>
+      <p class="notice">Alle rader kontrolleres på nytt før generering. Selve lydfilene behandles én om gangen: hvis en fil feiler, vises resultatet per innspilling, og tidligere genererte kandidater beholdes. Ingen kandidat aktiveres automatisk.</p>
+      {% if file_writes_enabled %}<button class="primary" type="submit">Bekreft og generer kandidater</button>{% else %}<p>Filskriving er deaktivert i denne installasjonen.</p>{% endif %}
+    </form>
+  {% endif %}
+  {% if results %}<section class="recording-card"><header><h2>Resultat</h2></header><ul>{% for item in results %}<li>{{ item.recording.title }} · {{ item.message }}{% if item.success %} · <a href="{% url 'gui_v2:recording_generation_preview' item.recording.pk %}">Kontroller / aktiver</a>{% endif %}</li>{% endfor %}</ul></section>{% endif %}
+</div>
+{% endblock %}

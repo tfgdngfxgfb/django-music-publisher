@@ -1,0 +1,56 @@
+<section class="recording-card digitization-storage-picker" id="{{ picker_id }}" data-file-picker data-browse-url="{% url 'gui_v2:digitization_browse_files' batch.pk %}">
+  <header><h2>{{ picker_heading }}</h2><span>{{ picker_step }}</span></header>
+  <p>{{ picker_description }}</p>
+  <form method="get" class="digitization-toolbar" aria-label="{{ picker_heading }}">
+    <input type="hidden" name="browse" value="1">
+    <input type="hidden" name="role" value="{{ picker_role }}">
+    <label>Lagringsområde
+      <select name="root_key" required>
+        {% for key, label in source_roots %}
+          <option value="{{ key }}" {% if active_role == picker_role and browse_form.cleaned_data.root_key == key or active_role != picker_role and picker_default_root == key %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Mappe under lagringsområdet
+      <input name="relative_path" value="{% if active_role == picker_role and storage_browsed %}{{ browse_form.cleaned_data.relative_path|default:'.' }}{% else %}.{% endif %}" placeholder="." autocomplete="off">
+    </label>
+    <label>Søk etter filnavn i mappen
+      <input type="search" name="file_q" value="{% if active_role == picker_role %}{{ request.GET.file_q }}{% endif %}" placeholder="For eksempel Side A eller 01">
+    </label>
+    <button type="submit">Vis filer</button>
+  </form>
+  {% if active_role == picker_role and storage_browsed %}
+    {% if browse_error %}<p class="notice error" role="alert">{{ browse_error }}</p>{% endif %}
+    {% if browse_form.errors %}<div class="form-errors" role="alert">{{ browse_form.errors }}</div>{% endif %}
+    {% if not browse_error and browse_form.is_valid %}
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="operation" value="register">
+        <input type="hidden" name="selection_mode" value="selected">
+        <input type="hidden" name="root_key" value="{{ browse_form.cleaned_data.root_key }}">
+        <input type="hidden" name="role" value="{{ picker_role }}">
+        <input type="hidden" name="relative_path" value="{{ browse_form.cleaned_data.relative_path|default:'.' }}">
+        <div class="digitization-file-choices digitization-table">
+          <table>
+            <thead><tr><th>Velg</th><th>Fil eller mappe</th><th>Størrelse</th><th>Registrering</th></tr></thead>
+            <tbody>
+              {% for item in storage_entries %}
+                <tr>
+                  {% if item.folder %}
+                    <td></td><td><a data-picker-folder href="?browse=1&amp;root_key={{ browse_form.cleaned_data.root_key|urlencode }}&amp;role={{ picker_role|urlencode }}&amp;relative_path={{ item.path|urlencode }}#{{ picker_id }}">📁 {{ item.name }} →</a></td><td>Mappe</td><td>Åpne</td>
+                  {% else %}
+                    <td><input type="checkbox" id="{{ picker_id }}-{{ forloop.counter }}" name="filenames" value="{{ item.name }}" {% if item.unavailable %}disabled{% endif %}></td>
+                    <td><label for="{{ picker_id }}-{{ forloop.counter }}">{{ item.name }}</label><small>{{ item.path }}</small></td>
+                    <td>{{ item.size_bytes|filesizeformat }}</td>
+                    <td>{% if item.registered_here %}Allerede registrert her{% elif item.unavailable %}Registrert i en annen digitalisering{% else %}Klar til registrering{% endif %}</td>
+                  {% endif %}
+                </tr>
+              {% empty %}<tr><td colspan="4">Ingen WAV-filer eller undermapper funnet her.</td></tr>{% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% if writes_enabled and perms.media_assets.operate_digitization %}<button class="primary" type="submit">Forhåndsvis valgte {{ picker_noun }}</button>{% endif %}
+      </form>
+    {% endif %}
+  {% endif %}
+</section>

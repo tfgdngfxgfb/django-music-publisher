@@ -21,6 +21,7 @@
       {% if perms.music_library.view_musiclibraryentry %}<a {% if section == 'music_library' %}aria-current="page"{% endif %} href="{% url 'gui_v2:music_library' %}">Musikkarkiv</a>{% endif %}
       {% if perms.catalogue.view_release %}<a {% if section == 'releases' %}aria-current="page"{% endif %} href="{% url 'gui_v2:release_list' %}">Utgivelser</a>{% endif %}
       {% if perms.media_assets.view_digitizationbatch and perms.media_assets.view_fileasset and perms.media_assets.view_filelocation and perms.catalogue.view_release and perms.catalogue.view_recording %}<a {% if section == 'digitization' %}aria-current="page"{% endif %} href="{% url 'gui_v2:digitization_index' %}">Digitalisering</a>{% endif %}
+      {% if perms.catalogue.view_recording and perms.media_assets.view_fileasset and perms.media_assets.view_filelocation %}<a {% if section == 'radio_workbench' %}aria-current="page"{% endif %} href="{% url 'gui_v2:radio_workbench' %}">Radio-FLAC</a>{% endif %}
       {% if perms.delivery.view_delivery %}<a {% if section == 'delivery' %}aria-current="page"{% endif %} href="{% url 'delivery:history' %}">Leveranser</a>{% endif %}
       {% if perms.managed_music.view_managedrecording and perms.catalogue.view_recording %}<a {% if section == 'managed' %}aria-current="page"{% endif %} href="{% url 'gui_v2:managed_music' %}">Forvaltet musikk</a>{% endif %}
       {% if perms.parties.view_party %}<a href="{% url 'workbench:parties' %}">Artister/personer</a>{% endif %}

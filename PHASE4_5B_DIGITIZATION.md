@@ -2,6 +2,35 @@
 
 `Release → DigitizationBatch → RAW → redigert master → Recording → selected_master → 4.5A → radio-FLAC`.
 
+## GUI-revisjon etter pilotbruk
+
+Normal inngang er nå **Start ny digitalisering**: velg/opprett Release,
+registrer metadata og spor i Release-arbeidsflaten, velg RAW-filer, velg
+redigerte WAV-mastere, koble RAW → master og master → spor/Recording, og velg
+master. RAW og master har hver sin filvelger med en avgrenset, read-only
+mappevisning. Søk og mappenavigasjon oppdaterer bare den aktuelle filvelgeren,
+uten full sidelasting; vanlig GET er reserve uten JavaScript.
+Registrering av valgte filer bruker eksisterende
+`DigitizationPlan`-preview/apply og endrer ikke kildefilene. En fysisk RAW-fil
+gjenbrukes bare innen samme batch i denne revisjonen.
+
+En batch kan avsluttes når katalog-/filkoblingene og mastervalgene er på
+plass; radio-FLAC er ikke et ferdigkrav. Den tverrgående Radio-FLAC-flaten
+viser én rad per Recording, også når den finnes på flere Releases. Status
+avledes fra valgt master, gjeldende radiofil, kandidat og kjent lineage.
+Ukjent lineage er et nøytralt undersøkelsessignal, ikke en automatisk
+erstatningsbeslutning. Bulkforhåndsvisning revalideres før eksisterende
+4.5A-generator lager kandidater; aktivering skjer separat. Ingen ny
+work-item-modell eller statuskolonne er opprettet.
+
+Installasjonen kan konfigurere separate, read-only kildeområder gjennom
+`P7_RAW_SOURCE_ROOT` og `P7_MASTER_SOURCE_ROOT`; ellers kan den eksisterende
+Musikkarkiv-roten brukes. **Standardmappe per filrolle i systemadministrasjon**
+er en senere innstillingsoppgave og er ikke modellert her. Mer detaljert
+fysisk kildebeskrivelse, som spolebånd-master for kassett og 2-/4-spors
+programstruktur, hører også til en senere formatrevisjon. Den eksisterende
+`Release.release_type` brukes nå uten ny fysisk arkivmodell.
+
 Oppdeling og lydredigering skjer manuelt utenfor P7-systemet. P7 dokumenterer
 resultatet og provenance; det er ikke et lydredigeringsprogram.
 

@@ -15,15 +15,20 @@ from django.core.exceptions import (
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.db.models import Count, Q
+from django.http import HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.http import require_http_methods
+from urllib.parse import quote
 
 from catalogue.models import Label, Release, ReleaseTrack
 from managed_music.models import ManagedRelease
 from media_assets.digitization import (
     apply_plan,
     delete_empty_batch,
+    complete_digitization,
+    list_digitization_folder,
     preview_operation,
     preview_registration,
     require_operator,
@@ -36,6 +41,7 @@ from media_assets.models import (
     DigitizationPlan,
     FileAsset,
     FileDerivation,
+    FileLocation,
     MediaAssetEvent,
     RecordingMediaSelection,
     RadioFlacGeneration,
@@ -44,7 +50,9 @@ from media_assets.pipeline_status import (
     CurrentRadioState,
     GenerationState,
     MasterState,
+    RadioWorkState,
     get_recording_media_pipeline_status,
+    radio_work_state,
 )
 from .forms import MasterRegistrationForm, ReleaseMetadataForm
 from .home_state import remember_object
@@ -100,7 +108,21 @@ class FolderForm(MasterRegistrationForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        choices = []
+        if str(getattr(settings, "P7_MUSIC_ROOT", "") or "").strip():
+            choices.append(
+                ("music_library", "Musikkarkiv · felles kildeområde")
+            )
+        for key, label in (
+            ("raw_sources", "RAW-arkiv"),
+            ("edited_masters", "Redigerte mastere"),
+        ):
+            if key in settings.P7_STORAGE_ROOTS:
+                choices.append((key, label))
+        self.fields["root_key"].choices = choices
         self.fields["relative_path"].label = "Mappe under lagringsroten"
+        self.fields["relative_path"].required = False
+        self.fields["relative_path"].initial = "."
         self.fields["relative_path"].help_text = (
             "Leser WAV-filene direkte i mappen. Lydredigering skjer utenfor P7."
         )
@@ -248,6 +270,9 @@ def batch_workspace(batch):
         )
         for recording_id in ids
     }
+    radio_states = [
+        radio_work_state(status["facts"]) for status in statuses.values()
+    ]
     release_counts = {
         item["recording_id"]: item["count"]
         for item in ReleaseTrack.objects.filter(recording_id__in=ids)
@@ -352,6 +377,21 @@ def batch_workspace(batch):
             "current": sum(
                 bool(row["selection"] and row["selection"].current_radio_id)
                 for row in pipeline
+            ),
+            "radio_missing": radio_states.count(
+                RadioWorkState.MISSING_RADIO_FLAC
+            ),
+            "radio_previous": radio_states.count(
+                RadioWorkState.CURRENT_FROM_PREVIOUS_MASTER
+            ),
+            "radio_unknown": radio_states.count(
+                RadioWorkState.CURRENT_LINEAGE_UNKNOWN
+            ),
+            "radio_updated": radio_states.count(
+                RadioWorkState.CURRENT_MATCHES_SELECTED_MASTER
+            ),
+            "radio_candidate": radio_states.count(
+                RadioWorkState.CANDIDATE_FROM_SELECTED_MASTER
             ),
         },
         "derivations": digitization_derivations,
@@ -546,6 +586,76 @@ def release_matrix(request, release_id):
 @login_required
 @permission_required(VIEW_PERMS, raise_exception=True)
 @require_http_methods(["GET", "POST"])
+def start(request):
+    """Choose a Release first; the batch is an internal work context."""
+    query = request.GET.get("q", "").strip()[:100]
+    releases = Release.objects.select_related("label").order_by("title")
+    if query:
+        releases = releases.filter(
+            Q(title__icontains=query) | Q(catalogue_number__icontains=query)
+        )
+    release_form = DigitizationReleaseForm(
+        request.POST if request.POST.get("mode") == "new" else None,
+        prefix="release",
+    )
+    error = ""
+    if request.method == "POST":
+        _write_access(request)
+        mode = request.POST.get("mode")
+        release = None
+        if mode == "existing":
+            try:
+                release = Release.objects.filter(
+                    pk=request.POST.get("release_id")
+                ).first()
+            except (ValidationError, ValueError):
+                release = None
+            if release is None:
+                error = "Velg en eksisterende utgivelse."
+        elif mode == "new":
+            if not request.user.has_perm("catalogue.add_release"):
+                raise PermissionDenied
+            if not release_form.is_valid():
+                error = "Kontroller feltene for den nye utgivelsen."
+        else:
+            error = "Velg eksisterende eller ny utgivelse."
+        if release or (mode == "new" and not error):
+            with transaction.atomic():
+                if mode == "new":
+                    release = release_form.save()
+                    release_form.save_barcode()
+                batch = DigitizationBatch.objects.create(
+                    release=release,
+                    title=(
+                        f"Digitalisering · {release.title} · "
+                        f"{timezone.localdate():%d.%m.%Y}"
+                    )[:255],
+                    created_by=request.user,
+                )
+            destination = reverse(
+                "gui_v2:digitization_detail", args=[batch.pk]
+            )
+            return redirect(
+                f"{reverse('gui_v2:release_detail', args=[release.pk])}"
+                f"?tab=tracks&return={quote(destination, safe='')}"
+            )
+    return render(
+        request,
+        "gui_v2/digitization_start.html",
+        {
+            "section": "digitization",
+            "query": query,
+            "releases": releases[:50],
+            "release_form": release_form,
+            "error": error,
+            "writes_enabled": settings.GUI_V2_WRITES_ENABLED,
+        },
+    )
+
+
+@login_required
+@permission_required(VIEW_PERMS, raise_exception=True)
+@require_http_methods(["GET", "POST"])
 def index(request):
     query = request.GET.get("q", "").strip()
     batches = DigitizationBatch.objects.select_related(
@@ -719,6 +829,119 @@ def index(request):
     )
 
 
+def _browse_storage(batch, params):
+    browse_form = FolderForm(
+        params if params.get("browse") else None,
+        initial={"role": FileAsset.Role.RAW_DIGITIZATION},
+    )
+    storage_entries = []
+    browse_error = ""
+    active_role = params.get("role", FileAsset.Role.RAW_DIGITIZATION)
+    if active_role not in {
+        FileAsset.Role.RAW_DIGITIZATION,
+        FileAsset.Role.EDITED_WAV_MASTER,
+    }:
+        active_role = FileAsset.Role.RAW_DIGITIZATION
+    if params.get("browse"):
+        if browse_form.is_valid():
+            try:
+                storage_entries = list_digitization_folder(
+                    root_key=browse_form.cleaned_data["root_key"],
+                    relative_path=browse_form.cleaned_data["relative_path"]
+                    or ".",
+                    query=params.get("file_q", "")[:100],
+                )
+                locations = {
+                    location.relative_path: location
+                    for location in FileLocation.objects.filter(
+                        storage_root_key=browse_form.cleaned_data["root_key"],
+                        relative_path__in=[
+                            item["path"]
+                            for item in storage_entries
+                            if not item["folder"]
+                        ],
+                        is_current=True,
+                    ).select_related("asset", "asset__digitization_file")
+                }
+                for item in storage_entries:
+                    location = locations.get(item["path"])
+                    membership = (
+                        getattr(location.asset, "digitization_file", None)
+                        if location
+                        else None
+                    )
+                    item["registered_here"] = bool(
+                        membership and membership.batch_id == batch.pk
+                    )
+                    item["unavailable"] = bool(
+                        membership and membership.batch_id != batch.pk
+                    )
+            except (ValidationError, OSError, ImproperlyConfigured) as exc:
+                browse_error = "; ".join(getattr(exc, "messages", [str(exc)]))
+    return browse_form, storage_entries, browse_error, active_role
+
+
+@login_required
+@permission_required(VIEW_PERMS, raise_exception=True)
+@require_http_methods(["GET"])
+def browse_files(request, batch_id):
+    """Render only one source picker; browser search does not reload the page."""
+    batch = get_object_or_404(DigitizationBatch, pk=batch_id)
+    role = request.GET.get("role")
+    if role not in {
+        FileAsset.Role.RAW_DIGITIZATION,
+        FileAsset.Role.EDITED_WAV_MASTER,
+    }:
+        return HttpResponseBadRequest("Velg RAW eller redigert master.")
+    browse_form, entries, error, active_role = _browse_storage(
+        batch, request.GET
+    )
+    raw = role == FileAsset.Role.RAW_DIGITIZATION
+    return render(
+        request,
+        "gui_v2/includes/digitization_file_picker.html",
+        {
+            "batch": batch,
+            "picker_id": "raw-picker" if raw else "master-picker",
+            "picker_role": role,
+            "picker_heading": (
+                "Finn RAW-filer" if raw else "Finn redigerte mastere"
+            ),
+            "picker_step": (
+                "Steg 3 · Rå digitalisering"
+                if raw
+                else "Steg 4 · Redigerte mastere"
+            ),
+            "picker_description": (
+                "Velg filer i RAW-området. Filene leses og registreres her; de flyttes eller endres ikke."
+                if raw
+                else "Velg ferdig redigerte WAV-mastere i masterområdet. Koble dem deretter til RAW-kilde og riktig spor i tabellen over."
+            ),
+            "picker_default_root": (
+                (
+                    "raw_sources"
+                    if "raw_sources" in settings.P7_STORAGE_ROOTS
+                    else "music_library"
+                )
+                if raw
+                else (
+                    "edited_masters"
+                    if "edited_masters" in settings.P7_STORAGE_ROOTS
+                    else "music_library"
+                )
+            ),
+            "picker_noun": "RAW-filer" if raw else "mastere",
+            "source_roots": FolderForm().fields["root_key"].choices,
+            "browse_form": browse_form,
+            "active_role": active_role,
+            "storage_browsed": bool(request.GET.get("browse")),
+            "storage_entries": entries,
+            "browse_error": error,
+            "writes_enabled": settings.GUI_V2_WRITES_ENABLED,
+        },
+    )
+
+
 @login_required
 @permission_required(VIEW_PERMS, raise_exception=True)
 @require_http_methods(["GET", "POST"])
@@ -730,12 +953,26 @@ def detail(request, batch_id):
     if request.method == "GET":
         remember_object(request, "batch", batch.pk)
     folder_form = FolderForm()
+    browse_form, storage_entries, browse_error, active_role = (
+        _browse_storage(batch, request.GET)
+        if request.method == "GET"
+        else _browse_storage(batch, {})
+    )
     plan = None
     error = ""
     if request.method == "POST":
         _write_access(request)
         operation = request.POST.get("operation")
         try:
+            if operation == "finish":
+                complete_digitization(batch=batch, user=request.user)
+                messages.success(
+                    request,
+                    "Digitaliseringen er avsluttet. Radio-FLAC kan behandles senere.",
+                )
+                return redirect(
+                    "gui_v2:digitization_detail", batch_id=batch.pk
+                )
             if operation == "delete_batch":
                 if request.POST.get("confirmed") != "yes":
                     raise ValidationError(
@@ -773,7 +1010,15 @@ def detail(request, batch_id):
                     plan = preview_registration(
                         batch=batch,
                         user=request.user,
-                        **folder_form.cleaned_data,
+                        root_key=folder_form.cleaned_data["root_key"],
+                        relative_path=folder_form.cleaned_data["relative_path"]
+                        or ".",
+                        role=folder_form.cleaned_data["role"],
+                        selected_names=(
+                            request.POST.getlist("filenames")
+                            if request.POST.get("selection_mode") == "selected"
+                            else None
+                        ),
                     )
             else:
                 assets = request.POST.getlist("assets")
@@ -833,6 +1078,22 @@ def detail(request, batch_id):
             "batch": batch,
             "workspace": batch_workspace(batch),
             "folder_form": folder_form,
+            "browse_form": browse_form,
+            "source_roots": folder_form.fields["root_key"].choices,
+            "raw_default_root": (
+                "raw_sources"
+                if "raw_sources" in settings.P7_STORAGE_ROOTS
+                else "music_library"
+            ),
+            "master_default_root": (
+                "edited_masters"
+                if "edited_masters" in settings.P7_STORAGE_ROOTS
+                else "music_library"
+            ),
+            "active_role": active_role,
+            "storage_browsed": bool(request.GET.get("browse")),
+            "storage_entries": storage_entries,
+            "browse_error": browse_error,
             "plan": plan,
             "error": error,
             "writes_enabled": settings.GUI_V2_WRITES_ENABLED,

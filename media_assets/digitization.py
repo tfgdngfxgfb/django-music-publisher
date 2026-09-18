@@ -152,7 +152,44 @@ def _event(batch, asset, user, event_type, *, related=None, details=None):
     )
 
 
-def inspect_folder(*, root_key, relative_path, role):
+def list_digitization_folder(*, root_key, relative_path=".", query=""):
+    """Browse one configured folder without hashing or changing its contents."""
+    folder = resolve_storage_path(
+        relative_path or ".", root_key=root_key, require_root=True
+    )
+    if not folder.server_path.is_dir():
+        raise ValidationError("Mappen finnes ikke under valgt lagringsrot.")
+    query = query.strip().casefold()
+    entries = []
+    for path in sorted(
+        folder.server_path.iterdir(), key=lambda item: item.name.casefold()
+    ):
+        if query and query not in path.name.casefold():
+            continue
+        logical = str(folder.logical_path / path.name)
+        try:
+            resolve_storage_path(logical, root_key=root_key)
+        except ValidationError:
+            continue
+        if path.is_dir():
+            entries.append(
+                {"name": path.name, "path": logical, "folder": True}
+            )
+        elif path.is_file() and path.suffix.casefold() == ".wav":
+            entries.append(
+                {
+                    "name": path.name,
+                    "path": logical,
+                    "folder": False,
+                    "size_bytes": path.stat().st_size,
+                }
+            )
+        if len(entries) >= 500:
+            break
+    return entries
+
+
+def inspect_folder(*, root_key, relative_path, role, selected_names=None):
     if role not in (
         FileAsset.Role.RAW_DIGITIZATION,
         FileAsset.Role.EDITED_WAV_MASTER,
@@ -173,6 +210,20 @@ def inspect_folder(*, root_key, relative_path, role):
         ),
         key=lambda path: path.name.casefold(),
     )
+    if selected_names is not None:
+        wanted = set(selected_names)
+        if (
+            not wanted
+            or len(wanted) != len(selected_names)
+            or any(
+                name in {".", ".."} or "/" in name or "\\" in name
+                for name in wanted
+            )
+        ):
+            raise ValidationError("Velg én eller flere gyldige WAV-filer.")
+        paths = [path for path in paths if path.name in wanted]
+        if {path.name for path in paths} != wanted:
+            raise ValidationError("En valgt WAV-fil finnes ikke i mappen.")
     if not paths:
         raise ValidationError("Mappen inneholder ingen WAV-filer.")
     results = []
@@ -373,10 +424,15 @@ def preview_operation(*, batch, operation, payload, user):
     )
 
 
-def preview_registration(*, batch, root_key, relative_path, role, user):
+def preview_registration(
+    *, batch, root_key, relative_path, role, user, selected_names=None
+):
     require_operator(user)
     files = inspect_folder(
-        root_key=root_key, relative_path=relative_path, role=role
+        root_key=root_key,
+        relative_path=relative_path,
+        role=role,
+        selected_names=selected_names,
     )
     return preview_operation(
         batch=batch, operation="register", payload={"files": files}, user=user
@@ -400,6 +456,58 @@ def delete_empty_batch(*, batch, user):
     # Unapplied previews are operational drafts, not protected catalogue data.
     batch.plans.all().delete()
     batch.delete()
+
+
+@transaction.atomic
+def complete_digitization(*, batch, user):
+    """Finish capture without requiring a generated/current Radio-FLAC."""
+    require_operator(user)
+    Release.objects.select_for_update().get(pk=batch.release_id)
+    batch = DigitizationBatch.objects.select_for_update().get(pk=batch.pk)
+    if batch.status == DigitizationBatch.Status.COMPLETE:
+        return batch
+    recording_ids = set(
+        batch.release.tracks.values_list("recording_id", flat=True)
+    )
+    if not recording_ids:
+        raise ValidationError("Registrer utgivelsens spor før avslutning.")
+    members = list(batch.files.select_related("asset"))
+    raw_ids = {
+        item.asset_id
+        for item in members
+        if item.asset.role == FileAsset.Role.RAW_DIGITIZATION
+    }
+    masters = [
+        item.asset
+        for item in members
+        if item.asset.role == FileAsset.Role.EDITED_WAV_MASTER
+    ]
+    if not raw_ids or not masters:
+        raise ValidationError("Registrer RAW og redigerte mastere først.")
+    if any(not asset.recording_id for asset in masters):
+        raise ValidationError("Koble alle redigerte mastere til innspilling.")
+    sourced_master_ids = set(
+        DigitizationDerivation.objects.filter(
+            derived_asset_id__in=[asset.pk for asset in masters],
+            source_asset_id__in=raw_ids,
+            is_active=True,
+        ).values_list("derived_asset_id", flat=True)
+    )
+    if any(asset.pk not in sourced_master_ids for asset in masters):
+        raise ValidationError("Koble RAW-kilde til alle redigerte mastere.")
+    selected_recording_ids = set(
+        RecordingMediaSelection.objects.filter(
+            recording_id__in=recording_ids,
+            selected_master__isnull=False,
+        ).values_list("recording_id", flat=True)
+    )
+    if recording_ids - selected_recording_ids:
+        raise ValidationError(
+            "Velg master for alle innspillingene på utgivelsen."
+        )
+    batch.status = DigitizationBatch.Status.COMPLETE
+    batch.save(update_fields=("status", "updated_at", "revision"))
+    return batch
 
 
 def apply_plan(*, plan, user):

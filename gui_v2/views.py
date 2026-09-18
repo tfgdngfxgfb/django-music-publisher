@@ -2078,8 +2078,14 @@ def release_detail(request, release_id):
                 release_form.save()
                 release_form.save_barcode()
             messages.success(request, "Utgivelsesopplysningene er lagret.")
+            return_suffix = (
+                f"&return={quote(return_url, safe='')}"
+                if request.GET.get("return")
+                else ""
+            )
             return redirect(
-                f"{reverse('gui_v2:release_detail', args=[release.pk])}?tab=details"
+                f"{reverse('gui_v2:release_detail', args=[release.pk])}"
+                f"?tab=details{return_suffix}"
             )
     elif request.method == "POST" and action == "managed_release":
         if not settings.GUI_V2_WRITES_ENABLED:

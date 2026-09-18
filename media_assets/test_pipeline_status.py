@@ -12,7 +12,9 @@ from media_assets.pipeline_status import (
     CurrentRadioState,
     GenerationState,
     MasterState,
+    RadioWorkState,
     get_recording_media_pipeline_status,
+    radio_work_state,
 )
 
 
@@ -93,6 +95,10 @@ class RecordingMediaPipelineStatusTests(TestCase):
         )
         self.assertEqual(status.current_radio, self.current)
         self.assertEqual(status.candidate_asset, candidate)
+        self.assertEqual(
+            radio_work_state(status),
+            RadioWorkState.CANDIDATE_FROM_SELECTED_MASTER,
+        )
 
     def test_unknown_current_lineage_is_neutral_and_not_regeneration_claim(
         self,
@@ -104,6 +110,17 @@ class RecordingMediaPipelineStatusTests(TestCase):
         )
         self.assertEqual(status.generation_state, GenerationState.NONE)
         self.assertIsNone(status.current_source_master)
+        self.assertEqual(
+            radio_work_state(status), RadioWorkState.CURRENT_LINEAGE_UNKNOWN
+        )
+
+    def test_current_from_previous_master_is_replacement_work(self):
+        self.derive(self.old_master, self.current)
+        status = get_recording_media_pipeline_status(self.recording)
+        self.assertEqual(
+            radio_work_state(status),
+            RadioWorkState.CURRENT_FROM_PREVIOUS_MASTER,
+        )
 
     def test_current_matches_selected_master(self):
         self.derive(self.selected_master, self.current)
@@ -113,6 +130,10 @@ class RecordingMediaPipelineStatusTests(TestCase):
         self.assertEqual(
             status.current_state,
             CurrentRadioState.MATCHES_SELECTED_MASTER,
+        )
+        self.assertEqual(
+            radio_work_state(status),
+            RadioWorkState.CURRENT_MATCHES_SELECTED_MASTER,
         )
 
     def test_generation_progress_failure_and_other_master_are_distinct(self):
@@ -127,6 +148,12 @@ class RecordingMediaPipelineStatusTests(TestCase):
             ).generation_state,
             GenerationState.IN_PROGRESS,
         )
+        self.assertEqual(
+            radio_work_state(
+                get_recording_media_pipeline_status(self.recording)
+            ),
+            RadioWorkState.GENERATING,
+        )
         generation.status = RadioFlacGeneration.Status.FAILED
         generation.save()
         self.assertEqual(
@@ -134,6 +161,12 @@ class RecordingMediaPipelineStatusTests(TestCase):
                 self.recording
             ).generation_state,
             GenerationState.FAILED,
+        )
+        self.assertEqual(
+            radio_work_state(
+                get_recording_media_pipeline_status(self.recording)
+            ),
+            RadioWorkState.GENERATION_FAILED,
         )
         generation.delete()
 
@@ -155,6 +188,12 @@ class RecordingMediaPipelineStatusTests(TestCase):
             ).generation_state,
             GenerationState.CANDIDATE_FROM_OTHER_MASTER,
         )
+        self.assertEqual(
+            radio_work_state(
+                get_recording_media_pipeline_status(self.recording)
+            ),
+            RadioWorkState.CANDIDATE_FROM_OTHER_MASTER,
+        )
 
     def test_recording_without_selection_or_radio_has_neutral_empty_state(
         self,
@@ -166,3 +205,6 @@ class RecordingMediaPipelineStatusTests(TestCase):
         self.assertEqual(status.master_state, MasterState.NO_MASTER)
         self.assertEqual(status.current_state, CurrentRadioState.NO_RADIO)
         self.assertEqual(status.generation_state, GenerationState.NONE)
+        self.assertEqual(
+            radio_work_state(status), RadioWorkState.NO_SELECTED_MASTER
+        )
