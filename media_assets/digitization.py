@@ -381,6 +381,10 @@ def _validate(batch, operation, payload):
                     else " · uten sporforekomst"
                 )
             )
+        changes.append(
+            "Innspillinger med én redigert master og uten tidligere "
+            "mastervalg får denne masteren valgt automatisk."
+        )
     elif operation == "select_master":
         assets = _assets(batch, payload["assets"])
         seen = set()
@@ -653,6 +657,7 @@ def _apply_raw_links(batch, payload, user):
 
 
 def _apply_recording_links(batch, payload, user, plan):
+    affected_recordings = {}
     for row in payload["rows"]:
         asset = _assets(batch, [row["asset"]])[0]
         track = (
@@ -686,6 +691,25 @@ def _apply_recording_links(batch, payload, user, plan):
                 "plan": str(plan.pk),
             },
         )
+        affected_recordings[recording.pk] = recording
+    for recording in affected_recordings.values():
+        selection = RecordingMediaSelection.objects.filter(
+            recording=recording
+        ).first()
+        if selection and selection.selected_master_id:
+            continue
+        master_ids = list(
+            FileAsset.objects.filter(
+                recording=recording,
+                role=FileAsset.Role.EDITED_WAV_MASTER,
+            ).values_list("pk", flat=True)[:2]
+        )
+        if len(master_ids) == 1:
+            select_master(
+                recording=recording,
+                asset=FileAsset.objects.get(pk=master_ids[0]),
+                user=user,
+            )
 
 
 def _register(batch, files, user):

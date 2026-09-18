@@ -367,6 +367,81 @@ class DigitizationWorkflowTests(TestCase):
         protected = _protection_map([t.recording_id for t in tracks])
         self.assertTrue(all(protected[t.recording_id] for t in tracks))
 
+    def test_only_linked_master_is_selected_and_shown_in_final_step(self):
+        _, masters = self.prepare()
+        track = ReleaseTrack.objects.create(
+            release=self.release,
+            recording=Recording.objects.create(title="Sang en"),
+            sequence_number=1,
+        )
+        plan = self.preview(
+            "recording_link",
+            {"rows": [{"asset": str(masters[0].pk), "track": str(track.pk)}]},
+        )
+        self.assertIn("valgt automatisk", " ".join(plan.consequences))
+        apply_plan(plan=plan, user=self.user)
+        self.assertEqual(
+            RecordingMediaSelection.objects.get(
+                recording=track.recording
+            ).selected_master_id,
+            masters[0].pk,
+        )
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse("gui_v2:digitization_detail", args=[self.batch.pk]),
+            {"step": "radio"},
+        )
+        row = response.context["workspace"]["pipeline"][0]
+        self.assertEqual(row["master_label"], "Valgt")
+        self.assertNotContains(response, "Koble og velg master</a>")
+        selection = RecordingMediaSelection.objects.get(
+            recording=track.recording
+        )
+        selection.selected_master = None
+        selection.save()
+        legacy_response = self.client.get(
+            reverse("gui_v2:digitization_detail", args=[self.batch.pk]),
+            {"step": "radio"},
+        )
+        self.assertEqual(
+            legacy_response.context["workspace"]["pipeline"][0][
+                "master_label"
+            ],
+            "Tilknyttet – ikke valgt",
+        )
+
+    def test_two_masters_for_recording_require_explicit_choice(self):
+        _, masters = self.prepare()
+        track = ReleaseTrack.objects.create(
+            release=self.release,
+            recording=Recording.objects.create(title="Sang en"),
+            sequence_number=1,
+        )
+        self.apply(
+            "recording_link",
+            {
+                "rows": [
+                    {"asset": str(asset.pk), "track": str(track.pk)}
+                    for asset in masters[:2]
+                ]
+            },
+        )
+        self.assertFalse(
+            RecordingMediaSelection.objects.filter(
+                recording=track.recording,
+                selected_master__isnull=False,
+            ).exists()
+        )
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse("gui_v2:digitization_detail", args=[self.batch.pk]),
+            {"step": "radio"},
+        )
+        self.assertEqual(
+            response.context["workspace"]["pipeline"][0]["master_label"],
+            "Tilknyttet – ikke valgt",
+        )
+
     def test_recording_link_rolls_back_new_recordings_and_assignments(self):
         _, masters = self.prepare()
         plan = self.preview(
@@ -399,7 +474,7 @@ class DigitizationWorkflowTests(TestCase):
         )
         with self.assertRaisesMessage(ValidationError, "Arbeidsgrunnlaget"):
             apply_plan(plan=plan, user=self.user)
-        self.assertEqual(RecordingMediaSelection.objects.count(), 1)
+        self.assertEqual(RecordingMediaSelection.objects.count(), 3)
 
     def test_relevant_recording_change_rejects_recording_link_preview(self):
         _, masters = self.prepare()
@@ -725,6 +800,7 @@ class DigitizationWorkflowTests(TestCase):
                 apply_plan(plan=plan, user=self.user)
         self.assertFalse(DigitizationDerivation.objects.exists())
         self.assertEqual(MediaAssetEvent.objects.count(), events_before)
+        self.assertFalse(RecordingMediaSelection.objects.exists())
         self.assertFalse(
             FileAsset.objects.filter(
                 pk__in=[m.pk for m in masters], recording__isnull=False
@@ -732,6 +808,12 @@ class DigitizationWorkflowTests(TestCase):
         )
         apply_plan(plan=plan, user=self.user)
         self.assertEqual(DigitizationDerivation.objects.count(), 3)
+        self.assertEqual(
+            RecordingMediaSelection.objects.filter(
+                selected_master__in=masters
+            ).count(),
+            3,
+        )
         self.assertEqual(
             FileAsset.objects.filter(
                 pk__in=[m.pk for m in masters], recording__isnull=False
@@ -877,11 +959,10 @@ class DigitizationWorkflowTests(TestCase):
             role=FileAsset.Role.RADIO_FLAC,
             lifecycle_status=FileAsset.LifecycleStatus.CANDIDATE,
         )
-        RecordingMediaSelection.objects.create(
-            recording=recording,
-            selected_master=second,
-            current_radio=current,
-        )
+        selection = RecordingMediaSelection.objects.get(recording=recording)
+        selection.selected_master = second
+        selection.current_radio = current
+        selection.save()
         for source, derived in ((masters[0], current), (second, candidate)):
             FileDerivation.objects.create(
                 source_asset=source,
@@ -948,7 +1029,7 @@ class DigitizationWorkflowTests(TestCase):
                 progress["selected"],
                 progress["radio"],
             ),
-            (3, 3, 1, 1),
+            (3, 3, 3, 1),
         )
         batch_page = self.client.get(
             reverse("gui_v2:digitization_detail", args=[self.batch.pk])
@@ -1007,11 +1088,11 @@ class DigitizationWorkflowTests(TestCase):
             role=FileAsset.Role.RADIO_FLAC,
             lifecycle_status=FileAsset.LifecycleStatus.CURRENT,
         )
-        RecordingMediaSelection.objects.create(
-            recording=track.recording,
-            selected_master=masters[0],
-            current_radio=current,
+        selection = RecordingMediaSelection.objects.get(
+            recording=track.recording
         )
+        selection.current_radio = current
+        selection.save()
         self.client.force_login(self.user)
         response = self.client.get(
             reverse(

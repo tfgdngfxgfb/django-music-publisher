@@ -354,11 +354,19 @@ def batch_workspace(batch):
             if row["asset"].recording_id == track.recording_id
         ]
         selection = selections.get(track.recording_id)
+        if selection and selection.selected_master_id:
+            master_label, master_kind = "Valgt", "ok"
+        elif masters:
+            master_label, master_kind = "Tilknyttet – ikke valgt", "warning"
+        else:
+            master_label, master_kind = "Ingen master tilknyttet", "muted"
         pipeline.append(
             {
                 "track": track,
                 "masters": masters,
                 "selection": selection,
+                "master_label": master_label,
+                "master_kind": master_kind,
                 "raw": any(row["source"] for row in masters),
                 "generation": next(
                     (
