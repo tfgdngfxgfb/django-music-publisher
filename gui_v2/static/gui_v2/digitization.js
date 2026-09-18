@@ -85,6 +85,16 @@
   };
   workspace.addEventListener('change', updateSelection);
   workspace.querySelector('[data-select-all]')?.addEventListener('change', event => {rows.forEach(row => {row.querySelector('[name=assets]').checked = event.target.checked;}); updateSelection();});
+  workspace.querySelectorAll('[data-choose-raw]').forEach(button => button.addEventListener('click', () => {
+    const row = button.closest('[data-digitization-row]');
+    rows.forEach(item => {item.querySelector('[name=assets]').checked = item === row;});
+    select(row);
+    updateSelection();
+    saveDraft();
+    const source = workspace.querySelector('.digitization-toolbar select[name=source]');
+    source?.scrollIntoView({block: 'center'});
+    source?.focus();
+  }));
   workspace.querySelectorAll('[data-select-master]').forEach(link => link.addEventListener('click', () => {const row = rows.find(item => item.dataset.digitizationRow === link.dataset.selectMaster); if (row) select(row);}));
   const saved = sessionStorage.getItem(`digitization:${location.pathname}`);
   const initial = rows.find(row => row.dataset.digitizationRow === saved) || rows[0];

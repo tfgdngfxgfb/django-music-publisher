@@ -25,6 +25,9 @@
   let searchTimer = null;
   let draftTimer = null;
   let controlFilter = sessionStorage.getItem(filterKey) || "all";
+  if (controlFilter === "issues") controlFilter = "now";
+  const duplicateTimers = new WeakMap();
+  const duplicateRequests = new WeakMap();
 
   const inputOf = cell => cell?.querySelector("input:not([type=hidden]):not([type=checkbox])");
   const cells = () => [...body.querySelectorAll("[data-grid-cell]")];
@@ -69,42 +72,51 @@
   const clearRange = () => { body.querySelectorAll(".range-cell").forEach(cell => cell.classList.remove("range-cell")); rangeAnchor = null; };
 
   const positionKey = row => value(row, "track_number") ? `${value(row, "disc_number") || "1"}|${value(row, "side").toUpperCase()}|${value(row, "track_number")}` : "";
-  function controlReasons(row, positionCounts = null) {
-    const reasons = [];
-    if (!value(row, "recording_id")) reasons.push("Mangler Recording-kobling");
-    if (!value(row, "artists")) reasons.push("Mangler artist");
-    if (!value(row, "isrc")) reasons.push("Mangler ISRC");
-    if (!value(row, "composers") && !value(row, "lyricists")) reasons.push("Mangler opphavere");
-    if (!value(row, "sequence_number") || row.querySelector(".client-invalid,[data-field='sequence_number'] .cell-error")) reasons.push("Ugyldig sporplassering");
+  function controlReasons(row, positionCounts = null, sequenceCounts = null) {
+    const now = [], later = [];
+    if (fieldInput(row, "remove")?.checked) {
+      if (row.dataset.hasFiles === "true") now.push("Filkobling hindrer sletting");
+      return {now, later};
+    }
+    if (!value(row, "recording_id") && !value(row, "recording_title") && !value(row, "title_override")) now.push("Velg eller opprett innspilling");
+    if (!value(row, "sequence_number") || row.querySelector(".client-invalid,[data-field='sequence_number'] .cell-error")) now.push("Ugyldig sporplassering");
+    if (sequenceCounts?.get(value(row, "sequence_number")) > 1) now.push("Sorteringsrekkefølgen brukes flere ganger");
     const key = positionKey(row);
-    if (key && positionCounts?.get(key) > 1) reasons.push("Sporplasseringen brukes flere ganger");
-    if (row.querySelector(".candidate-list")) reasons.push("Flere mulige Recording-treff");
-    if (row.querySelector(".cell-error:not(.client-error)")) reasons.push("Valideringsfeil må rettes");
-    if (fieldInput(row, "remove")?.checked && row.dataset.hasFiles === "true") reasons.push("Filkobling hindrer sletting");
-    return [...new Set(reasons)];
+    if (key && positionCounts?.get(key) > 1) later.push("Plate/side/spornummer bør kontrolleres");
+    if (row.dataset.duplicateStatus === "pending") now.push("Kontrollerer mulige innspillinger");
+    if (row.dataset.duplicateStatus === "error") now.push("Kandidatkontroll mislyktes");
+    if (row.dataset.duplicateStatus === "blocking") now.push("ISRC finnes allerede");
+    if (row.dataset.duplicateStatus === "matches" && !value(row, "force_create")) now.push("Velg eller avklar mulig dublett");
+    if (row.querySelector(".cell-error:not(.client-error)")) now.push("Valideringsfeil må rettes");
+    if (!value(row, "artists")) later.push("Artist mangler");
+    if (!value(row, "isrc")) later.push("ISRC mangler");
+    if (!value(row, "composers") && !value(row, "lyricists")) later.push("Opphavere mangler");
+    return {now: [...new Set(now)], later: [...new Set(later)]};
   }
   function updateControls() {
     const rows = [...body.rows];
-    const positionCounts = new Map();
-    rows.forEach(row => { const key = positionKey(row); if (key) positionCounts.set(key, (positionCounts.get(key) || 0) + 1); });
-    let linked = 0, issues = 0, missingIsrc = 0, missingCreators = 0;
+    const positionCounts = new Map(), sequenceCounts = new Map();
+    rows.filter(row => !fieldInput(row, "remove")?.checked).forEach(row => { const key = positionKey(row), sequence = value(row, "sequence_number"); if (key) positionCounts.set(key, (positionCounts.get(key) || 0) + 1); if (sequence) sequenceCounts.set(sequence, (sequenceCounts.get(sequence) || 0) + 1); });
+    let linked = 0, needsNow = 0, needsLater = 0, missingIsrc = 0, missingCreators = 0;
     rows.forEach(row => {
-      const reasons = controlReasons(row, positionCounts);
+      const reasons = controlReasons(row, positionCounts, sequenceCounts);
       if (value(row, "recording_id")) linked += 1;
       if (!value(row, "isrc")) missingIsrc += 1;
       if (!value(row, "composers") && !value(row, "lyricists")) missingCreators += 1;
-      if (reasons.length) issues += 1;
-      row.dataset.hasIssues = reasons.length ? "true" : "false";
-      row.hidden = controlFilter === "issues" && !reasons.length;
+      if (reasons.now.length) needsNow += 1;
+      if (reasons.later.length) needsLater += 1;
+      row.dataset.hasIssues = reasons.now.length || reasons.later.length ? "true" : "false";
+      row.hidden = (controlFilter === "now" && !reasons.now.length) || (controlFilter === "later" && !reasons.later.length);
       const button = row.querySelector("[data-control-status]");
       if (button) {
-        button.textContent = reasons.length ? `${reasons.length} kontrollpunkt` : "Klar";
-        button.title = reasons.join("\n") || "Ingen kjente kontrollbehov";
-        button.className = `control-pill row-state ${reasons.length ? "warning" : "ok"}`;
+        button.textContent = reasons.now.length ? `Avklar nå (${reasons.now.length})` : reasons.later.length ? `Senere (${reasons.later.length})` : "Klar";
+        button.title = [...reasons.now.map(reason => `Nå: ${reason}`), ...reasons.later.map(reason => `Senere: ${reason}`)].join("\n") || "Ingen kjente kontrollbehov";
+        button.className = `control-pill row-state ${reasons.now.length ? "warning" : reasons.later.length ? "deferred" : "ok"}`;
       }
     });
     document.querySelector("[data-summary-total]")?.replaceChildren(String(rows.length));
-    document.querySelector("[data-summary-issues]")?.replaceChildren(String(issues));
+    document.querySelector("[data-summary-now]")?.replaceChildren(String(needsNow));
+    document.querySelector("[data-summary-later]")?.replaceChildren(String(needsLater));
     document.querySelector("[data-summary-linked]")?.replaceChildren(String(linked));
     document.querySelector("[data-summary-isrc]")?.replaceChildren(String(missingIsrc));
     document.querySelector("[data-summary-creators]")?.replaceChildren(String(missingCreators));
@@ -124,10 +136,10 @@
     document.querySelector("#inspector-position")?.replaceChildren(`${value(row, "disc_number") ? `Plate ${value(row, "disc_number")} · ` : ""}${value(row, "side")}${value(row, "track_number") || value(row, "sequence_number")}`);
     document.querySelector("#inspector-artist")?.replaceChildren(value(row, "artists") || "Uavklart");
     document.querySelector("#inspector-isrc")?.replaceChildren(value(row, "isrc") || "Ikke registrert");
-    const counts = new Map();
-    [...body.rows].forEach(item => { const key = positionKey(item); if (key) counts.set(key, (counts.get(key) || 0) + 1); });
-    const reasons = controlReasons(row, counts);
-    document.querySelector("#inspector-control")?.replaceChildren(reasons.length ? reasons.join(" · ") : "Ingen kjente kontrollbehov");
+    const counts = new Map(), sequences = new Map();
+    [...body.rows].filter(item => !fieldInput(item, "remove")?.checked).forEach(item => { const key = positionKey(item), sequence = value(item, "sequence_number"); if (key) counts.set(key, (counts.get(key) || 0) + 1); if (sequence) sequences.set(sequence, (sequences.get(sequence) || 0) + 1); });
+    const reasons = controlReasons(row, counts, sequences);
+    document.querySelector("#inspector-control")?.replaceChildren([...reasons.now.map(reason => `Avklar nå: ${reason}`), ...reasons.later.map(reason => `Senere: ${reason}`)].join(" · ") || "Ingen kjente kontrollbehov");
     const recordingLink = document.querySelector("#inspector-recording-link"), recordingId = value(row, "recording_id");
     if (recordingLink) {
       recordingLink.hidden = !recordingId;
@@ -226,6 +238,7 @@
   }
   function addRow(values = [], record = true, before = null) {
     if (record) pushUndo();
+    if (controlFilter !== "all") { controlFilter = "all"; sessionStorage.setItem(filterKey, "all"); }
     const index = Number(total.value), fragment = template.content.cloneNode(true), row = fragment.querySelector("tr");
     row.innerHTML = row.innerHTML.replaceAll("__prefix__", index); row.dataset.index = index;
     fieldInput(row, "sequence_number").value = body.rows.length + 1;
@@ -270,14 +283,113 @@
   const chooseRecording = (cell, item) => {
     const row = cell.closest("tr"), input = inputOf(cell), id = fieldInput(row, "recording_id"), force = fieldInput(row, "force_create");
     input.value = item?.title || input.value; id.value = item?.id || ""; force.value = item ? "" : "on";
+    const trackTitle = fieldInput(row, "title_override");
+    if (item && trackTitle.value.trim().toLocaleLowerCase() === item.title.trim().toLocaleLowerCase()) {
+      trackTitle.value = "";
+      mark(trackTitle.closest("[data-grid-cell]"));
+    }
+    duplicateRequests.set(row, (duplicateRequests.get(row) || 0) + 1);
+    clearTimeout(duplicateTimers.get(row));
+    row.dataset.duplicateStatus = "";
+    row.querySelector("[data-candidate-panel]")?.setAttribute("hidden", "");
+    row.querySelector("[data-server-candidates]")?.setAttribute("hidden", "");
+    cell.querySelectorAll(".cell-error").forEach(node => node.remove());
     mark(cell); closeSearch(cell); finishEdit(cell); next(cell, 1);
   };
+  function checkCandidates(row) {
+    const panel = row.querySelector("[data-candidate-panel]");
+    if (!panel) return;
+    const title = value(row, "recording_title") || (!value(row, "recording_id") ? value(row, "title_override") : "");
+    const request = (duplicateRequests.get(row) || 0) + 1;
+    duplicateRequests.set(row, request);
+    panel.replaceChildren();
+    if (value(row, "recording_id") || !title) {
+      panel.hidden = true;
+      row.dataset.duplicateStatus = "";
+      updateControls();
+      return;
+    }
+    row.dataset.duplicateStatus = "pending";
+    panel.hidden = false;
+    panel.textContent = "Kontrollerer eksisterende innspillinger …";
+    updateControls();
+    const params = new URLSearchParams({match: "exact", q: title, isrc: value(row, "isrc"), duration: value(row, "duration")});
+    fetch(`${window.P7_V2.recordingSearch}?${params}`).then(response => {
+      if (!response.ok) throw new Error("lookup failed");
+      return response.json();
+    }).then(data => {
+      if (duplicateRequests.get(row) !== request) return;
+      const matches = data.results || [];
+      panel.replaceChildren();
+      row.querySelector("[data-server-candidates]")?.setAttribute("hidden", "");
+      row.querySelectorAll("[data-field='recording_title'] .cell-error").forEach(node => {
+        if (node.textContent.includes("Mulig dublett")) node.remove();
+      });
+      row.classList.toggle("invalid", Boolean(row.querySelector(".client-invalid,.cell-error")));
+      if (!matches.length) {
+        panel.hidden = true;
+        row.dataset.duplicateStatus = "clear";
+        updateControls();
+        return;
+      }
+      const blocking = matches.some(item => item.blocking);
+      row.dataset.duplicateStatus = blocking ? "blocking" : "matches";
+      const heading = document.createElement("strong");
+      heading.textContent = blocking ? "Samme ISRC finnes allerede – velg innspillingen eller avklar ISRC." : "Mulige eksisterende innspillinger – kontroller nå:";
+      panel.append(heading);
+      matches.forEach(item => {
+        const entry = document.createElement("div");
+        const label = document.createElement("span");
+        label.textContent = `${item.title}${item.artist ? ` · ${item.artist}` : ""}${item.signals?.length ? ` · ${item.signals.join(", ")}` : ""}`;
+        const use = document.createElement("button");
+        use.type = "button";
+        use.dataset.useRecording = item.id;
+        use.dataset.title = item.title;
+        use.textContent = "Bruk denne innspillingen";
+        const open = document.createElement("a");
+        open.href = item.url;
+        open.target = "_blank";
+        open.rel = "noopener";
+        open.textContent = "Åpne og kontroller ↗";
+        entry.append(label, use, open);
+        panel.append(entry);
+      });
+      if (!blocking) {
+        const create = document.createElement("button");
+        create.type = "button";
+        create.dataset.createRecording = "true";
+        create.textContent = "Jeg har kontrollert – opprett separat innspilling";
+        panel.append(create);
+      }
+      updateControls();
+    }).catch(() => {
+      if (duplicateRequests.get(row) !== request) return;
+      row.dataset.duplicateStatus = "error";
+      panel.textContent = "Kandidatkontrollen feilet. Prøv igjen før lagring.";
+      updateControls();
+    });
+  }
+  function scheduleCandidates(row) {
+    clearTimeout(duplicateTimers.get(row));
+    duplicateRequests.set(row, (duplicateRequests.get(row) || 0) + 1);
+    if (!row.querySelector("[data-candidate-panel]")) return;
+    if (value(row, "recording_id")) {
+      checkCandidates(row);
+      return;
+    }
+    row.dataset.duplicateStatus = "pending";
+    const panel = row.querySelector("[data-candidate-panel]");
+    panel.hidden = false;
+    panel.textContent = "Kontrollerer eksisterende innspillinger …";
+    updateControls();
+    duplicateTimers.set(row, setTimeout(() => checkCandidates(row), 220));
+  }
   async function search(cell) {
     const q = inputOf(cell).value.trim(), box = cell.querySelector(".search-results"); if (q.length < 2) return closeSearch(cell);
     try {
       const response = await fetch(`${window.P7_V2.recordingSearch}?q=${encodeURIComponent(q)}`), data = await response.json();
-      box.replaceChildren(...data.results.map(item => { const button = document.createElement("button"); button.type = "button"; button.role = "option"; button.dataset.result = JSON.stringify(item); button.innerHTML = `<strong>${item.title}</strong><span>${item.artist}${item.isrc ? ` · ${item.isrc}` : ""}</span>`; return button; }));
-      const create = document.createElement("button"); create.type = "button"; create.role = "option"; create.dataset.create = "true"; create.textContent = "+ Opprett ny innspilling"; box.append(create); box.hidden = false; box.dataset.active = "-1";
+      box.replaceChildren(...data.results.map(item => { const button = document.createElement("button"); button.type = "button"; button.role = "option"; button.dataset.result = JSON.stringify(item); const title = document.createElement("strong"), detail = document.createElement("span"); title.textContent = item.title; detail.textContent = `${item.artist}${item.isrc ? ` · ${item.isrc}` : ""}`; button.append(title, detail); return button; }));
+      box.hidden = !data.results?.length; box.dataset.active = "-1";
     } catch { closeSearch(cell); }
   }
   const moveResult = (box, delta) => {
@@ -289,13 +401,30 @@
   body.addEventListener("click", event => {
     const result = event.target.closest(".search-results button"); if (result) { const cell = result.closest("[data-grid-cell]"); chooseRecording(cell, result.dataset.create ? null : JSON.parse(result.dataset.result)); return; }
     const candidate = event.target.closest("[data-use-recording],[data-create-recording]"); if (candidate) { const cell = candidate.closest("[data-grid-cell]"); chooseRecording(cell, candidate.dataset.useRecording ? {id: candidate.dataset.useRecording, title: candidate.dataset.title} : null); return; }
+    const moveTitle = event.target.closest("[data-move-track-title]"); if (moveTitle) {
+      const row = moveTitle.closest("tr"), source = fieldInput(row, "title_override"), target = fieldInput(row, "recording_title");
+      if (!source.value.trim()) { focusCell(source.closest("[data-grid-cell]")); return; }
+      pushUndo(); target.value = source.value.trim(); source.value = "";
+      fieldInput(row, "recording_id").value = ""; fieldInput(row, "force_create").value = "";
+      mark(source.closest("[data-grid-cell]")); mark(target.closest("[data-grid-cell]"));
+      scheduleCandidates(row); focusCell(target.closest("[data-grid-cell]")); return;
+    }
+    if (event.target.closest("[data-candidate-panel] a,[data-server-candidates] a")) persistDraft();
     const control = event.target.closest("[data-control-status]"); if (control) { updateInspector(control.closest("tr")); return; }
     const cell = event.target.closest("[data-grid-cell]"); if (cell && event.target === cell) focusCell(cell);
   });
   body.addEventListener("dblclick", event => { const cell = event.target.closest("[data-grid-cell]"); if (cell) beginEdit(cell); });
   body.addEventListener("input", event => {
     const cell = event.target.closest("[data-grid-cell]"); if (!cell) return; mark(cell); validate(cell);
-    if (cell.dataset.field === "recording_title") { fieldInput(cell.closest("tr"), "recording_id").value = ""; fieldInput(cell.closest("tr"), "force_create").value = ""; clearTimeout(searchTimer); searchTimer = setTimeout(() => search(cell), 180); }
+    cell.querySelectorAll(".cell-error:not(.client-error)").forEach(node => node.remove());
+    if (cell.dataset.field === "recording_title") {
+      fieldInput(cell.closest("tr"), "recording_id").value = "";
+      fieldInput(cell.closest("tr"), "force_create").value = "";
+      cell.closest("tr").querySelector("[data-server-candidates]")?.setAttribute("hidden", "");
+      clearTimeout(searchTimer); searchTimer = setTimeout(() => search(cell), 180);
+    }
+    if (cell.dataset.field === "title_override" && !value(cell.closest("tr"), "recording_id") && !value(cell.closest("tr"), "recording_title")) fieldInput(cell.closest("tr"), "force_create").value = "";
+    if (["recording_title", "title_override", "isrc", "duration"].includes(cell.dataset.field)) scheduleCandidates(cell.closest("tr"));
     updateControls(); updateInspector(cell.closest("tr"));
   });
   body.addEventListener("change", event => { const row = event.target.closest("tr"); if (row) { row.classList.add("dirty"); const cell = event.target.closest("[data-grid-cell]") || rowCells(row)[0]; mark(cell); updateControls(); } });
@@ -345,11 +474,14 @@
   document.addEventListener("keydown", event => { if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "n") { event.preventDefault(); focusCell(rowCells(addRow())[0]); } }, {signal: gridSignal});
   form.addEventListener("submit", event => {
     if (form.dataset.submitting) { event.preventDefault(); return; }
-    const invalid = cells().filter(cell => !validate(cell)); if (invalid.length) { event.preventDefault(); focusCell(invalid[0]); updateControls(); return; }
+    const invalid = cells().filter(cell => !validate(cell)); if (invalid.length) { event.preventDefault(); controlFilter = "all"; sessionStorage.setItem(filterKey, "all"); updateControls(); focusCell(invalid[0]); return; }
+    const unresolved = [...body.rows].find(row => ["pending", "error", "blocking"].includes(row.dataset.duplicateStatus) || (row.dataset.duplicateStatus === "matches" && !value(row, "force_create")));
+    if (unresolved) { event.preventDefault(); controlFilter = "all"; sessionStorage.setItem(filterKey, "all"); updateControls(); focusCell(unresolved.querySelector("[data-field='recording_title']")); return; }
     form.dataset.submitting = "true"; rememberFocus(currentCell); form.querySelector("button[type=submit]").disabled = true;
   });
 
   prepare(); updateControls();
+  [...body.rows].forEach(row => { if (!value(row, "recording_id") && (value(row, "recording_title") || value(row, "title_override"))) scheduleCandidates(row); });
   if (form.dataset.gridSaved) {
     localStorage.removeItem(draftKey);
     const url = new URL(location.href); url.searchParams.delete("grid_saved"); history.replaceState({}, "", url);

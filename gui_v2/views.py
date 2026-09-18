@@ -35,6 +35,7 @@ from django.db.models import (
     Subquery,
     Value,
     When,
+    prefetch_related_objects,
 )
 from django.db.models.functions import Coalesce
 from django.utils import timezone
@@ -62,6 +63,7 @@ from catalogue.models import (
     Release,
     ReleaseTrack,
 )
+from catalogue.services import find_recording_candidates
 from delivery.models import DeliveryArtifact, DeliveryItem, DeliveryProfile
 from flac_ingest.models import FlacIngestItem
 from flac_ingest.services import (
@@ -2216,8 +2218,45 @@ def release_detail(request, release_id):
 @permission_required("catalogue.view_recording", raise_exception=True)
 def recording_search(request):
     q = request.GET.get("q", "").strip()
-    if len(q) < 2:
+    if not q or (len(q) < 2 and request.GET.get("match") != "exact"):
         return JsonResponse({"results": []})
+    if request.GET.get("match") == "exact":
+        isrc = re.sub(r"[\s-]", "", request.GET.get("isrc", ""))
+        if not re.fullmatch(r"[A-Za-z]{2}[A-Za-z0-9]{3}\d{7}", isrc):
+            isrc = ""
+        duration = request.GET.get("duration", "")
+        parts = duration.split(":")
+        duration_ms = None
+        if len(parts) == 2 and all(part.isdigit() for part in parts):
+            minutes, seconds = (int(part) for part in parts)
+            if seconds < 60:
+                duration_ms = (minutes * 60 + seconds) * 1000
+        matches = find_recording_candidates(
+            title=q, isrc=isrc, duration_ms=duration_ms
+        )[:12]
+        prefetch_related_objects(
+            [match.recording for match in matches],
+            "contributions__artist_identity",
+            "contributions__party",
+        )
+        return JsonResponse(
+            {
+                "results": [
+                    {
+                        "id": str(match.recording.pk),
+                        "title": match.recording.title,
+                        "artist": _artist_text(match.recording),
+                        "signals": match.signals,
+                        "blocking": "samme ISRC" in match.signals,
+                        "url": reverse(
+                            "gui_v2:recording_detail",
+                            args=[match.recording.pk],
+                        ),
+                    }
+                    for match in matches
+                ]
+            }
+        )
     queryset = (
         Recording.objects.filter(
             Q(title__icontains=q)

@@ -1,7 +1,12 @@
 from django import forms
 from django.forms import formset_factory
 
-from catalogue.models import ExternalIdentifier, Recording, Release
+from catalogue.models import (
+    ExternalIdentifier,
+    Recording,
+    RecordingContribution,
+    Release,
+)
 from catalogue.services import find_recording_candidates
 from catalogue.validators import normalize_isrc, normalize_trade_item_number
 from music_library.models import Channel, MusicLibraryEntry, TargetAudience
@@ -9,6 +14,7 @@ from music_library.models import Channel, MusicLibraryEntry, TargetAudience
 from .presentation import observed_genres, radio_language_name
 
 from django.conf import settings
+from django.db.models import prefetch_related_objects
 from media_assets.storage import MUSIC_LIBRARY_ROOT
 
 
@@ -350,7 +356,15 @@ class TrackRowForm(forms.Form):
     def __init__(self, *args, release=None, **kwargs):
         self.release = release
         self.duplicate_candidates = ()
+        self.duplicate_display = ()
+        self.duplicate_isrc_conflict = False
         super().__init__(*args, **kwargs)
+        self.fields["title_override"].widget.attrs[
+            "placeholder"
+        ] = "Bare hvis tittelen avviker"
+        self.fields["recording_title"].widget.attrs[
+            "placeholder"
+        ] = "Felles innspillingstittel"
         for name, field in self.fields.items():
             if not isinstance(field.widget, forms.HiddenInput):
                 field.widget.attrs.setdefault("aria-label", field.label)
@@ -378,6 +392,10 @@ class TrackRowForm(forms.Form):
             return data
         title = (data.get("recording_title") or "").strip()
         recording_id = data.get("recording_id")
+        if not recording_id and not title and data.get("title_override"):
+            title = data["title_override"].strip()
+            data["recording_title"] = title
+            data["title_override"] = ""
         if not recording_id and not title:
             self.add_error(
                 "recording_title",
@@ -394,6 +412,33 @@ class TrackRowForm(forms.Form):
                 )[:5]
             )
             if self.duplicate_candidates:
+                prefetch_related_objects(
+                    [match.recording for match in self.duplicate_candidates],
+                    "contributions__artist_identity",
+                    "contributions__party",
+                )
+                self.duplicate_display = tuple(
+                    {
+                        "match": match,
+                        "artist": ", ".join(
+                            dict.fromkeys(
+                                contribution.display_credit
+                                for contribution in match.recording.contributions.all()
+                                if contribution.role
+                                in {
+                                    RecordingContribution.Role.PRIMARY,
+                                    RecordingContribution.Role.FEATURED,
+                                }
+                            )
+                        )
+                        or "Uavklart artist",
+                    }
+                    for match in self.duplicate_candidates
+                )
+                self.duplicate_isrc_conflict = any(
+                    "samme ISRC" in match.signals
+                    for match in self.duplicate_candidates
+                )
                 self.add_error(
                     "recording_title",
                     "Mulig dublett. Velg et forslag eller marker «Opprett ny likevel».",
