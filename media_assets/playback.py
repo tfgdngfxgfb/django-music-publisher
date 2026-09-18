@@ -1,6 +1,6 @@
 """Conservative resolution and streaming helpers for internal radio playback."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from pathlib import Path
 
@@ -31,9 +31,18 @@ class RadioPlaybackResolution:
     location: FileLocation | None = None
     path: Path | None = None
     resolved_location: ResolvedLocation | None = None
+    source: str = "current_radio"
 
     @property
     def message(self):
+        if self.source == "selected_master":
+            return {
+                RadioPlaybackStatus.AVAILABLE: "Valgt master er klar for avspilling.",
+                RadioPlaybackStatus.AMBIGUOUS: "Valgt master har flere aktive plasseringer. Kontroller Filer.",
+            }.get(
+                self.status,
+                "Valgt master er ikke tilgjengelig fra registrert plassering.",
+            )
         return {
             RadioPlaybackStatus.AVAILABLE: "Radiofilen er klar for avspilling.",
             RadioPlaybackStatus.NO_RADIO_FILE: "Ingen radiofil er registrert.",
@@ -75,13 +84,41 @@ def resolve_current_radio_asset(recording, *, verify_file=False):
     if not radio_assets:
         return RadioPlaybackResolution(RadioPlaybackStatus.NO_RADIO_FILE)
 
+    return _resolve_assets(radio_assets, verify_file=verify_file)
+
+
+def resolve_recording_playback(recording, *, verify_file=False):
+    """Normal listening prefers the explicitly selected master.
+
+    An unavailable selection is reported, never silently replaced by different
+    audio. Explicit radio operations continue to use resolve_current_radio_asset.
+    """
+    try:
+        selection = recording.media_selection
+    except ObjectDoesNotExist:
+        selection = None
+    if not selection or not selection.selected_master_id:
+        return resolve_current_radio_asset(recording, verify_file=verify_file)
+    asset = selection.selected_master
+    if (
+        asset.recording_id != recording.pk
+        or asset.role != FileAsset.Role.EDITED_WAV_MASTER
+    ):
+        result = RadioPlaybackResolution(RadioPlaybackStatus.FILE_UNAVAILABLE)
+    else:
+        result = _resolve_assets([asset], verify_file=verify_file)
+    return replace(result, source="selected_master")
+
+
+def _resolve_assets(assets, *, verify_file):
+
     candidates = []
     location_ambiguity = False
     supported_storage = {
         FileLocation.StorageType.NAS,
         FileLocation.StorageType.LOCAL,
     }
-    for asset in radio_assets:
+    for asset in assets:
         if asset.sync_status in {
             FileAsset.SyncStatus.MISSING,
             FileAsset.SyncStatus.FAILED,

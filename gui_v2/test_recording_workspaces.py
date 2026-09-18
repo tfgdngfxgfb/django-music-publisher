@@ -187,7 +187,7 @@ class RecordingWorkspaceTests(TestCase):
         self.assertContains(available, "data-play-recording")
         self.assertContains(
             available,
-            reverse("gui_v2:recording_audio", args=[self.recording.pk]),
+            reverse("gui_v2:recording_radio_audio", args=[self.recording.pk]),
         )
         second = FileAsset.objects.create(
             recording=self.recording,

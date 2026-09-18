@@ -117,3 +117,74 @@ Programarkiv, Delivery, Rotasjon, DSP, automatisk oppdeling og flytting/
 sletting av kildelyd er ikke implementert. Batchmedlemskap og råprovenance er
 adskilt fra musikkens Recording-kobling; ingen polymorf modell eller
 GenericForeignKey er innført for hypotetisk framtidig gjenbruk.
+
+## Veiledet digitalisering og valgt master ved avspilling (pilot, 2026-09-18)
+
+Normal inngang er «Start ny digitalisering». Søk i utgivelser omfatter label,
+katalognummer, tittel og registrert artist/kreditering. Valgt eller ny utgivelse
+fortsetter i digitaliseringsguiden: metadata/spor, RAW, redigerte mastere,
+kobling/mastervalg, Radio-FLAC-status/ferdig. Utgivelsesredigering og sporgrid
+gjenbruker eksisterende Release-workspace med retur til riktig steg. Ingen ny
+lagret wizard-status eller nye domenemodeller er innført.
+
+`catalogue.metadata_providers` definerer en read-only grense for søk og
+kildebelagte metadataforslag. NCB er første planlagte leverandør; NCB, TONO og
+Gramo vises som ikke konfigurert. Faktisk integrasjon krever godkjent API,
+tilgang, kildeformat og kontroll av forslag mot fysisk kilde. Ingen scraping
+eller automatisk canonical metadata-import er implementert.
+
+RAW- og mastervelgere navigerer med klikkbar mappesti. Brukeren skriver ikke
+filstier. Søking/mapper oppdaterer bare panelet med fetch; avkrysninger bevares
+innen samme mappe også når et søk skjuler noen av de valgte filene. Antallet
+skjulte valg vises før forhåndsvisning. Listing leser én mappe, høyst 500 treff,
+og gjør ikke rekursive NAS-skanninger eller endrer source storage.
+
+Systemoppsettet bruker `P7_RAW_SOURCE_ROOT` og `P7_MASTER_SOURCE_ROOT` med
+tilsvarende `*_CLIENT_ROOT` for Windows-stier. Uten separate røtter kan brukeren
+bla fra det eksisterende Musikkarkiv-området. Følgende miljøinnstillinger
+styrer mappeforslag, uten hardkodet label:
+
+- `P7_RAW_FOLDER_TEMPLATE`: standard `{label}/{series}`.
+- `P7_MASTER_FOLDER_TEMPLATE`: standard
+  `{label}/{catalogue_number} - {title}`.
+
+`series` er bokstavprefikset i katalognummeret (FMC 102 → FMC). Malene kan bruke
+label, series, catalogue_number og title. Forslag prøver bare den forventede
+mappen og dens foreldre innen konfigurert rot. Manglende katalogopplysninger
+eller mappe gir manuell navigasjon, aldri opprettelse/flytting. Native redigering
+av standardmapper i systemadministrasjon og full fysisk formatmodell er utsatt.
+
+`media_assets.digitization_matching.suggest_master_links()` er den felles, rene
+forslagstjenesten for koblingstabellen. Den mottar ferdiglastede fakta og gjør
+ingen ORM-/filoppslag. Prioritet: lagret kobling, eksplisitt side/spornummer
+(A1/A01/B04 osv.), fullstendig nummerert filrekkefølge, deretter entydig lagret
+filendringstid. Endringstid er ikke fremstilt som sikker opprettelsesdato.
+Ulikt antall mastere/spor, like tidsstempler, gjentatte posisjoner og konflikt
+med lagret Recording gir manuell kontroll fremfor stille forskyvning.
+RAW foreslås etter side eller én forenlig råkilde; A+B kan dekke begge sider.
+Ingen filnavn/tidspunkter blir autoritative katalogdata.
+
+«Godta alle» velger forslag for brukerens kontroll. `link_masters` legger
+RAW→master og master→Recording/ReleaseTrack i én eksisterende DigitizationPlan.
+Samme preview-fingerprint, låserekkefølge, permissions og atomiske apply brukes;
+begge relasjoner og hendelser rulles tilbake dersom en rad feiler. De gamle
+rå-/Recording-operasjonene deler nå apply-funksjoner med samlehandlingen.
+Valgt master er fortsatt et eget eksplisitt valg og erstattes aldri automatisk.
+
+Vanlig intern avspilling bruker `resolve_recording_playback`: valgt master
+først, ellers eksisterende konservativ current-radio-resolver. En utilgjengelig
+valgt master rapporteres og gir ingen skjult overgang til en annen lydfil.
+WAV strømmes med riktig MIME-type, Range/HEAD og samme tilgangs-/storagekontroll.
+Normal lydadresse er `/v2/avspilling/innspillinger/<uuid>/lyd`; eksisterende
+`radio.flac`-adresse og «Spill Radio-FLAC» er fortsatt eksplisitt radioavspilling.
+4.5A-generering, metadataautoritet, Delivery og radio-lifecycle er uendret.
+
+Radio-FLAC-workbenchen og batchens oppsummering gjenbruker pipeline-statusen;
+ferdigstilling krever ikke Radio-FLAC. Søk etter eksisterende radio åpner
+Musikkarkivets registrerte materiale; dette er ikke en ny fysisk FLAC-import.
+Ingen produksjons-NCB-integrasjon, ny generator, DSP eller work-item-tabell.
+
+Revisjonen kontrolleres med målrettede SQLite-tester, Django check,
+migrasjonskontroll, Black 26.5.1/79 og JS-syntakskontroll. Nettleserkontroll
+bruker syntetiske data i SQLite-minne. PostgreSQL er ikke kjørt i denne
+revisjonen; de tidligere fasekontrollene ovenfor er historiske resultater.

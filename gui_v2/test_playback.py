@@ -9,10 +9,15 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from catalogue.models import Recording, Release, ReleaseTrack
-from media_assets.models import FileAsset, FileLocation
+from media_assets.models import (
+    FileAsset,
+    FileLocation,
+    RecordingMediaSelection,
+)
 from media_assets.playback import (
     RadioPlaybackStatus,
     resolve_current_radio_asset,
+    resolve_recording_playback,
 )
 from music_library.models import MusicLibraryEntry
 
@@ -78,6 +83,13 @@ class RadioPlaybackTests(TestCase):
         self.assertContains(
             response, f'data-audio-url-template="{template_url}"'
         )
+        radio_url = reverse(
+            "gui_v2:recording_radio_audio",
+            args=["00000000-0000-0000-0000-000000000000"],
+        )
+        self.assertContains(
+            response, f'data-radio-audio-url-template="{radio_url}"'
+        )
         self.assertContains(response, "gui_v2/player.css")
         self.assertNotContains(response, "data-player-hide")
         self.assertNotContains(response, "data-player-show")
@@ -85,6 +97,74 @@ class RadioPlaybackTests(TestCase):
     def test_resolver_returns_one_current_radio_asset(self):
         result = resolve_current_radio_asset(self.recording)
         self.assertEqual(result.status, RadioPlaybackStatus.AVAILABLE)
+        self.assertEqual(result.asset, self.asset)
+
+    def _select_master(self):
+        self.asset.lifecycle_status = FileAsset.LifecycleStatus.CURRENT
+        self.asset.save()
+        asset = FileAsset.objects.create(
+            recording=self.recording,
+            filename="master.wav",
+            role=FileAsset.Role.EDITED_WAV_MASTER,
+            mime_type="audio/wav",
+        )
+        (self.root / asset.filename).write_bytes(b"RIFFselected master bytes")
+        FileLocation.objects.create(
+            asset=asset,
+            storage_type=FileLocation.StorageType.LOCAL,
+            relative_path=asset.filename,
+            status=FileLocation.Status.ACTIVE,
+            is_current=True,
+        )
+        RecordingMediaSelection.objects.create(
+            recording=self.recording,
+            selected_master=asset,
+            current_radio=self.asset,
+        )
+        return asset
+
+    def test_default_playback_prefers_selected_master_and_streams_wav_range(
+        self,
+    ):
+        master = self._select_master()
+        result = resolve_recording_playback(self.recording)
+        self.assertEqual(result.asset, master)
+        self.assertEqual(result.source, "selected_master")
+        response = self._get(HTTP_RANGE="bytes=0-3")
+        self.assertEqual(response.status_code, 206)
+        self.assertEqual(response["Content-Type"], "audio/wav")
+        self.assertEqual(b"".join(response.streaming_content), b"RIFF")
+        self.assertEqual(
+            resolve_current_radio_asset(self.recording).asset, self.asset
+        )
+
+    def test_explicit_radio_route_and_card_remain_radio_with_selected_master(
+        self,
+    ):
+        self._select_master()
+        self.url = reverse(
+            "gui_v2:recording_radio_audio", args=[self.recording.pk]
+        )
+        response = self._get()
+        self.assertEqual(response["Content-Type"], "audio/flac")
+        self.assertEqual(b"".join(response.streaming_content), self.payload)
+        page = self.client.get(
+            reverse("gui_v2:recording_files", args=[self.recording.pk])
+        )
+        self.assertContains(page, "Spill valgt master")
+        self.assertContains(page, self.url)
+
+    def test_unavailable_selected_master_does_not_silently_play_radio(self):
+        master = self._select_master()
+        (self.root / master.filename).unlink()
+        response = self._get()
+        self.assertEqual(response.status_code, 404)
+        self.assertContains(
+            response, "Valgt master er ikke tilgjengelig", status_code=404
+        )
+
+    def test_without_selected_master_default_uses_current_radio(self):
+        result = resolve_recording_playback(self.recording)
         self.assertEqual(result.asset, self.asset)
         self.assertEqual(result.location, self.location)
 

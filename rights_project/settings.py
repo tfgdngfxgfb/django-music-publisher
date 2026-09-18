@@ -106,6 +106,12 @@ P7_GENERATED_MEDIA_RELATIVE_ROOT = os.getenv(
 )
 
 P7_STORAGE_ROOTS = {}
+P7_RAW_FOLDER_TEMPLATE = os.getenv(
+    "P7_RAW_FOLDER_TEMPLATE", "{label}/{series}"
+)
+P7_MASTER_FOLDER_TEMPLATE = os.getenv(
+    "P7_MASTER_FOLDER_TEMPLATE", "{label}/{catalogue_number} - {title}"
+)
 for key, setting_name, client_setting in (
     ("raw_sources", "P7_RAW_SOURCE_ROOT", "P7_RAW_SOURCE_CLIENT_ROOT"),
     (

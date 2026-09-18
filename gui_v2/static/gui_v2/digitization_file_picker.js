@@ -1,5 +1,33 @@
 (() => {
+  const selections = new Map();
+  const folderKey = (section) => {
+    if (section.dataset.folderKey) return section.dataset.folderKey;
+    const form = section.querySelector("form[method='get']");
+    return [section.id, form.elements.root_key.value, form.elements.relative_path.value].join(":");
+  };
+  const syncSelection = (section) => {
+    const key = folderKey(section);
+    const selected = new Set(selections.get(key) || []);
+    const visible = new Set();
+    section.querySelectorAll('input[type=checkbox][name=filenames]').forEach(input => {
+      visible.add(input.value);
+      if (input.checked && !input.disabled) selected.add(input.value);
+      else selected.delete(input.value);
+    });
+    selections.set(key, [...selected]);
+    const form = section.querySelector('form[method=post]');
+    if (!form) return;
+    form.querySelectorAll('[data-picker-kept]').forEach(input => input.remove());
+    [...selected].filter(name => !visible.has(name)).forEach(name => {
+      const input = document.createElement('input'); input.type = 'hidden'; input.name = 'filenames'; input.value = name; input.dataset.pickerKept = ''; form.append(input);
+    });
+    let count = form.querySelector('[data-picker-count]');
+    if (!count) {count = document.createElement('p'); count.dataset.pickerCount = ''; count.setAttribute('role', 'status'); form.prepend(count);}
+    const hiddenCount = [...selected].filter(name => !visible.has(name)).length;
+    count.textContent = `${selected.size} ${selected.size === 1 ? 'fil' : 'filer'} valgt i mappen${hiddenCount ? ` (${hiddenCount} utenfor dette søket)` : ''}.`;
+  };
   async function browse(section, params) {
+    syncSelection(section);
     section.browseController?.abort();
     const controller = new AbortController();
     section.browseController = controller;
@@ -18,7 +46,13 @@
       if (!replacement || replacement.id !== section.id) {
         throw new Error("Filvisningen kunne ikke oppdateres.");
       }
+      replacement.hidden = section.hidden;
       section.replaceWith(replacement);
+      const selected = selections.get(folderKey(replacement)) || [];
+      replacement.querySelectorAll("[name=filenames]").forEach(input => {input.checked = !input.disabled && selected.includes(input.value);});
+      replacement.dataset.folderKey = folderKey(replacement);
+      syncSelection(replacement);
+      if (!replacement.hidden) replacement.querySelector("input[type=search]")?.focus({preventScroll: true});
     } catch (error) {
       if (error.name === "AbortError") return;
       let notice = section.querySelector("[data-picker-error]");
@@ -41,7 +75,9 @@
     const form = event.target.closest("[data-file-picker] form[method='get']");
     if (!form) return;
     event.preventDefault();
-    browse(form.closest("[data-file-picker]"), new URLSearchParams(new FormData(form)));
+    const params = new URLSearchParams(new FormData(form));
+    if (event.submitter?.name) params.set(event.submitter.name, event.submitter.value);
+    browse(form.closest("[data-file-picker]"), params);
   });
 
   document.addEventListener("click", (event) => {
@@ -51,4 +87,27 @@
     const section = link.closest("[data-file-picker]");
     browse(section, new URL(link.href).searchParams);
   });
+  document.addEventListener("change", (event) => {
+    const section = event.target.closest("[data-file-picker]");
+    if (!section) return;
+    if (event.target.matches("[data-picker-select-all]")) {
+      section.querySelectorAll('input[type=checkbox][name=filenames]:not(:disabled)').forEach(input => {input.checked = event.target.checked;});
+    }
+    if (event.target.name === "root_key") {
+      const params = new URLSearchParams(new FormData(event.target.form));
+      params.set("relative_path", "."); params.set("suggest", "1");
+      browse(section, params);
+    }
+    else syncSelection(section);
+  });
+  const loadVisible = () => document.querySelectorAll('[data-picker-auto="true"]').forEach(section => {
+    if (section.hidden) return;
+    section.dataset.pickerAuto = "false";
+    section.dataset.folderKey = folderKey(section);
+    const params = new URLSearchParams(new FormData(section.querySelector("form[method='get']")));
+    params.set("suggest", "1");
+    browse(section, params);
+  });
+  document.addEventListener("digitization:step", loadVisible);
+  loadVisible();
 })();

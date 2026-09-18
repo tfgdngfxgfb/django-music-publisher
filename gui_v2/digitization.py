@@ -1,6 +1,7 @@
 """Music digitization workbench, consuming media services and existing GUI v2."""
 
 import logging
+from dataclasses import replace
 
 from django import forms
 from django.conf import settings
@@ -23,6 +24,7 @@ from django.views.decorators.http import require_http_methods
 from urllib.parse import quote
 
 from catalogue.models import Label, Release, ReleaseTrack
+from catalogue.metadata_providers import provider_availability
 from managed_music.models import ManagedRelease
 from media_assets.digitization import (
     apply_plan,
@@ -32,7 +34,6 @@ from media_assets.digitization import (
     preview_operation,
     preview_registration,
     require_operator,
-    suggest_tracks,
 )
 from media_assets.models import (
     DigitizationBatch,
@@ -53,6 +54,11 @@ from media_assets.pipeline_status import (
     RadioWorkState,
     get_recording_media_pipeline_status,
     radio_work_state,
+)
+from media_assets.digitization_matching import suggest_master_links
+from media_assets.digitization_storage import (
+    suggested_folder,
+    folder_breadcrumbs,
 )
 from .forms import MasterRegistrationForm, ReleaseMetadataForm
 from .home_state import remember_object
@@ -280,6 +286,23 @@ def batch_workspace(batch):
         .annotate(count=Count("release_id", distinct=True))
     }
     rows, raws = [], []
+    suggestions = suggest_master_links(
+        [
+            asset
+            for asset in files
+            if asset.role == FileAsset.Role.EDITED_WAV_MASTER
+        ],
+        tracks,
+        [
+            asset
+            for asset in files
+            if asset.role == FileAsset.Role.RAW_DIGITIZATION
+        ],
+        {
+            key: relation.source_asset
+            for key, relation in active_sources.items()
+        },
+    )
     for asset in files:
         selection = selections.get(asset.recording_id)
         row = {
@@ -302,7 +325,7 @@ def batch_workspace(batch):
             ]
             raws.append(row)
         else:
-            row["suggestion"] = suggest_tracks(asset, tracks)
+            row["link_suggestion"] = suggestions[asset.pk]
             row["selected"] = bool(
                 selection and selection.selected_master_id == asset.pk
             )
@@ -592,8 +615,14 @@ def start(request):
     releases = Release.objects.select_related("label").order_by("title")
     if query:
         releases = releases.filter(
-            Q(title__icontains=query) | Q(catalogue_number__icontains=query)
-        )
+            Q(title__icontains=query)
+            | Q(catalogue_number__icontains=query)
+            | Q(label__name__icontains=query)
+            | Q(tracks__recording__contributions__credited_as__icontains=query)
+            | Q(
+                tracks__recording__contributions__artist_identity__display_name__icontains=query
+            )
+        ).distinct()
     release_form = DigitizationReleaseForm(
         request.POST if request.POST.get("mode") == "new" else None,
         prefix="release",
@@ -632,12 +661,8 @@ def start(request):
                     )[:255],
                     created_by=request.user,
                 )
-            destination = reverse(
-                "gui_v2:digitization_detail", args=[batch.pk]
-            )
             return redirect(
-                f"{reverse('gui_v2:release_detail', args=[release.pk])}"
-                f"?tab=tracks&return={quote(destination, safe='')}"
+                f"{reverse('gui_v2:digitization_detail', args=[batch.pk])}?step=metadata"
             )
     return render(
         request,
@@ -830,19 +855,34 @@ def index(request):
 
 
 def _browse_storage(batch, params):
+    params = params.copy()
+    hint = None
+    hint_error = ""
+    if params.get("suggest") and params.get("root_key"):
+        try:
+            hint = suggested_folder(
+                batch.release, params.get("role"), params["root_key"]
+            )
+            params["relative_path"] = hint["path"]
+        except (ValidationError, OSError, ImproperlyConfigured) as exc:
+            hint_error = "; ".join(getattr(exc, "messages", [str(exc)]))
     browse_form = FolderForm(
         params if params.get("browse") else None,
         initial={"role": FileAsset.Role.RAW_DIGITIZATION},
     )
     storage_entries = []
-    browse_error = ""
+    browse_error = hint_error
+    browse_form.folder_hint = hint
+    browse_form.breadcrumbs = folder_breadcrumbs(
+        params.get("relative_path", ".")
+    )
     active_role = params.get("role", FileAsset.Role.RAW_DIGITIZATION)
     if active_role not in {
         FileAsset.Role.RAW_DIGITIZATION,
         FileAsset.Role.EDITED_WAV_MASTER,
     }:
         active_role = FileAsset.Role.RAW_DIGITIZATION
-    if params.get("browse"):
+    if params.get("browse") and not hint_error:
         if browse_form.is_valid():
             try:
                 storage_entries = list_digitization_folder(
@@ -886,7 +926,9 @@ def _browse_storage(batch, params):
 @require_http_methods(["GET"])
 def browse_files(request, batch_id):
     """Render only one source picker; browser search does not reload the page."""
-    batch = get_object_or_404(DigitizationBatch, pk=batch_id)
+    batch = get_object_or_404(
+        DigitizationBatch.objects.select_related("release__label"), pk=batch_id
+    )
     role = request.GET.get("role")
     if role not in {
         FileAsset.Role.RAW_DIGITIZATION,
@@ -908,14 +950,12 @@ def browse_files(request, batch_id):
                 "Finn RAW-filer" if raw else "Finn redigerte mastere"
             ),
             "picker_step": (
-                "Steg 3 · Rå digitalisering"
-                if raw
-                else "Steg 4 · Redigerte mastere"
+                "Rå digitalisering" if raw else "Redigerte mastere"
             ),
             "picker_description": (
                 "Velg filer i RAW-området. Filene leses og registreres her; de flyttes eller endres ikke."
                 if raw
-                else "Velg ferdig redigerte WAV-mastere i masterområdet. Koble dem deretter til RAW-kilde og riktig spor i tabellen over."
+                else "Velg ferdig redigerte WAV-mastere i masterområdet. Koble dem deretter til RAW-kilde og riktig spor i neste steg: Koble og velg mastere."
             ),
             "picker_default_root": (
                 (
@@ -971,7 +1011,7 @@ def detail(request, batch_id):
                     "Digitaliseringen er avsluttet. Radio-FLAC kan behandles senere.",
                 )
                 return redirect(
-                    "gui_v2:digitization_detail", batch_id=batch.pk
+                    f"{reverse('gui_v2:digitization_detail', args=[batch.pk])}?step=radio"
                 )
             if operation == "delete_batch":
                 if request.POST.get("confirmed") != "yes":
@@ -1002,7 +1042,18 @@ def detail(request, batch_id):
                     "Alle viste endringer er lagret. Lydfilene er urørt.",
                 )
                 return redirect(
-                    f"{reverse('gui_v2:digitization_detail', args=[batch.pk])}?applied=1"
+                    f"{reverse('gui_v2:digitization_detail', args=[batch.pk])}?applied=1&step="
+                    + (
+                        "radio"
+                        if plan.operation == "select_master"
+                        else (
+                            "raw"
+                            if plan.operation == "register"
+                            and plan.payload["files"][0]["role"]
+                            == FileAsset.Role.RAW_DIGITIZATION
+                            else "links"
+                        )
+                    )
                 )
             elif operation == "register":
                 folder_form = FolderForm(request.POST)
@@ -1028,11 +1079,13 @@ def detail(request, batch_id):
                         source=request.POST.get("source", ""),
                         note=request.POST.get("note", ""),
                     )
-                elif operation == "recording_link":
+                elif operation in {"recording_link", "link_masters"}:
                     payload = {
+                        "note": request.POST.get("note", ""),
                         "rows": [
                             {
                                 "asset": pk,
+                                "source": request.POST.get(f"source_{pk}", ""),
                                 "track": request.POST.get(f"track_{pk}", ""),
                                 "recording": request.POST.get(
                                     f"recording_{pk}", ""
@@ -1044,7 +1097,7 @@ def detail(request, batch_id):
                                 == "on",
                             }
                             for pk in assets
-                        ]
+                        ],
                     }
                 plan = preview_operation(
                     batch=batch,
@@ -1070,13 +1123,45 @@ def detail(request, batch_id):
             )
             error = "Handlingen kunne ikke fullføres. Kontroller filtilgang og registrerte koblinger. Ingen deler av bulkhandlingen er lagret."
             plan = None
+    workspace = batch_workspace(batch)
+    # Keep unsaved choices visible when preview validation fails.
+    if request.method == "POST" and error:
+        for row in workspace["masters"]:
+            suggestion = row["link_suggestion"]
+            row["link_suggestion"] = replace(
+                suggestion,
+                track=next(
+                    (
+                        t
+                        for t in workspace["tracks"]
+                        if str(t.pk)
+                        == request.POST.get(f"track_{row['asset'].pk}")
+                    ),
+                    suggestion.track,
+                ),
+                source=next(
+                    (
+                        r["asset"]
+                        for r in workspace["raws"]
+                        if str(r["asset"].pk)
+                        == request.POST.get(f"source_{row['asset'].pk}")
+                    ),
+                    suggestion.source,
+                ),
+            )
+    default_step = "raw" if workspace["tracks"] else "metadata"
+    step = request.POST.get("step") or request.GET.get("step", default_step)
+    if step not in {"metadata", "raw", "masters", "links", "radio", "history"}:
+        step = default_step
     return render(
         request,
         "gui_v2/digitization_detail.html",
         {
             "section": "digitization",
             "batch": batch,
-            "workspace": batch_workspace(batch),
+            "workspace": workspace,
+            "step": step,
+            "metadata_providers": provider_availability(),
             "folder_form": folder_form,
             "browse_form": browse_form,
             "source_roots": folder_form.fields["root_key"].choices,

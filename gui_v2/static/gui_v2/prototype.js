@@ -567,10 +567,11 @@
     const safeQueue = saved.queue.map(track => {
       const id = track?.playRecordingId || "";
       const expected = template.replace("00000000-0000-0000-0000-000000000000", id);
+      const expectedRadio = player.dataset.radioAudioUrlTemplate?.replace("00000000-0000-0000-0000-000000000000", id);
       return {
         ...track,
         playUrl: /^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i.test(id) &&
-          track.playUrl === expected ? expected : "",
+          (track.playUrl === expected || (expectedRadio && track.playUrl === expectedRadio)) ? track.playUrl : "",
       };
     });
     const index = saved.queueIndex;

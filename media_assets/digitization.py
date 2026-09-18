@@ -57,7 +57,7 @@ def _relevant_recording_ids(batch, operation, payload, files):
             for item in files
             if str(item.asset_id) in selected and item.asset.recording_id
         }
-    if operation != "recording_link":
+    if operation not in {"recording_link", "link_masters"}:
         return set()
     rows = payload.get("rows", ())
     ids = {row.get("recording") for row in rows if row.get("recording")}
@@ -260,7 +260,23 @@ def _validate(batch, operation, payload):
     changes = []
     if batch.status != DigitizationBatch.Status.OPEN:
         raise ValidationError("Digitaliseringen er avsluttet.")
-    if operation == "register":
+    if operation == "link_masters":
+        rows = payload.get("rows", [])
+        _assets(batch, [row["asset"] for row in rows])
+        changes.extend(_validate(batch, "recording_link", {"rows": rows}))
+        for row in rows:
+            changes.extend(
+                _validate(
+                    batch,
+                    "raw_link",
+                    {
+                        "assets": [row["asset"]],
+                        "source": row.get("source", ""),
+                        "note": payload.get("note", ""),
+                    },
+                )
+            )
+    elif operation == "register":
         for item in payload["files"]:
             locations = list(
                 FileLocation.objects.filter(
@@ -578,70 +594,22 @@ def apply_plan(*, plan, user):
         _validate(batch, plan.operation, plan.payload)
         if plan.operation == "register":
             _register(batch, plan.payload["files"], user)
-        elif plan.operation == "raw_link":
-            raw = _assets(batch, [plan.payload["source"]])[0]
-            for asset in _assets(batch, plan.payload["assets"]):
-                old = list(asset.digitization_sources.filter(is_active=True))
-                if old and old[0].source_asset_id == raw.pk:
-                    continue
-                for relation in old:
-                    relation.is_active = False
-                    relation.save()
-                DigitizationDerivation.objects.create(
-                    source_asset=raw,
-                    derived_asset=asset,
-                    created_by=user,
-                    note=plan.payload.get("note", ""),
-                )
-                _event(
+        elif plan.operation == "link_masters":
+            _apply_recording_links(batch, plan.payload, user, plan)
+            for row in plan.payload["rows"]:
+                _apply_raw_links(
                     batch,
-                    asset,
-                    user,
-                    MediaAssetEvent.EventType.RAW_LINKED,
-                    related=raw,
-                    details={
-                        "previous": [
-                            str(item.source_asset_id) for item in old
-                        ],
+                    {
+                        "source": row["source"],
+                        "assets": [row["asset"]],
                         "note": plan.payload.get("note", ""),
                     },
-                )
-        elif plan.operation == "recording_link":
-            for row in plan.payload["rows"]:
-                asset = _assets(batch, [row["asset"]])[0]
-                track = (
-                    ReleaseTrack.objects.get(
-                        pk=row["track"], release=batch.release
-                    )
-                    if row.get("track")
-                    else None
-                )
-                recording = (
-                    Recording.objects.get(pk=row["recording"])
-                    if row.get("recording")
-                    else (track.recording if track else None)
-                )
-                recording = resolve_release_track_recording(
-                    recording=recording,
-                    new_recording_title=row.get("new_title", ""),
-                    force_create=bool(row.get("force_create")),
-                    duration_ms=asset.technical_metadata.get("duration_ms"),
-                )
-                asset.recording = recording
-                asset.release = None
-                asset.release_track = track
-                asset.save()
-                MusicLibraryEntry.objects.get_or_create(recording=recording)
-                _event(
-                    batch,
-                    asset,
                     user,
-                    MediaAssetEvent.EventType.RECORDING_LINKED,
-                    details={
-                        "track": str(track.pk) if track else None,
-                        "plan": str(plan.pk),
-                    },
                 )
+        elif plan.operation == "raw_link":
+            _apply_raw_links(batch, plan.payload, user)
+        elif plan.operation == "recording_link":
+            _apply_recording_links(batch, plan.payload, user, plan)
         elif plan.operation == "select_master":
             for asset in sorted(
                 _assets(batch, plan.payload["assets"]),
@@ -654,6 +622,70 @@ def apply_plan(*, plan, user):
         plan.applied_at = timezone.now()
         plan.save()
         return plan
+
+
+def _apply_raw_links(batch, payload, user):
+    raw = _assets(batch, [payload["source"]])[0]
+    for asset in _assets(batch, payload["assets"]):
+        old = list(asset.digitization_sources.filter(is_active=True))
+        if old and old[0].source_asset_id == raw.pk:
+            continue
+        for relation in old:
+            relation.is_active = False
+            relation.save()
+        DigitizationDerivation.objects.create(
+            source_asset=raw,
+            derived_asset=asset,
+            created_by=user,
+            note=payload.get("note", ""),
+        )
+        _event(
+            batch,
+            asset,
+            user,
+            MediaAssetEvent.EventType.RAW_LINKED,
+            related=raw,
+            details={
+                "previous": [str(item.source_asset_id) for item in old],
+                "note": payload.get("note", ""),
+            },
+        )
+
+
+def _apply_recording_links(batch, payload, user, plan):
+    for row in payload["rows"]:
+        asset = _assets(batch, [row["asset"]])[0]
+        track = (
+            ReleaseTrack.objects.get(pk=row["track"], release=batch.release)
+            if row.get("track")
+            else None
+        )
+        recording = (
+            Recording.objects.get(pk=row["recording"])
+            if row.get("recording")
+            else (track.recording if track else None)
+        )
+        recording = resolve_release_track_recording(
+            recording=recording,
+            new_recording_title=row.get("new_title", ""),
+            force_create=bool(row.get("force_create")),
+            duration_ms=asset.technical_metadata.get("duration_ms"),
+        )
+        asset.recording = recording
+        asset.release = None
+        asset.release_track = track
+        asset.save()
+        MusicLibraryEntry.objects.get_or_create(recording=recording)
+        _event(
+            batch,
+            asset,
+            user,
+            MediaAssetEvent.EventType.RECORDING_LINKED,
+            details={
+                "track": str(track.pk) if track else None,
+                "plan": str(plan.pk),
+            },
+        )
 
 
 def _register(batch, files, user):

@@ -220,15 +220,14 @@ class DigitizationWorkflowTests(TestCase):
             FileAsset.objects.filter(role=FileAsset.Role.RADIO_FLAC).count(), 0
         )
 
-    def test_start_uses_existing_or_new_release_and_returns_to_tracks(self):
+    def test_start_uses_existing_or_new_release_and_returns_to_guide(self):
         self.client.force_login(self.user)
         url = reverse("gui_v2:digitization_start")
         existing = self.client.post(
             url, {"mode": "existing", "release_id": str(self.release.pk)}
         )
         self.assertEqual(existing.status_code, 302)
-        self.assertIn("tab=tracks", existing.url)
-        self.assertIn("return=", existing.url)
+        self.assertIn("step=metadata", existing.url)
         self.assertEqual(
             DigitizationBatch.objects.filter(release=self.release).count(), 2
         )
@@ -243,7 +242,7 @@ class DigitizationWorkflowTests(TestCase):
         )
         self.assertEqual(new.status_code, 302)
         created = Release.objects.get(title="Ny kassett")
-        self.assertIn(str(created.pk), new.url)
+        self.assertIn("step=metadata", new.url)
         self.assertTrue(
             DigitizationBatch.objects.filter(release=created).exists()
         )
@@ -679,6 +678,111 @@ class DigitizationWorkflowTests(TestCase):
         self.assertEqual(suggestion["status"], "Tvetydig")
         self.assertEqual(len(suggestion["choices"]), 2)
         self.assertIsNone(masters[0].recording_id)
+
+    def test_combined_links_preview_apply_and_rollback(self):
+        raw, masters = self.prepare()
+        tracks = [
+            ReleaseTrack.objects.create(
+                release=self.release,
+                recording=Recording.objects.create(title=f"Spor {n}"),
+                sequence_number=n,
+                side="A",
+                track_number=n,
+            )
+            for n in range(1, 4)
+        ]
+        plan = self.preview(
+            "link_masters",
+            {
+                "rows": [
+                    {
+                        "asset": str(master.pk),
+                        "track": str(track.pk),
+                        "source": str(raw[0].pk),
+                    }
+                    for master, track in zip(masters, tracks)
+                ]
+            },
+        )
+        self.assertFalse(DigitizationDerivation.objects.exists())
+        from media_assets.digitization import _apply_raw_links
+
+        calls = 0
+
+        def fail_second(*args):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                raise ValidationError("Simulert feil i andre råkobling")
+            return _apply_raw_links(*args)
+
+        events_before = MediaAssetEvent.objects.count()
+        with patch(
+            "media_assets.digitization._apply_raw_links",
+            side_effect=fail_second,
+        ):
+            with self.assertRaises(ValidationError):
+                apply_plan(plan=plan, user=self.user)
+        self.assertFalse(DigitizationDerivation.objects.exists())
+        self.assertEqual(MediaAssetEvent.objects.count(), events_before)
+        self.assertFalse(
+            FileAsset.objects.filter(
+                pk__in=[m.pk for m in masters], recording__isnull=False
+            ).exists()
+        )
+        apply_plan(plan=plan, user=self.user)
+        self.assertEqual(DigitizationDerivation.objects.count(), 3)
+        self.assertEqual(
+            FileAsset.objects.filter(
+                pk__in=[m.pk for m in masters], recording__isnull=False
+            ).count(),
+            3,
+        )
+
+    def test_folder_conventions_use_release_and_allow_browsing_without_path_input(
+        self,
+    ):
+        from catalogue.models import Label
+        from media_assets.digitization_storage import suggested_folder
+
+        self.release.label = Label.objects.create(name="Klango")
+        self.release.catalogue_number = "FMC 102"
+        self.release.title = "Veien hjem"
+        self.release.save()
+        for folder in ("Klango/FMC", "Klango/FMC 102 - Veien hjem"):
+            (self.root / folder).mkdir(parents=True)
+        raw = suggested_folder(
+            self.release, FileAsset.Role.RAW_DIGITIZATION, "capture"
+        )
+        master = suggested_folder(
+            self.release, FileAsset.Role.EDITED_WAV_MASTER, "capture"
+        )
+        self.assertEqual(raw["path"], "Klango/FMC")
+        self.assertEqual(master["path"], "Klango/FMC 102 - Veien hjem")
+        with self.settings(P7_RAW_FOLDER_TEMPLATE="{label}/annen/{series}"):
+            fallback = suggested_folder(
+                self.release, FileAsset.Role.RAW_DIGITIZATION, "capture"
+            )
+            self.assertEqual(fallback["path"], "Klango")
+            self.assertFalse(fallback["matched"])
+        self.client.force_login(self.user)
+        with self.settings(
+            P7_STORAGE_ROOTS={"raw_sources": {"server_root": str(self.root)}}
+        ):
+            page = self.client.get(
+                reverse(
+                    "gui_v2:digitization_browse_files", args=[self.batch.pk]
+                ),
+                {
+                    "browse": "1",
+                    "suggest": "1",
+                    "root_key": "raw_sources",
+                    "role": FileAsset.Role.RAW_DIGITIZATION,
+                },
+            )
+        self.assertContains(page, "Klango/FMC")
+        self.assertContains(page, 'type="hidden" name="relative_path"')
+        self.assertNotContains(page, 'placeholder="."')
 
     def test_no_permission_and_other_preview_owner_rejected(self):
         raw, masters = self.prepare()

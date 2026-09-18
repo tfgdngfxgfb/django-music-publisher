@@ -80,6 +80,7 @@ from media_assets.playback import (
     RadioPlaybackStatus,
     iter_file_range,
     resolve_current_radio_asset,
+    resolve_recording_playback,
 )
 from media_assets.pipeline_status import get_recording_media_pipeline_status
 from media_assets.storage import get_client_folder, open_for_read
@@ -149,18 +150,30 @@ def _duration(value):
     return f"{seconds // 60:02d}:{seconds % 60:02d}"
 
 
-def _playback_context(recording, user):
+def _playback_context(recording, user, *, radio_only=False):
     if not user.has_perms(PLAYBACK_PERMISSIONS):
         return {
             "status": "forbidden",
             "message": "Du har ikke tilgang til denne lydfilen.",
         }
-    resolution = resolve_current_radio_asset(recording)
+    resolution = (
+        resolve_current_radio_asset(recording)
+        if radio_only
+        else resolve_recording_playback(recording)
+    )
     return {
         "status": resolution.status.value,
         "message": resolution.message,
+        "source": resolution.source,
         "url": (
-            reverse("gui_v2:recording_audio", args=[recording.pk])
+            reverse(
+                (
+                    "gui_v2:recording_radio_audio"
+                    if radio_only
+                    else "gui_v2:recording_audio"
+                ),
+                args=[recording.pk],
+            )
             if resolution.status == RadioPlaybackStatus.AVAILABLE
             else ""
         ),
@@ -417,7 +430,10 @@ def music_library(request):
         annotate_recording_authority(
             MusicLibraryEntry.objects.all(), recording_ref="recording_id"
         )
-        .select_related("recording__media_selection__current_radio")
+        .select_related(
+            "recording__media_selection__current_radio",
+            "recording__media_selection__selected_master",
+        )
         .prefetch_related(
             artist_prefetch,
             "channels",
@@ -425,6 +441,7 @@ def music_library(request):
             "recording__identifiers",
             "recording__file_assets__locations",
             "recording__media_selection__current_radio__locations",
+            "recording__media_selection__selected_master__locations",
             "recording__release_tracks__release",
         )
         .annotate(
@@ -1125,6 +1142,9 @@ def recording_files(request, recording_id):
             **workspace,
             "overview": overview,
             "file_view": file_view,
+            "radio_playback": _playback_context(
+                recording, request.user, radio_only=True
+            ),
             "writes_enabled": settings.GUI_V2_WRITES_ENABLED,
             "can_select_master": settings.GUI_V2_WRITES_ENABLED
             and request.user.has_perms(MASTER_CHANGE_PERMISSIONS),
@@ -1227,7 +1247,7 @@ def recording_radio(request, recording_id):
             form.save()
         messages.success(request, "Radiometadata ble lagret.")
         return redirect(context["tab_urls"]["radio"])
-    playback = _playback_context(recording, request.user)
+    playback = _playback_context(recording, request.user, radio_only=True)
     resolution = resolve_current_radio_asset(recording)
     context.update(
         {
@@ -1570,19 +1590,24 @@ def recording_activate_candidate(request, recording_id, generation_id):
 @require_http_methods(["GET", "HEAD"])
 @login_required
 @permission_required(PLAYBACK_PERMISSIONS, raise_exception=True)
-def recording_audio(request, recording_id):
-    """Stream the one unambiguous current radio-FLAC for a Recording."""
+def recording_audio(request, recording_id, radio_only=False):
+    """Stream selected master, falling back to radio only without a selection."""
     recording = get_object_or_404(
         Recording.objects.prefetch_related("file_assets__locations"),
         pk=recording_id,
     )
-    resolution = resolve_current_radio_asset(recording, verify_file=True)
+    resolver = (
+        resolve_current_radio_asset
+        if radio_only
+        else resolve_recording_playback
+    )
+    resolution = resolver(recording, verify_file=True)
     if resolution.status != RadioPlaybackStatus.AVAILABLE:
         status_code = (
             409 if resolution.status == RadioPlaybackStatus.AMBIGUOUS else 404
         )
         logger.warning(
-            "Radio playback unavailable",
+            "Recording playback unavailable",
             extra={
                 "recording_uuid": str(recording.pk),
                 "file_asset_id": (
@@ -1605,7 +1630,7 @@ def recording_audio(request, recording_id):
         size = os.fstat(handle.fileno()).st_size
     except OSError:
         logger.warning(
-            "Radio playback file could not be opened",
+            "Recording playback file could not be opened",
             extra={
                 "recording_uuid": str(recording.pk),
                 "file_asset_id": str(resolution.asset.pk),
@@ -1614,7 +1639,7 @@ def recording_audio(request, recording_id):
             },
         )
         return HttpResponse(
-            "Radiofilen er ikke tilgjengelig fra registrert plassering.",
+            "Lydfilen er ikke tilgjengelig fra registrert plassering.",
             status=404,
             content_type="text/plain; charset=utf-8",
         )
@@ -1634,14 +1659,17 @@ def recording_audio(request, recording_id):
         status_code = 206
     length = max(0, end - start + 1) if size else 0
     handle.seek(start)
+    content_type = (
+        "audio/wav" if resolution.source == "selected_master" else "audio/flac"
+    )
     if request.method == "HEAD":
         handle.close()
-        response = HttpResponse(status=status_code, content_type="audio/flac")
+        response = HttpResponse(status=status_code, content_type=content_type)
     else:
         response = StreamingHttpResponse(
             iter_file_range(handle, length=length),
             status=status_code,
-            content_type="audio/flac",
+            content_type=content_type,
         )
     response["Accept-Ranges"] = "bytes"
     response["Content-Length"] = str(length)
@@ -2015,12 +2043,17 @@ def release_detail(request, release_id):
         active_tab = "tracks"
     return_url = _safe_return(request, reverse("gui_v2:release_list"))
     tracks = list(
-        release.tracks.select_related("recording")
+        release.tracks.select_related(
+            "recording__media_selection__selected_master",
+            "recording__media_selection__current_radio",
+        )
         .prefetch_related(
             "recording__contributions__artist_identity",
             "recording__contributions__party",
             "recording__identifiers",
             "recording__file_assets__locations",
+            "recording__media_selection__selected_master__locations",
+            "recording__media_selection__current_radio__locations",
             "file_assets",
         )
         .order_by("sequence_number")

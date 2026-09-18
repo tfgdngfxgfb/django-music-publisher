@@ -14,7 +14,9 @@ app_name = "gui_v2"
 
 urlpatterns = [
     path("radio-flac/", radio_work_views.index, name="radio_workbench"),
-    path("radio-flac/bulk/", radio_work_views.bulk, name="radio_workbench_bulk"),
+    path(
+        "radio-flac/bulk/", radio_work_views.bulk, name="radio_workbench_bulk"
+    ),
     path("oppfolging/", followup_views.index, name="followup"),
     path(
         "utgivelser/<uuid:release_id>/rettigheter/registrering/",
@@ -74,7 +76,9 @@ urlpatterns = [
         name="recording_rights_replace",
     ),
     path("digitalisering/", digitization.index, name="digitization_index"),
-    path("digitalisering/start/", digitization.start, name="digitization_start"),
+    path(
+        "digitalisering/start/", digitization.start, name="digitization_start"
+    ),
     path(
         "digitalisering/utgivelser/<uuid:release_id>/matrise/",
         digitization.release_matrix,
@@ -143,9 +147,15 @@ urlpatterns = [
         name="recording_activate_candidate",
     ),
     path(
-        "avspilling/innspillinger/<uuid:recording_id>/radio.flac",
+        "avspilling/innspillinger/<uuid:recording_id>/lyd",
         views.recording_audio,
         name="recording_audio",
+    ),
+    path(
+        "avspilling/innspillinger/<uuid:recording_id>/radio.flac",
+        views.recording_audio,
+        {"radio_only": True},
+        name="recording_radio_audio",
     ),
     path(
         "kanaler/<uuid:channel_id>/logo/",

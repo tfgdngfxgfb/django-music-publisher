@@ -1,4 +1,4 @@
-<section class="recording-card digitization-storage-picker" id="{{ picker_id }}" data-file-picker data-browse-url="{% url 'gui_v2:digitization_browse_files' batch.pk %}">
+<section class="recording-card digitization-storage-picker" id="{{ picker_id }}" data-file-picker data-picker-auto="{% if not storage_browsed or active_role != picker_role %}true{% else %}false{% endif %}" data-digitization-step="{% if picker_role == 'raw_digitization' %}raw{% else %}masters{% endif %}" data-browse-url="{% url 'gui_v2:digitization_browse_files' batch.pk %}">
   <header><h2>{{ picker_heading }}</h2><span>{{ picker_step }}</span></header>
   <p>{{ picker_description }}</p>
   <form method="get" class="digitization-toolbar" aria-label="{{ picker_heading }}">
@@ -7,24 +7,28 @@
     <label>Lagringsområde
       <select name="root_key" required>
         {% for key, label in source_roots %}
-          <option value="{{ key }}" {% if active_role == picker_role and browse_form.cleaned_data.root_key == key or active_role != picker_role and picker_default_root == key %}selected{% endif %}>{{ label }}</option>
+          <option value="{{ key }}" {% if active_role == picker_role and storage_browsed %}{% if browse_form.cleaned_data.root_key == key %}selected{% endif %}{% else %}{% if picker_default_root == key %}selected{% endif %}{% endif %}>{{ label }}</option>
         {% endfor %}
       </select>
     </label>
-    <label>Mappe under lagringsområdet
-      <input name="relative_path" value="{% if active_role == picker_role and storage_browsed %}{{ browse_form.cleaned_data.relative_path|default:'.' }}{% else %}.{% endif %}" placeholder="." autocomplete="off">
-    </label>
+    <input type="hidden" name="relative_path" value="{% if active_role == picker_role and storage_browsed %}{{ browse_form.cleaned_data.relative_path|default:'.' }}{% else %}.{% endif %}">
     <label>Søk etter filnavn i mappen
       <input type="search" name="file_q" value="{% if active_role == picker_role %}{{ request.GET.file_q }}{% endif %}" placeholder="For eksempel Side A eller 01">
     </label>
     <button type="submit">Vis filer</button>
+    <button type="submit" name="suggest" value="1">Finn mappe for utgivelsen</button>
   </form>
   {% if active_role == picker_role and storage_browsed %}
+    {% if browse_form.folder_hint.missing %}<p>Utgivelsen mangler opplysninger for automatisk mappeforslag. Velg mappe i lagringsområdet.</p>{% elif browse_form.folder_hint %}<p>Forventet mappe: <strong>{{ browse_form.folder_hint.expected }}</strong>. {% if browse_form.folder_hint.matched %}Mappen ble funnet.{% else %}Mappen ble ikke funnet. Velg en undermappe eller utvid søket via mappestien.{% endif %}</p>{% endif %}
+    <nav class="digitization-steps" aria-label="Mappesti">
+      {% for crumb in browse_form.breadcrumbs %}<a data-picker-folder href="?browse=1&amp;root_key={{ browse_form.cleaned_data.root_key|urlencode }}&amp;role={{ picker_role }}&amp;relative_path={{ crumb.path|urlencode }}#{{ picker_id }}">{{ crumb.name }}</a>{% endfor %}
+    </nav>
     {% if browse_error %}<p class="notice error" role="alert">{{ browse_error }}</p>{% endif %}
     {% if browse_form.errors %}<div class="form-errors" role="alert">{{ browse_form.errors }}</div>{% endif %}
     {% if not browse_error and browse_form.is_valid %}
-      <form method="post">
+      <form method="post" action="{% url 'gui_v2:digitization_detail' batch.pk %}">
         {% csrf_token %}
+        <input type="hidden" name="step" value="{% if picker_role == 'raw_digitization' %}raw{% else %}masters{% endif %}">
         <input type="hidden" name="operation" value="register">
         <input type="hidden" name="selection_mode" value="selected">
         <input type="hidden" name="root_key" value="{{ browse_form.cleaned_data.root_key }}">
@@ -32,7 +36,7 @@
         <input type="hidden" name="relative_path" value="{{ browse_form.cleaned_data.relative_path|default:'.' }}">
         <div class="digitization-file-choices digitization-table">
           <table>
-            <thead><tr><th>Velg</th><th>Fil eller mappe</th><th>Størrelse</th><th>Registrering</th></tr></thead>
+            <thead><tr><th><input type="checkbox" data-picker-select-all aria-label="Velg alle viste filer"></th><th>Fil eller mappe</th><th>Størrelse</th><th>Registrering</th></tr></thead>
             <tbody>
               {% for item in storage_entries %}
                 <tr>

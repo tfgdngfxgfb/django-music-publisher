@@ -84,6 +84,8 @@ def recording_overview_queryset():
         "music_library_entry__target_audiences",
         Prefetch("release_tracks", queryset=tracks),
         Prefetch("file_assets", queryset=files),
+        "media_selection__selected_master__locations",
+        "media_selection__current_radio__locations",
         Prefetch("duplicate_candidates_as_a", queryset=duplicate_cases),
         Prefetch("duplicate_candidates_as_b", queryset=duplicate_cases),
     )
