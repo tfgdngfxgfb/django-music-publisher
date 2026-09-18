@@ -15,9 +15,9 @@
 <body class="{% block body_class %}{% endblock %}" data-p7-shell="gui-v2">
   <a class="skip-link" href="#v2-main">Hopp til innhold</a>
   <header class="app-header">
-    <a class="brand" href="{% url 'gui_v2:home' %}" aria-label="P7 Arkiv og rettigheter, GUI v2"><span>P7</span><strong>Arkiv og rettigheter</strong></a>
+    <a class="brand" href="{% url 'home' %}" aria-label="P7 Arkiv og rettigheter, GUI v2"><span>P7</span><strong>Arkiv og rettigheter</strong></a>
     <nav class="main-nav" aria-label="Hovedmeny">
-      <a {% if section == 'home' %}aria-current="page"{% endif %} href="{% url 'gui_v2:home' %}">Hjem</a>
+      <a {% if section == 'home' %}aria-current="page"{% endif %} href="{% url 'home' %}">Hjem</a>
       {% if perms.music_library.view_musiclibraryentry %}<a {% if section == 'music_library' %}aria-current="page"{% endif %} href="{% url 'gui_v2:music_library' %}">Musikkarkiv</a>{% endif %}
       {% if perms.catalogue.view_release %}<a {% if section == 'releases' %}aria-current="page"{% endif %} href="{% url 'gui_v2:release_list' %}">Utgivelser</a>{% endif %}
       {% if perms.media_assets.view_digitizationbatch and perms.media_assets.view_fileasset and perms.media_assets.view_filelocation and perms.catalogue.view_release and perms.catalogue.view_recording %}<a {% if section == 'digitization' %}aria-current="page"{% endif %} href="{% url 'gui_v2:digitization_index' %}">Digitalisering</a>{% endif %}
@@ -28,9 +28,9 @@
       {% if perms.media_assets.view_fileasset %}<a href="{% url 'workbench:files' %}">Filer</a>{% endif %}
       {% if perms.flac_ingest.preview_library_cleanup or perms.flac_ingest.preview_library_rebuild %}<a href="{% url 'workbench:library_maintenance' %}">Kontroll</a>{% endif %}
     </nav>
-    <div class="header-actions"><span class="prototype-mark">GUI v2 · prototype</span><button type="button" id="v2-theme-toggle" aria-label="Bytt lyst eller mørkt tema">◐</button><span class="user-chip">{{ request.user.get_username }}</span></div>
+    <div class="header-actions"><span class="prototype-mark">GUI v2</span><button type="button" id="v2-theme-toggle" aria-label="Bytt lyst eller mørkt tema">◐</button><span class="user-chip">{{ request.user.get_username }}</span></div>
   </header>
-  <div class="prototype-strip"><span>GUI v2 · testområde</span>{% if writes_enabled %}<strong>Endringer lagres i den separate testdatabasen</strong>{% else %}<strong>Ingen endringer lagres</strong>{% endif %}<a href="{% url 'home' %}">Tidligere Workbench</a></div>
+  <div class="prototype-strip"><span>Primær arbeidsflate</span><strong>Innspillinger, utgivelser og rettigheter</strong>{% if request.user.is_staff %}<a href="{% url 'workbench:home' %}">GUI v1 · eldre arbeidsflate</a>{% endif %}</div>
   {% if messages %}<div class="messages" aria-live="polite">{% for message in messages %}<p class="message {{ message.tags }}">{{ message }}</p>{% endfor %}</div>{% endif %}
   <main id="v2-main" tabindex="-1">{% block content %}{% endblock %}</main>
   <footer class="player-footer" data-p7-player-footer>{% include "gui_v2/includes/player.html" with player_class="global-player" %}</footer>

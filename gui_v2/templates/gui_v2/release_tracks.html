@@ -10,7 +10,7 @@
   <section class="track-workspace" id="tracks">
     <header class="release-header track-context-bar">
       <div><strong>Sporregistrering</strong><p>Sportittel gjelder utgivelsen. Innspilling, krediteringer og ISRC er felles og kan brukes på flere utgivelser.</p></div>
-      <div class="heading-actions"><button class="button" type="button" data-open-inspector hidden>Vis sporinspektør</button><span class="status {% if writes_enabled %}ok{% else %}muted{% endif %}">{% if writes_enabled %}Isolert lagring aktiv{% else %}Skrivebeskyttet prototype{% endif %}</span></div>
+      <div class="heading-actions"><button class="button" type="button" data-open-inspector hidden>Vis sporinspektør</button><span class="status {% if writes_enabled %}ok{% else %}muted{% endif %}">{% if writes_enabled %}Lagring tilgjengelig{% else %}Skrivebeskyttet i dette oppsettet{% endif %}</span></div>
     </header>
 
     <div class="draft-banner" data-draft-banner hidden role="status"><span><strong>Ulagret utkast funnet.</strong> Du kan fortsette der du slapp.</span><button type="button" class="primary" data-restore-draft>Gjenopprett</button><button type="button" class="button" data-discard-draft>Forkast</button></div>

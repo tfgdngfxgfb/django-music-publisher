@@ -5,6 +5,7 @@ from . import views
 app_name = "workbench"
 
 urlpatterns = [
+    path("", views.home, name="home"),
     path("omslag/<uuid:pk>/", views.cover_image, name="cover_image"),
     path("musikkarkiv/", views.library_list, name="library"),
     path("musikkarkiv/legg-til/", views.library_add, name="library_add"),

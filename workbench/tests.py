@@ -82,7 +82,7 @@ class AuthenticationAndPermissionTests(WorkbenchTestCase):
         user = self.create_user()
         self.login(user)
         self.assertNotContains(
-            self.client.get(reverse("home")), 'id="global-search"'
+            self.client.get(reverse("workbench:home")), 'id="global-search"'
         )
 
         viewer = self.create_user(
@@ -90,7 +90,7 @@ class AuthenticationAndPermissionTests(WorkbenchTestCase):
             permissions=("music_library.view_musiclibraryentry",),
         )
         self.login(viewer)
-        response = self.client.get(reverse("home"))
+        response = self.client.get(reverse("workbench:home"))
         self.assertContains(response, 'id="global-search"')
         self.assertContains(
             response, 'action="%s"' % reverse("workbench:library")
@@ -118,7 +118,7 @@ class AuthenticationAndPermissionTests(WorkbenchTestCase):
             )
         )
         self.login(user)
-        response = self.client.get(reverse("home"))
+        response = self.client.get(reverse("workbench:home"))
         self.assertContains(response, "Musikkarkiv")
         self.assertContains(response, "Utgivelser")
         self.assertNotContains(response, "Forvaltet musikk")

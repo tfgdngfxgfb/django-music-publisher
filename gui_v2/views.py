@@ -1665,9 +1665,7 @@ def recording_audio(request, recording_id):
 )
 def rescan_library_file(request, entry_id, asset_id):
     if not settings.GUI_V2_WRITES_ENABLED:
-        raise PermissionDenied(
-            "Ny innlesing er deaktivert i dette prototypeoppsettet."
-        )
+        raise PermissionDenied("Ny innlesing er deaktivert i dette oppsettet.")
     entry = get_object_or_404(
         MusicLibraryEntry.objects.select_related("recording"), pk=entry_id
     )
@@ -1787,9 +1785,7 @@ def rescan_library_file(request, entry_id, asset_id):
 )
 def split_library_file(request, entry_id, asset_id):
     if not settings.GUI_V2_WRITES_ENABLED:
-        raise PermissionDenied(
-            "Utskilling er deaktivert utenfor den isolerte testdatabasen."
-        )
+        raise PermissionDenied("Utskilling er deaktivert i dette oppsettet.")
     entry = get_object_or_404(
         MusicLibraryEntry.objects.select_related("recording"), pk=entry_id
     )
@@ -1877,7 +1873,7 @@ def release_list(request):
     if request.method == "POST":
         if not settings.GUI_V2_WRITES_ENABLED:
             raise PermissionDenied(
-                "GUI v2 er skrivebeskyttet utenfor den isolerte testdatabasen."
+                "GUI v2 er skrivebeskyttet i dette oppsettet."
             )
         if not request.user.has_perm("catalogue.add_release"):
             raise PermissionDenied
@@ -2071,7 +2067,7 @@ def release_detail(request, release_id):
     if request.method == "POST" and action == "release":
         if not settings.GUI_V2_WRITES_ENABLED:
             raise PermissionDenied(
-                "GUI v2 er skrivebeskyttet utenfor den isolerte testdatabasen."
+                "GUI v2 er skrivebeskyttet i dette oppsettet."
             )
         if not request.user.has_perm("catalogue.change_release"):
             raise PermissionDenied
@@ -2086,7 +2082,7 @@ def release_detail(request, release_id):
     elif request.method == "POST" and action == "managed_release":
         if not settings.GUI_V2_WRITES_ENABLED:
             raise PermissionDenied(
-                "GUI v2 er skrivebeskyttet utenfor den isolerte testdatabasen."
+                "GUI v2 er skrivebeskyttet i dette oppsettet."
             )
         if not can_edit_release_management:
             raise PermissionDenied
@@ -2105,7 +2101,7 @@ def release_detail(request, release_id):
     elif request.method == "POST" and action == "tracks":
         if not settings.GUI_V2_WRITES_ENABLED:
             raise PermissionDenied(
-                "GUI v2 er skrivebeskyttet utenfor den isolerte testdatabasen."
+                "GUI v2 er skrivebeskyttet i dette oppsettet."
             )
         if formset.is_valid():
             rows = [form.cleaned_data for form in formset.forms]

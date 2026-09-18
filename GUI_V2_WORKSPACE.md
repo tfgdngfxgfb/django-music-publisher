@@ -1,9 +1,12 @@
-# GUI v2 – isolert arbeidsområde
+# GUI v2 – primær arbeidsflate
 
-- Branch: `feature/gui-v2-prototype`
-- URL: `http://127.0.0.1:8000/v2/`
-- Standardmodus: lesing fra den valgte databasen. Skriving krever både
-  `GUI_V2_WRITES_ENABLED=1` og relevante Django-rettigheter.
+- Primær URL: `http://127.0.0.1:8000/`. Den tidligere `/v2/`-adressen virker
+  fortsatt.
+- GUI v1/Workbench er sekundær på `/arbeid/`. Eksisterende dyp-lenker under
+  `/arbeid/` virker fortsatt.
+- GUI v2 leser og skriver mot databasen som er valgt for prosessen. Skriving er
+  aktivert som standard, men krever relevante Django-rettigheter og kan slås
+  av med `GUI_V2_WRITES_ENABLED=false`. Filskriving styres separat.
 - Lokal start: `run-p7-gui-v2-test.cmd` bruker den vedvarende databasen
   `.local/p7-empty-test.sqlite3`.
 - GUI-v2-startskriptet er nå et alias og laster ikke kunstige GUI-v2-data.
@@ -12,11 +15,13 @@
   eksisterende ingest-tjenesten. Handlingen starter ikke en full skann og følger
   etablerte autoritetsregler. Direkte start av OneTagger er ikke aktivert;
   full filsti kan kopieres og åpnes manuelt i OneTagger.
-- Sporlagring undertrykker automatisk FLAC-synkroniseringskø i prototypen.
+- Sporlagring undertrykker automatisk FLAC-synkroniseringskø; DB→FLAC styres
+  fortsatt av egne autoritets- og filskrivingsregler.
 - Innlogging og visningstillatelser er de samme som i Workbench.
 
 Templates, CSS og JavaScript ligger under `gui_v2`. Ingen domenemodeller eller
-migrations er lagt til. Dagens `/`, `/arbeid/`, admin og Workbench er uendret.
+migrations ble lagt til ved omleggingen. Admin og Workbench er fortsatt
+tilgjengelige.
 
 Musikkarkiv-tabellen støtter pil opp/ned, Enter for full visning og Escape for å
 lukke detaljpanelet. Søk, filtre, sortering, side og valgt rad følger eksplisitte

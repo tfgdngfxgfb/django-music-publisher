@@ -47,14 +47,13 @@ class IntegratedHomeTests(TestCase):
         response = self.client.get(reverse("home"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Start")
-        self.assertContains(response, 'class="side-nav"', html=False)
+        self.assertContains(response, 'data-p7-shell="gui-v2"')
+        self.assertContains(response, reverse("workbench:home"))
         for label in (
             "Musikkarkiv",
             "Forvaltet musikk",
             "Utgivelser",
             "Kontroll",
-            "Hjelp",
         ):
             self.assertContains(response, label)
 
@@ -70,20 +69,23 @@ class IntegratedHomeTests(TestCase):
         response = self.client.get(reverse("home"))
 
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-p7-shell="gui-v2"')
         self.assertContains(response, "Utgivelser")
-        self.assertContains(response, "Hjelp")
-        self.assertNotContains(
-            response, "Radiometadata, innspillinger og radiofiler"
-        )
-        self.assertNotContains(response, "Katalogtilhørighet og dokumentasjon")
-        self.assertNotContains(response, "Mulige dubletter")
-        self.assertNotContains(response, "Kilder og verifikasjon")
+        self.assertNotContains(response, "Forvaltet musikk")
+        self.assertNotContains(response, "Musikkarkiv")
+        self.assertNotContains(response, "Kontroll")
 
-    def test_non_staff_user_cannot_open_internal_start(self):
+    def test_non_staff_user_uses_v2_but_cannot_open_v1(self):
         user = self.create_user("ordinary-user")
         self.client.force_login(user)
 
         response = self.client.get(reverse("home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-p7-shell="gui-v2"')
+        self.assertNotContains(response, "GUI v1 · eldre arbeidsflate")
+
+        response = self.client.get(reverse("workbench:home"))
 
         self.assertEqual(response.status_code, 302)
         self.assertEqual(urlparse(response.url).path, reverse("admin:login"))

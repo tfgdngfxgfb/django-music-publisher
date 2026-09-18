@@ -42,8 +42,8 @@ if ($LASTEXITCODE -ne 0) { throw "Kunne ikke klargjøre den tomme testdatabasen.
 Write-Host ""
 Write-Host "P7 Arkiv og rettigheter bruker den separate testdatabasen."
 Write-Host "Database: $DatabasePath"
-Write-Host "GUI v2: http://${HostAddress}:$Port/v2/"
-Write-Host "Tidligere Workbench: http://${HostAddress}:$Port/"
+Write-Host "GUI v2 (primær): http://${HostAddress}:$Port/"
+Write-Host "GUI v1 (eldre): http://${HostAddress}:$Port/arbeid/"
 Write-Host "Brukernavn: $AdminUsername"
 Write-Host "-Reset arkiverer databasen og bygger den tom igjen."
 

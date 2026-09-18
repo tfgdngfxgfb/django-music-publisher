@@ -29,13 +29,14 @@
   <a class="skip-link" href="#main">Hopp til innhold</a>
   <div class="app-shell">
     <aside class="sidebar" id="app-navigation">
-      <a class="brand" href="{% url 'home' %}">
+      <a class="brand" href="{% url 'workbench:home' %}">
         <span class="brand-mark">P7</span>
         <span class="brand-copy"><strong>P7 Arkiv</strong><small>og rettigheter</small></span>
       </a>
       <nav class="side-nav" aria-label="Hovedmeny">
-        <span class="nav-label">Arbeidsflater</span>
-        <a {% if section == 'home' %}aria-current="page"{% endif %} href="{% url 'home' %}"><svg><use href="#i-home"></use></svg><span>Start</span></a>
+        <a href="{% url 'home' %}"><svg><use href="#i-home"></use></svg><span>GUI v2 · hovedflate</span></a>
+        <span class="nav-label">GUI v1 · eldre arbeidsflate</span>
+        <a {% if section == 'home' %}aria-current="page"{% endif %} href="{% url 'workbench:home' %}"><svg><use href="#i-home"></use></svg><span>Start</span></a>
         {% if perms.music_library.view_musiclibraryentry %}<a {% if section == 'library' %}aria-current="page"{% endif %} href="{% url 'workbench:library' %}"><svg><use href="#i-library"></use></svg><span>Musikkarkiv</span></a>{% endif %}
         {% if perms.managed_music.view_managedrecording %}<a {% if section == 'managed' %}aria-current="page"{% endif %} href="{% url 'workbench:managed' %}"><svg><use href="#i-managed"></use></svg><span>Forvaltet musikk</span></a>{% endif %}
         {% if perms.catalogue.view_release %}<a {% if section == 'releases' %}aria-current="page"{% endif %} href="{% url 'workbench:releases' %}"><svg><use href="#i-release"></use></svg><span>Utgivelser</span></a>{% endif %}

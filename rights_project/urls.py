@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.urls import include, path
-from workbench.views import help_page, home
+from gui_v2.views import home
+from workbench.views import help_page
 
 admin.site.site_header = "P7 Arkiv og rettigheter"
 admin.site.site_title = "P7 Arkiv og rettigheter"

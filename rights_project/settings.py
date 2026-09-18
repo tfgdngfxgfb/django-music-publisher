@@ -125,6 +125,6 @@ P7_DELIVERY_ARTIFACT_TTL_HOURS = int(
     os.getenv("P7_DELIVERY_ARTIFACT_TTL_HOURS", "24")
 )
 
-# GUI v2 remains read-only unless an isolated test process explicitly enables
-# catalogue writes. GUI v2 never exposes ingest apply or FLAC writeback routes.
-GUI_V2_WRITES_ENABLED = env_bool("GUI_V2_WRITES_ENABLED", False)
+# GUI v2 is the primary workspace. Its database writes still require the
+# relevant Django permissions; file writes keep their separate installation gate.
+GUI_V2_WRITES_ENABLED = env_bool("GUI_V2_WRITES_ENABLED", True)
