@@ -1945,6 +1945,15 @@ def _track_initial(track):
         "title_override": track.title_override,
         "recording_title": track.recording.title,
         "artists": credits(RecordingContribution.Role.PRIMARY),
+        "primary_artist_identity_name": next(
+            (
+                item.artist_identity.display_name
+                for item in contributions
+                if item.role == RecordingContribution.Role.PRIMARY
+                and item.artist_identity_id
+            ),
+            "",
+        ),
         "composers": credits(RecordingContribution.Role.COMPOSER),
         "lyricists": credits(RecordingContribution.Role.LYRICIST),
         "arrangers": credits(RecordingContribution.Role.ARRANGER),

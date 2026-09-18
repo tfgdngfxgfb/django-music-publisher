@@ -25,13 +25,15 @@ def _names(value):
     ]
 
 
-def _replace_credits(recording, role, names):
+def _replace_credits(recording, role, names, *, primary_identity=None):
     RecordingContribution.objects.filter(
         recording=recording, role=role
     ).delete()
     for index, name in enumerate(_names(names)):
         identity = (
-            ArtistIdentity.objects.filter(display_name__iexact=name)
+            primary_identity
+            if index == 0 and primary_identity is not None
+            else ArtistIdentity.objects.filter(display_name__iexact=name)
             .select_related("party")
             .first()
         )
@@ -198,6 +200,7 @@ def save_release_track_rows(*, release, rows):
                     recording,
                     RecordingContribution.Role.PRIMARY,
                     row.get("artists"),
+                    primary_identity=row.get("primary_artist_identity_name"),
                 )
                 _replace_credits(
                     recording,

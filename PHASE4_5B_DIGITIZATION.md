@@ -10,6 +10,9 @@ redigerte WAV-mastere, koble RAW → master og master → spor/Recording, og vel
 master. RAW og master har hver sin filvelger med en avgrenset, read-only
 mappevisning. Søk og mappenavigasjon oppdaterer bare den aktuelle filvelgeren,
 uten full sidelasting; vanlig GET er reserve uten JavaScript.
+Sporregistreringen kan knytte en trykt hovedartistkreditering til en
+eksisterende kanonisk ArtistIdentity med et annet navn. `credited_as` beholdes
+uendret, og ukjent/ikke-entydig identitet blir ikke opprettet automatisk.
 Registrering av valgte filer bruker eksisterende
 `DigitizationPlan`-preview/apply og endrer ikke kildefilene. En fysisk RAW-fil
 gjenbrukes bare innen samme batch i denne revisjonen.

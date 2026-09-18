@@ -10,6 +10,7 @@ from catalogue.models import (
 from catalogue.services import find_recording_candidates
 from catalogue.validators import normalize_isrc, normalize_trade_item_number
 from music_library.models import Channel, MusicLibraryEntry, TargetAudience
+from parties.models import ArtistIdentity
 
 from .presentation import observed_genres, radio_language_name
 
@@ -336,6 +337,12 @@ class TrackRowForm(forms.Form):
     artists = forms.CharField(
         max_length=1000, required=False, label="Artister"
     )
+    primary_artist_identity_name = forms.CharField(
+        max_length=255,
+        required=False,
+        label="Kanonisk hovedartist",
+        help_text="Valgfritt: eksakt navn på en eksisterende artistidentitet. Den trykte krediteringen beholdes.",
+    )
     composers = forms.CharField(
         max_length=1000, required=False, label="Komponister"
     )
@@ -381,6 +388,23 @@ class TrackRowForm(forms.Form):
         value = (self.cleaned_data.get("isrc") or "").strip()
         return normalize_isrc(value) if value else ""
 
+    def clean_primary_artist_identity_name(self):
+        name = (
+            self.cleaned_data.get("primary_artist_identity_name") or ""
+        ).strip()
+        if not name:
+            return None
+        matches = list(
+            ArtistIdentity.objects.filter(
+                display_name__iexact=name
+            ).select_related("party")[:2]
+        )
+        if len(matches) != 1:
+            raise forms.ValidationError(
+                "Velg et entydig eksisterende artistnavn."
+            )
+        return matches[0]
+
     def clean_duration(self):
         value = self.cleaned_data.get("duration") or ""
         self.cleaned_data["duration_ms"] = _parse_duration(value)
@@ -390,6 +414,13 @@ class TrackRowForm(forms.Form):
         data = super().clean()
         if data.get("remove") and data.get("track_id"):
             return data
+        if (
+            data.get("primary_artist_identity_name")
+            and not (data.get("artists") or "").strip()
+        ):
+            self.add_error(
+                "artists", "Oppgi den fysiske artistkrediteringen også."
+            )
         title = (data.get("recording_title") or "").strip()
         recording_id = data.get("recording_id")
         if not recording_id and not title and data.get("title_override"):
