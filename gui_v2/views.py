@@ -1625,10 +1625,13 @@ def recording_audio(request, recording_id, radio_only=False):
             content_type="text/plain; charset=utf-8",
         )
 
+    handle = None
     try:
         handle = open_for_read(resolution.resolved_location)
         size = os.fstat(handle.fileno()).st_size
-    except OSError:
+    except (OSError, ValidationError, ImproperlyConfigured):
+        if handle is not None:
+            handle.close()
         logger.warning(
             "Recording playback file could not be opened",
             extra={
@@ -1998,18 +2001,31 @@ def _require_track_write_permissions(user, rows):
         "catalogue.add_releasetrack",
         "catalogue.change_releasetrack",
     }
-    if any(not row.get("track_id") for row in rows):
+    retained = [row for row in rows if not row.get("remove")]
+    if any(not row.get("recording_id") for row in retained):
         required.add("catalogue.add_recording")
     if any(row.get("remove") for row in rows):
         required.add("catalogue.delete_releasetrack")
     if any(
         row.get("update_shared_recording") or not row.get("recording_id")
-        for row in rows
+        for row in retained
     ):
         required.update(
             {
                 "catalogue.add_recordingcontribution",
                 "catalogue.add_externalidentifier",
+            }
+        )
+    if any(
+        row.get("recording_id") and row.get("update_shared_recording")
+        for row in retained
+    ):
+        required.update(
+            {
+                "catalogue.change_recording",
+                "catalogue.delete_recordingcontribution",
+                "catalogue.change_externalidentifier",
+                "catalogue.delete_externalidentifier",
             }
         )
     if not user.has_perms(required):
@@ -2095,7 +2111,7 @@ def release_detail(request, release_id):
     )
     managed_release = ManagedRelease.objects.filter(release=release).first()
     can_view_release_management = request.user.has_perm(
-        "catalogue.view_release"
+        "managed_music.view_managedrelease"
     )
     managed_permission = (
         "managed_music.change_managedrelease"

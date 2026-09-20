@@ -46,7 +46,7 @@
                     <td><input type="checkbox" id="{{ picker_id }}-{{ forloop.counter }}" name="filenames" value="{{ item.name }}" {% if item.unavailable %}disabled{% endif %}></td>
                     <td><label for="{{ picker_id }}-{{ forloop.counter }}">{{ item.name }}</label><small>{{ item.path }}</small></td>
                     <td>{{ item.size_bytes|filesizeformat }}</td>
-                    <td>{% if item.registered_here %}Allerede registrert her{% elif item.unavailable %}Registrert i en annen digitalisering{% else %}Klar til registrering{% endif %}</td>
+                    <td>{% if item.registered_here %}Allerede registrert her{% elif item.unavailable %}{{ item.unavailable_reason }}{% else %}Klar til registrering{% endif %}</td>
                   {% endif %}
                 </tr>
               {% empty %}<tr><td colspan="4">Ingen WAV-filer eller undermapper funnet her.</td></tr>{% endfor %}

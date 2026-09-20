@@ -26,17 +26,30 @@ def _names(value):
 
 
 def _replace_credits(recording, role, names, *, primary_identity=None):
+    names = _names(names)
+    existing = list(
+        RecordingContribution.objects.filter(recording=recording, role=role)
+        .select_related("artist_identity", "party")
+        .order_by("display_order", "id")
+    )
+    if [credit.display_credit for credit in existing] == names and (
+        primary_identity is None
+        or (existing and existing[0].artist_identity_id == primary_identity.pk)
+    ):
+        return
     RecordingContribution.objects.filter(
         recording=recording, role=role
     ).delete()
-    for index, name in enumerate(_names(names)):
-        identity = (
-            primary_identity
-            if index == 0 and primary_identity is not None
-            else ArtistIdentity.objects.filter(display_name__iexact=name)
-            .select_related("party")
-            .first()
-        )
+    for index, name in enumerate(names):
+        if index == 0 and primary_identity is not None:
+            identity = primary_identity
+        else:
+            candidates = list(
+                ArtistIdentity.objects.filter(
+                    display_name__iexact=name
+                ).select_related("party")[:2]
+            )
+            identity = candidates[0] if len(candidates) == 1 else None
         RecordingContribution.objects.create(
             recording=recording,
             party=identity.party if identity else None,
@@ -93,6 +106,33 @@ def save_release_track_rows(*, release, rows):
         existing = {
             str(item.pk): item for item in release.tracks.select_for_update()
         }
+        submitted_ids = [
+            str(row["track_id"]) for row in rows if row.get("track_id")
+        ]
+        if len(submitted_ids) != len(set(submitted_ids)) or set(
+            submitted_ids
+        ) != set(existing):
+            raise ValidationError(
+                "Sporlisten er endret eller ufullstendig. Last siden på nytt "
+                "før lagring; ingen spor er endret."
+            )
+        for row in rows:
+            track = existing.get(str(row.get("track_id") or ""))
+            recording_id = row.get("recording_id")
+            if recording_id and str(recording_id) not in locked_ids:
+                raise ValidationError(
+                    "Den valgte innspillingen finnes ikke lenger. Velg på nytt."
+                )
+            if (
+                track
+                and not row.get("remove")
+                and str(recording_id or "") != str(track.recording_id)
+                and track.file_assets.exists()
+            ):
+                raise ValidationError(
+                    "Sporet har tilknyttede filer og kan ikke flyttes til en "
+                    "annen innspilling her. Kontroller filkoblingene først."
+                )
         if any(
             str(item.recording_id) not in locked_ids
             for item in existing.values()

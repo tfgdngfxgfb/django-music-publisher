@@ -1,9 +1,11 @@
 import hashlib
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
+from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.db import connection
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -71,6 +73,25 @@ class RadioPlaybackTests(TestCase):
     def _get(self, **headers):
         with override_settings(P7_MUSIC_ROOT=self.root, P7_NAS_ROOT=self.root):
             return self.client.get(self.url, **headers)
+
+    def test_path_revalidation_failure_is_a_safe_unavailable_response(self):
+        for error in (ValidationError, ImproperlyConfigured):
+            with self.subTest(error=error), patch(
+                "gui_v2.views.open_for_read",
+                side_effect=error("private-server-root"),
+            ):
+                response = self._get()
+            self.assertEqual(response.status_code, 404)
+            self.assertNotContains(
+                response, "private-server-root", status_code=404
+            )
+
+    def test_failed_file_stat_closes_opened_handle(self):
+        with self.path.open("rb") as handle, patch(
+            "gui_v2.views.open_for_read", return_value=handle
+        ), patch("gui_v2.views.os.fstat", side_effect=OSError):
+            self.assertEqual(self._get().status_code, 404)
+            self.assertTrue(handle.closed)
 
     def test_global_player_has_recording_audio_route_for_reload(self):
         response = self.client.get(

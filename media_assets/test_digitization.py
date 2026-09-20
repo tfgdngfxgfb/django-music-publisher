@@ -98,6 +98,49 @@ class DigitizationWorkflowTests(TestCase):
             ).order_by("filename")
         )
 
+    def test_picker_rejects_conflicting_role_and_foreign_file_membership(self):
+        from django.http import QueryDict
+        from gui_v2.digitization import _browse_storage
+
+        assets = self.register("raw", FileAsset.Role.RAW_DIGITIZATION)
+        for asset in assets:
+            location = asset.locations.get(is_current=True)
+            location.storage_root_key = "music_library"
+            location.save()
+        params = QueryDict(mutable=True)
+        params.update(
+            {
+                "browse": "1",
+                "root_key": "music_library",
+                "relative_path": "raw",
+                "role": FileAsset.Role.RAW_DIGITIZATION,
+            }
+        )
+        with self.settings(P7_MUSIC_ROOT=str(self.root)):
+            form, entries, error, _ = _browse_storage(self.batch, params)
+            self.assertTrue(form.is_valid(), form.errors)
+            self.assertFalse(error)
+            self.assertEqual(len(entries), 2)
+            self.assertTrue(all(item["registered_here"] for item in entries))
+            self.assertFalse(any(item["unavailable"] for item in entries))
+            params["role"] = FileAsset.Role.EDITED_WAV_MASTER
+            _, entries, error, _ = _browse_storage(self.batch, params)
+            self.assertFalse(error)
+            self.assertEqual(len(entries), 2)
+            self.assertTrue(all(item["unavailable"] for item in entries))
+            self.assertFalse(any(item["registered_here"] for item in entries))
+            # A registered asset outside digitization needs explicit review.
+            DigitizationFile.objects.filter(asset=assets[0]).delete()
+            params["role"] = FileAsset.Role.RAW_DIGITIZATION
+            _, entries, _, _ = _browse_storage(self.batch, params)
+            affected = next(
+                item
+                for item in entries
+                if item["path"]
+                == assets[0].locations.get(is_current=True).relative_path
+            )
+            self.assertTrue(affected["unavailable"])
+
     def prepare(self):
         return (
             self.register("raw", FileAsset.Role.RAW_DIGITIZATION),
@@ -374,6 +417,7 @@ class DigitizationWorkflowTests(TestCase):
             recording=Recording.objects.create(title="Sang en"),
             sequence_number=1,
         )
+
         plan = self.preview(
             "recording_link",
             {"rows": [{"asset": str(masters[0].pk), "track": str(track.pk)}]},

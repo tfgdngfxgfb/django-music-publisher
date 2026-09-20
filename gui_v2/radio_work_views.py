@@ -20,7 +20,6 @@ from media_assets.mastering import (
     create_generation_plan,
     generate_candidate,
 )
-from media_assets.models import RadioFlacGeneration
 from media_assets.pipeline_status import (
     get_recording_media_pipeline_status,
     radio_work_state,
@@ -216,10 +215,11 @@ def bulk(request):
                         database_metadata_confirmed=preview["first_radio"],
                         expected_metadata_digest=preview["metadata_digest"],
                     )
-                    if generation.status == RadioFlacGeneration.Status.PLANNED:
-                        generate_candidate(
-                            generation=generation, user=request.user
-                        )
+                    # The service handles verified plans idempotently and
+                    # rejects failed/running plans; neither means success.
+                    generate_candidate(
+                        generation=generation, user=request.user
+                    )
                     results.append(
                         {
                             "recording": recording,

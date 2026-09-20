@@ -2,6 +2,7 @@ from unittest.mock import patch
 from types import SimpleNamespace
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.db import connection
 from django.test import TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
@@ -156,3 +157,43 @@ class RadioWorkbenchTests(TestCase):
                 self.assertContains(result, "Kandidat generert")
                 create.assert_called_once()
                 generate.assert_called_once()
+
+    @override_settings(GUI_V2_WRITES_ENABLED=True, P7_ALLOW_FILE_WRITES=True)
+    def test_existing_failed_plan_is_not_reported_as_generated(self):
+        with patch(
+            "gui_v2.radio_work_views.build_generation_preview",
+            return_value={
+                "master": self.master,
+                "first_radio": True,
+                "target_relative_path": "radio/candidate.flac",
+                "metadata_digest": "digest",
+            },
+        ):
+            preview = self.client.post(
+                reverse("gui_v2:radio_workbench_bulk"),
+                {"mode": "preview", "recordings": [str(self.recording.pk)]},
+            )
+            with (
+                patch(
+                    "gui_v2.radio_work_views.create_generation_plan",
+                    return_value=SimpleNamespace(status="failed"),
+                ),
+                patch(
+                    "gui_v2.radio_work_views.generate_candidate",
+                    side_effect=ValidationError(
+                        "Bare en planlagt generering kan kjøres."
+                    ),
+                ) as generate,
+            ):
+                result = self.client.post(
+                    reverse("gui_v2:radio_workbench_bulk"),
+                    {
+                        "mode": "apply",
+                        "plan": preview.context["plan"],
+                        f"metadata_{self.recording.pk}": "yes",
+                    },
+                )
+            generate.assert_called_once()
+            self.assertFalse(result.context["results"][0]["success"])
+            self.assertContains(result, "Bare en planlagt generering")
+            self.assertNotContains(result, "Kandidat generert og verifisert")

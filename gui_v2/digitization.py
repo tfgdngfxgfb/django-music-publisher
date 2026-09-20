@@ -144,7 +144,7 @@ def _write_access(request):
 
 def _present_pipeline_status(status):
     master = {
-        MasterState.NO_MASTER: ("Mangler", "muted"),
+        MasterState.NO_MASTER: ("Ikke valgt", "muted"),
         MasterState.SELECTED: ("Valgt", "ok"),
     }[status.master_state]
     current = {
@@ -899,30 +899,39 @@ def _browse_storage(batch, params):
                     or ".",
                     query=params.get("file_q", "")[:100],
                 )
-                locations = {
-                    location.relative_path: location
-                    for location in FileLocation.objects.filter(
-                        storage_root_key=browse_form.cleaned_data["root_key"],
-                        relative_path__in=[
-                            item["path"]
-                            for item in storage_entries
-                            if not item["folder"]
-                        ],
-                        is_current=True,
-                    ).select_related("asset", "asset__digitization_file")
-                }
+                locations = {}
+                for location in FileLocation.objects.filter(
+                    storage_root_key=browse_form.cleaned_data["root_key"],
+                    relative_path__in=[
+                        item["path"]
+                        for item in storage_entries
+                        if not item["folder"]
+                    ],
+                    is_current=True,
+                ).select_related("asset", "asset__digitization_file"):
+                    locations.setdefault(location.relative_path, []).append(
+                        location
+                    )
                 for item in storage_entries:
-                    location = locations.get(item["path"])
+                    matches = locations.get(item["path"], [])
+                    location = matches[0] if len(matches) == 1 else None
                     membership = (
                         getattr(location.asset, "digitization_file", None)
                         if location
                         else None
                     )
                     item["registered_here"] = bool(
-                        membership and membership.batch_id == batch.pk
+                        membership
+                        and membership.batch_id == batch.pk
+                        and location.asset.role == active_role
                     )
                     item["unavailable"] = bool(
-                        membership and membership.batch_id != batch.pk
+                        matches and not item["registered_here"]
+                    )
+                    item["unavailable_reason"] = (
+                        "Registrert i en annen digitalisering"
+                        if membership and membership.batch_id != batch.pk
+                        else "Registrert med annen rolle eller filkobling"
                     )
             except (ValidationError, OSError, ImproperlyConfigured) as exc:
                 browse_error = "; ".join(getattr(exc, "messages", [str(exc)]))

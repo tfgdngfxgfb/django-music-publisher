@@ -33,9 +33,14 @@
   workspace.querySelector('[data-step-previous]').addEventListener('click', () => showStep(steps[steps.indexOf(activeStep) - 1]));
   window.addEventListener('popstate', () => showStep(new URL(location.href).searchParams.get('step') || 'metadata', false));
   const draftKey = `digitization:draft:${location.pathname}`;
+  const storage = {
+    get: key => {try {return sessionStorage.getItem(key);} catch {return null;}},
+    set: (key, value) => {try {sessionStorage.setItem(key, value);} catch {}},
+    remove: key => {try {sessionStorage.removeItem(key);} catch {}},
+  };
   const bulkForm = workspace.querySelector('[data-bulk-form]');
   if (workspace.dataset.clearDraft === 'true') {
-    sessionStorage.removeItem(draftKey);
+    storage.remove(draftKey);
     const cleanUrl = new URL(location.href);
     cleanUrl.searchParams.delete('applied');
     history.replaceState(null, '', cleanUrl);
@@ -45,11 +50,11 @@
     const fields = [...bulkForm.querySelectorAll('input[name],select[name],textarea[name]')]
       .filter(field => !['csrfmiddlewaretoken', 'step'].includes(field.name))
       .map(field => ({name: field.name, type: field.type, value: field.value, checked: field.checked}));
-    sessionStorage.setItem(draftKey, JSON.stringify(fields));
+    storage.set(draftKey, JSON.stringify(fields));
   };
   if (bulkForm) {
     try {
-      const fields = JSON.parse(sessionStorage.getItem(draftKey) || '[]');
+      const fields = JSON.parse(storage.get(draftKey) || '[]');
       const controls = [...bulkForm.querySelectorAll('input[name],select[name],textarea[name]')];
       fields.forEach(saved => {
         if (saved.name === 'step') return;
@@ -59,7 +64,7 @@
         else target.value = saved.value;
       });
     } catch {
-      sessionStorage.removeItem(draftKey);
+      storage.remove(draftKey);
     }
     bulkForm.addEventListener('input', saveDraft);
     bulkForm.addEventListener('change', saveDraft);
@@ -73,7 +78,7 @@
     workspace.querySelectorAll('[data-raw-detail]').forEach(panel => {panel.hidden = true;});
     workspace.querySelector('.digitization-empty-detail').hidden = true;
     workspace.querySelectorAll('[data-digitization-detail]').forEach(panel => {panel.hidden = panel.dataset.digitizationDetail !== row.dataset.digitizationRow;});
-    sessionStorage.setItem(`digitization:${location.pathname}`, row.dataset.digitizationRow);
+    storage.set(`digitization:${location.pathname}`, row.dataset.digitizationRow);
   };
   const selectRaw = row => {
     rows.forEach(item => {item.classList.remove('selected'); item.setAttribute('aria-selected', 'false'); item.tabIndex = -1;});
@@ -140,8 +145,16 @@
     source?.scrollIntoView({block: 'center'});
     source?.focus();
   }));
-  workspace.querySelectorAll('[data-select-master]').forEach(link => link.addEventListener('click', () => {const row = rows.find(item => item.dataset.digitizationRow === link.dataset.selectMaster); if (row) select(row);}));
-  const saved = sessionStorage.getItem(`digitization:${location.pathname}`);
+  workspace.querySelectorAll('[data-select-master]').forEach(link => link.addEventListener('click', event => {
+    const row = rows.find(item => item.dataset.digitizationRow === link.dataset.selectMaster);
+    if (!row) return;
+    event.preventDefault();
+    showStep('links');
+    select(row);
+    row.focus({preventScroll: true});
+    row.scrollIntoView({block: 'nearest'});
+  }));
+  const saved = storage.get(`digitization:${location.pathname}`);
   const initial = rows.find(row => row.dataset.digitizationRow === saved) || rows[0];
   if (initial) select(initial);
   else if (rawRows.length) selectRaw(rawRows[0]);
