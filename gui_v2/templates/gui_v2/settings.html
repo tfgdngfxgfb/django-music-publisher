@@ -1,0 +1,65 @@
+{% extends "gui_v2/base.html" %}{% load static %}
+{% block title %}Innstillinger{% endblock %}
+{% block content %}
+<div class="settings-page">
+  <header class="settings-heading"><div><span class="eyebrow">P7 Arkiv og rettigheter</span><h1>Innstillinger</h1><p>Tilpass arbeidsflaten og avspillingen{% if is_settings_admin %}, og administrer programmets felles oppsett{% endif %}.</p></div><span class="settings-scope">{% if is_settings_admin %}Administrator{% else %}Min arbeidsflate{% endif %}</span></header>
+  <div class="settings-layout">
+    <nav class="settings-nav" aria-label="Innstillingsområder">
+      <a href="?tab=personal" {% if settings_tab == 'personal' %}aria-current="page"{% endif %}><span>◐</span><div>Min arbeidsflate<small>Utseende og avspilling</small></div></a>
+      {% if is_settings_admin %}
+      <p>FELLES FOR PROGRAMMET</p>
+      <a href="?tab=digitization" {% if settings_tab == 'digitization' %}aria-current="page"{% endif %}><span>▣</span><div>Lagring og digitalisering<small>RAW, mastere og mappevalg</small></div></a>
+      <a href="?tab=organization" {% if settings_tab == 'organization' %}aria-current="page"{% endif %}><span>♧</span><div>Organisasjon<small>Lokal rettighetshaver</small></div></a>
+      <a href="?tab=operation" {% if settings_tab == 'operation' %}aria-current="page"{% endif %}><span>≡</span><div>Drift og tilganger<small>Systemstatus og administrasjon</small></div></a>
+      {% endif %}
+    </nav>
+    <div class="settings-content">
+    {% if settings_tab == 'personal' %}
+      <form class="settings-card" data-personal-settings data-user-scope="{{ request.user.pk }}">
+        <header><span class="eyebrow">Bare din arbeidsflate</span><h2>Utseende og avspilling</h2><p>Valgene lagres i denne nettleseren. De følger ikke kontoen til andre enheter.</p></header>
+        <div class="settings-fields">
+          <label>Tema<select name="theme"><option value="dark">Mørkt</option><option value="light">Lyst</option></select><small>Gjelder hele GUI v2 i denne nettleseren.</small></label>
+          <label>Lydnivå <output data-volume-value>100 %</output><input type="range" name="volume" min="0" max="100" step="1" value="100"><small>Brukes også av avspilleren nederst på siden.</small></label>
+        </div>
+        <label class="settings-check"><input type="checkbox" name="auto_next" checked><span>Spill neste spor automatisk<small>Fortsett i spillekøen når et spor er ferdig. Du kan alltid bytte spor manuelt.</small></span></label>
+        <div class="settings-note"><strong>Avspillingskilde</strong><p>Innspillingen spilles fra valgt master når den finnes. Ellers brukes Radio-FLAC. Avspilling endrer ikke mastervalg eller gjeldende radiofil.</p></div>
+        <footer><button type="submit" class="primary">Lagre mine innstillinger</button><span role="status" data-settings-feedback></span></footer>
+      </form>
+      <section class="settings-card"><h2>Min konto</h2><dl class="settings-facts"><div><dt>Brukernavn</dt><dd>{{ request.user.get_username }}</dd></div><div><dt>Navn</dt><dd>{{ request.user.get_full_name|default:"Ikke oppgitt" }}</dd></div><div><dt>Tilgang</dt><dd>{% if request.user.is_superuser %}Administrator{% elif request.user.is_staff %}Medarbeider med administratortilgang{% else %}Bruker{% endif %}</dd></div></dl></section>
+      <script src="{% static 'gui_v2/settings.js' %}"></script>
+    {% elif settings_tab == 'digitization' %}
+      <form method="post" class="settings-card">{% csrf_token %}<input type="hidden" name="action" value="digitization">
+        <header><span class="eyebrow">Felles standardvalg</span><h2>Lagring og digitalisering</h2><p>Velg hvor filvelgeren skal begynne. Råfiler og redigerte mastere har hvert sitt oppsett.</p></header>
+        {% if not writes_enabled %}<p class="settings-note">Endringer er deaktivert i dette miljøet.</p>{% endif %}
+        {{ digitization_form.non_field_errors }}
+        <fieldset {% if not writes_enabled %}disabled{% endif %}><legend class="sr-only">Digitaliseringsinnstillinger</legend>
+          <div class="settings-fields">{% for field in digitization_form %}<label>{{ field.label }}{{ field }}<small>{{ field.help_text }}</small>{{ field.errors }}</label>{% endfor %}</div>
+          <div class="settings-note"><strong>Gjelder filvelgeren med en gang</strong><p>«Finn mappe for utgivelsen» bruker startmappen og mappemalen sammen. Eksisterende filkoblinger og filer på lagringsområdet beholdes.</p></div>
+          <footer><button type="submit" class="primary">Lagre lagringsvalg</button></footer>
+        </fieldset>
+      </form>
+      <section class="settings-card"><h2>Konfigurerte lagringsrøtter</h2><p>De fysiske serverstiene settes i installasjonens serveroppsett. Her velger du startmapper innenfor disse områdene.</p>
+        <div class="settings-storage">{% for root in storage_roots %}<article><header><h3>{{ root.label }}</h3><span class="settings-scope">{% if root.configured %}{% if root.read_only %}Lesing{% else %}Generert innhold{% endif %}{% else %}Ikke konfigurert{% endif %}</span></header>{% if root.configured %}<code>{{ root.path }}</code>{% if root.client_path %}<small>Klientsti: {{ root.client_path }}</small>{% endif %}{% endif %}</article>{% endfor %}</div>
+      </section>
+    {% elif settings_tab == 'organization' %}
+      <form method="post" class="settings-card">{% csrf_token %}<input type="hidden" name="action" value="organization">
+        <header><span class="eyebrow">Rettigheter og forvaltning</span><h2>Lokal P7-organisasjon</h2><p>Organisasjonen som regnes som lokal rettighetshaver ved registrering og vurdering av forvaltning.</p></header>
+        {% if not writes_enabled %}<p class="settings-note">Endringer er deaktivert i dette miljøet.</p>{% endif %}
+        {{ organization_form.non_field_errors }}
+        <fieldset {% if not writes_enabled %}disabled{% endif %}><legend class="sr-only">Organisasjonsinnstillinger</legend>
+          <label>{{ organization_form.local_organization.label }}{{ organization_form.local_organization }}{{ organization_form.local_organization.errors }}</label>
+          <div class="settings-note"><strong>{% if organization %}Gjeldende: {{ organization_name }}{% else %}Lokal organisasjon er ikke valgt{% endif %}</strong><p>Bytte påvirker beregnet lokalt eierskap, forvaltningsstatus og oppfølging. Eksisterende rettighetskrav og historikk omskrives ikke.</p></div>
+          {% if organization %}<label class="settings-check">{{ organization_form.confirm_change }}<span>{{ organization_form.confirm_change.label }}</span></label>{{ organization_form.confirm_change.errors }}{% endif %}
+          <footer><button type="submit" class="primary">Lagre organisasjon</button><a href="{% url 'admin:parties_party_changelist' %}" data-no-p7-nav>Administrer parter →</a></footer>
+        </fieldset>
+      </form>
+    {% elif settings_tab == 'operation' %}
+      <section class="settings-card"><header><span class="eyebrow">Gjeldende serveroppsett</span><h2>Drift og tilganger</h2><p>Driftsvalgene nedenfor er skrivebeskyttet her og styres av installasjonens konfigurasjon.</p></header>
+        <dl class="settings-facts"><div><dt>Database</dt><dd>{{ database_type }}</dd></div><div><dt>Primær arbeidsflate</dt><dd>GUI v2</dd></div><div><dt>Lagring av data i GUI v2</dt><dd>{{ writes_enabled|yesno:"Aktivert,Deaktivert" }}</dd></div><div><dt>Skriving av genererte lydfiler</dt><dd>{{ file_writes_enabled|yesno:"Aktivert,Deaktivert" }}</dd></div><div><dt>Mappe for generert innhold</dt><dd>{{ generated_relative_root }}</dd></div><div><dt>Leveransefiler beholdes</dt><dd>{{ delivery_retention }} timer</dd></div><div><dt>Utviklingsmodus</dt><dd>{{ debug_enabled|yesno:"Aktivert,Deaktivert" }}</dd></div></dl>
+      </section>
+      <section class="settings-card"><h2>Administrasjon</h2><div class="settings-admin-links"><a href="{% url 'admin:auth_user_changelist' %}" data-no-p7-nav>Brukere og tilganger →</a><a href="{% url 'admin:auth_group_changelist' %}" data-no-p7-nav>Grupper og rettigheter →</a><a href="{% url 'admin:index' %}" data-no-p7-nav>Django administrasjon →</a></div><p>Endringer i fellesinnstillingene loggføres i administrasjonsloggen.</p></section>
+    {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

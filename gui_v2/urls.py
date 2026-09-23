@@ -8,11 +8,13 @@ from . import (
     release_rights_views,
     followup_views,
     radio_work_views,
+    settings_views,
 )
 
 app_name = "gui_v2"
 
 urlpatterns = [
+    path("innstillinger/", settings_views.index, name="settings"),
     path("radio-flac/", radio_work_views.index, name="radio_workbench"),
     path(
         "radio-flac/bulk/", radio_work_views.bulk, name="radio_workbench_bulk"

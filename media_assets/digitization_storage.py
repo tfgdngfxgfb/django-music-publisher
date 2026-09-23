@@ -4,10 +4,9 @@ import re
 from string import Formatter
 from pathlib import PurePosixPath
 
-from django.conf import settings
 from django.core.exceptions import ValidationError
 
-from .models import FileAsset
+from .digitization_configuration import picker_defaults
 from .storage import resolve_storage_path
 
 
@@ -24,24 +23,19 @@ def suggested_folder(release, role, root_key):
         "catalogue_number": catalogue,
         "title": _component(release.title),
     }
-    raw = role == FileAsset.Role.RAW_DIGITIZATION
-    template = getattr(
-        settings,
-        "P7_RAW_FOLDER_TEMPLATE" if raw else "P7_MASTER_FOLDER_TEMPLATE",
-        "{label}/{series}" if raw else "{label}/{catalogue_number} - {title}",
-    )
+    defaults = picker_defaults(role)
+    base = defaults.base_path if defaults.root_key == root_key else "."
+    template = defaults.folder_template
     try:
-        fields = [
-            field for _, field, _, _ in Formatter().parse(template) if field
-        ]
+        fields = [field for _, field, _, _ in Formatter().parse(template) if field]
         if any(not values[field] for field in fields):
             return {
                 "expected": "",
-                "path": ".",
+                "path": base,
                 "matched": False,
                 "missing": True,
             }
-        expected = template.format_map(values).strip("/")
+        expected = str(PurePosixPath(base) / template.format_map(values))
     except (KeyError, ValueError) as exc:
         raise ValidationError(
             "Mappekonvensjonen i systemoppsettet er ugyldig."

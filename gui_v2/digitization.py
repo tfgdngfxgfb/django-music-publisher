@@ -56,6 +56,7 @@ from media_assets.pipeline_status import (
     radio_work_state,
 )
 from media_assets.digitization_matching import suggest_master_links
+from media_assets.digitization_configuration import picker_defaults, source_root_choices
 from media_assets.digitization_storage import (
     suggested_folder,
     folder_breadcrumbs,
@@ -120,18 +121,7 @@ class FolderForm(MasterRegistrationForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        choices = []
-        if str(getattr(settings, "P7_MUSIC_ROOT", "") or "").strip():
-            choices.append(
-                ("music_library", "Musikkarkiv · felles kildeområde")
-            )
-        for key, label in (
-            ("raw_sources", "RAW-arkiv"),
-            ("edited_masters", "Redigerte mastere"),
-        ):
-            if key in settings.P7_STORAGE_ROOTS:
-                choices.append((key, label))
-        self.fields["root_key"].choices = choices
+        self.fields["root_key"].choices = source_root_choices()
         self.fields["relative_path"].label = "Mappe under lagringsroten"
         self.fields["relative_path"].required = False
         self.fields["relative_path"].initial = "."
@@ -1035,30 +1025,14 @@ def browse_files(request, batch_id):
             "batch": batch,
             "picker_id": "raw-picker" if raw else "master-picker",
             "picker_role": role,
-            "picker_heading": (
-                "Finn RAW-filer" if raw else "Finn redigerte mastere"
-            ),
-            "picker_step": (
-                "Rå digitalisering" if raw else "Redigerte mastere"
-            ),
+            "picker_heading": ("Finn RAW-filer" if raw else "Finn redigerte mastere"),
+            "picker_step": ("Rå digitalisering" if raw else "Redigerte mastere"),
             "picker_description": (
                 "Velg filer i RAW-området. Filene leses og registreres her; de flyttes eller endres ikke."
                 if raw
                 else "Velg ferdig redigerte WAV-mastere i masterområdet. Koble dem deretter til RAW-kilde og riktig spor i neste steg: Koble og velg mastere."
             ),
-            "picker_default_root": (
-                (
-                    "raw_sources"
-                    if "raw_sources" in settings.P7_STORAGE_ROOTS
-                    else "music_library"
-                )
-                if raw
-                else (
-                    "edited_masters"
-                    if "edited_masters" in settings.P7_STORAGE_ROOTS
-                    else "music_library"
-                )
-            ),
+            "picker_default_root": picker_defaults(role).root_key,
             "picker_noun": "RAW-filer" if raw else "mastere",
             "source_roots": FolderForm().fields["root_key"].choices,
             "browse_form": browse_form,
@@ -1284,22 +1258,16 @@ def detail(request, batch_id):
             "folder_form": folder_form,
             "browse_form": browse_form,
             "source_roots": folder_form.fields["root_key"].choices,
-            "raw_default_root": (
-                "raw_sources"
-                if "raw_sources" in settings.P7_STORAGE_ROOTS
-                else "music_library"
-            ),
-            "master_default_root": (
-                "edited_masters"
-                if "edited_masters" in settings.P7_STORAGE_ROOTS
-                else "music_library"
-            ),
+            "raw_default_root": picker_defaults(
+                FileAsset.Role.RAW_DIGITIZATION
+            ).root_key,
+            "master_default_root": picker_defaults(
+                FileAsset.Role.EDITED_WAV_MASTER
+            ).root_key,
             "active_role": active_role,
             "storage_browsed": bool(request.GET.get("browse")),
             "storage_entries": storage_entries,
-            "storage_file_count": sum(
-                not item["folder"] for item in storage_entries
-            ),
+            "storage_file_count": sum(not item["folder"] for item in storage_entries),
             "browse_error": browse_error,
             "plan": plan,
             "error": error,

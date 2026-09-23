@@ -7,6 +7,34 @@ from django.db import models
 
 from catalogue.models import Recording, Release, ReleaseTrack
 from rights_core.models import CanonicalModel, validate_not_blank
+from .digitization_configuration import validate_folder_template
+
+
+class DigitizationConfiguration(models.Model):
+    """Picker defaults only; FileLocation roots and paths remain unchanged."""
+
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+    raw_root_key = models.CharField(max_length=50)
+    raw_base_path = models.CharField(max_length=1000, default=".")
+    raw_folder_template = models.CharField(
+        max_length=1000, blank=True, validators=[validate_folder_template]
+    )
+    master_root_key = models.CharField(max_length=50)
+    master_base_path = models.CharField(max_length=1000, default=".")
+    master_folder_template = models.CharField(
+        max_length=1000, blank=True, validators=[validate_folder_template]
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL
+    )
+
+    class Meta:
+        verbose_name = "digitaliseringsinnstilling"
+        verbose_name_plural = "digitaliseringsinnstillinger"
+
+    def __str__(self):
+        return "Standardmapper for digitalisering"
 
 
 def validate_logical_path(value):

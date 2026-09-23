@@ -479,7 +479,9 @@
     playbackRequested = false;
     updatePlaybackButtons();
     sendState(true);
-    void moveInQueue(1);
+    let autoNext = true;
+    try { autoNext = localStorage.getItem(`p7-v2-auto-next:${player?.dataset.playerScope || ""}`) !== "false"; } catch { /* Keep the default when storage is unavailable. */ }
+    if (autoNext) void moveInQueue(1);
   });
   audio?.addEventListener("error", () => {
     if (!ownsAudio) return;
