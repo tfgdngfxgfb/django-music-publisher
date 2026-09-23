@@ -993,6 +993,7 @@ def browse_files(request, batch_id):
             "active_role": active_role,
             "storage_browsed": bool(request.GET.get("browse")),
             "storage_entries": entries,
+            "storage_file_count": sum(not item["folder"] for item in entries),
             "browse_error": error,
             "writes_enabled": settings.GUI_V2_WRITES_ENABLED,
         },
@@ -1210,6 +1211,9 @@ def detail(request, batch_id):
             "active_role": active_role,
             "storage_browsed": bool(request.GET.get("browse")),
             "storage_entries": storage_entries,
+            "storage_file_count": sum(
+                not item["folder"] for item in storage_entries
+            ),
             "browse_error": browse_error,
             "plan": plan,
             "error": error,

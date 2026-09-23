@@ -25,6 +25,8 @@
     if (!count) {count = document.createElement('p'); count.dataset.pickerCount = ''; count.setAttribute('role', 'status'); form.prepend(count);}
     const hiddenCount = [...selected].filter(name => !visible.has(name)).length;
     count.textContent = `${selected.size} ${selected.size === 1 ? 'fil' : 'filer'} valgt i mappen${hiddenCount ? ` (${hiddenCount} utenfor dette søket)` : ''}.`;
+    const register = form.querySelector("[data-picker-register]");
+    if (register) register.disabled = selected.size === 0;
   };
   async function browse(section, params) {
     syncSelection(section);
@@ -52,7 +54,11 @@
       replacement.querySelectorAll("[name=filenames]").forEach(input => {input.checked = !input.disabled && selected.includes(input.value);});
       replacement.dataset.folderKey = folderKey(replacement);
       syncSelection(replacement);
-      if (!replacement.hidden) replacement.querySelector("input[type=search]")?.focus({preventScroll: true});
+      if (!replacement.hidden && params.has("file_q")) {
+        const search = replacement.querySelector("[data-picker-search]");
+        search?.focus({preventScroll: true});
+        search?.setSelectionRange(search.value.length, search.value.length);
+      }
     } catch (error) {
       if (error.name === "AbortError") return;
       let notice = section.querySelector("[data-picker-error]");
@@ -80,6 +86,16 @@
     browse(form.closest("[data-file-picker]"), params);
   });
 
+  document.addEventListener("input", (event) => {
+    if (!event.target.matches("[data-file-picker] [data-picker-search]")) return;
+    const form = event.target.form;
+    const section = form.closest("[data-file-picker]");
+    clearTimeout(section.searchTimer);
+    section.browseController?.abort();
+    const params = new URLSearchParams(new FormData(form));
+    section.searchTimer = setTimeout(() => browse(section, params), 250);
+  });
+
   document.addEventListener("click", (event) => {
     const link = event.target.closest("[data-file-picker] [data-picker-folder]");
     if (!link) return;
@@ -94,6 +110,7 @@
       section.querySelectorAll('input[type=checkbox][name=filenames]:not(:disabled)').forEach(input => {input.checked = event.target.checked;});
     }
     if (event.target.name === "root_key") {
+      clearTimeout(section.searchTimer);
       const params = new URLSearchParams(new FormData(event.target.form));
       params.set("relative_path", "."); params.set("suggest", "1");
       browse(section, params);
@@ -110,4 +127,5 @@
   });
   document.addEventListener("digitization:step", loadVisible);
   loadVisible();
+  document.querySelectorAll('[data-file-picker]:not([data-picker-auto="true"])').forEach(syncSelection);
 })();

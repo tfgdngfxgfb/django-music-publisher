@@ -193,6 +193,7 @@ class DigitizationWorkflowTests(TestCase):
             self.assertContains(page, "Finn redigerte mastere")
             self.assertContains(page, 'id="raw-picker"')
             self.assertContains(page, 'id="master-picker"')
+            self.assertContains(page, "digitization-picker-layout", count=2)
             browsed = self.client.get(
                 url,
                 {
@@ -219,6 +220,10 @@ class DigitizationWorkflowTests(TestCase):
                 },
             )
             self.assertContains(fragment, 'id="master-picker"')
+            self.assertContains(fragment, "digitization-picker-layout")
+            self.assertContains(fragment, "digitization-folder-tree")
+            self.assertContains(fragment, "Filer i valgt mappe")
+            self.assertContains(fragment, "WAV-filer: 1")
             self.assertContains(fragment, "01 Sang en.wav")
             self.assertNotContains(fragment, "02 Sang to.wav")
             self.assertNotContains(fragment, "v2-player")
