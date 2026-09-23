@@ -12,8 +12,9 @@
       else link.removeAttribute('aria-current');
     });
     const inspector = workspace.querySelector('.recording-files-inspector');
-    if (inspector) inspector.hidden = !['raw', 'links'].includes(step);
+    if (inspector) inspector.hidden = !['raw', 'masters', 'links'].includes(step);
     if (step === 'raw' && rawRows.length) selectRaw(rawRows.find(row => row.getAttribute('aria-selected') === 'true') || rawRows[0]);
+    if (step === 'masters' && rows.length) select(rows.find(row => row.getAttribute('aria-selected') === 'true') || rows[0]);
     if (step === 'links' && rows.length) select(rows.find(row => row.getAttribute('aria-selected') === 'true') || rows[0]);
     workspace.querySelector('[data-step-previous]').disabled = steps.indexOf(step) === 0;
     workspace.querySelector('[data-step-next]').disabled = ['radio', 'history'].includes(step);
@@ -32,6 +33,24 @@
   workspace.querySelector('[data-step-next]').addEventListener('click', () => showStep(steps[steps.indexOf(activeStep) + 1]));
   workspace.querySelector('[data-step-previous]').addEventListener('click', () => showStep(steps[steps.indexOf(activeStep) - 1]));
   window.addEventListener('popstate', () => showStep(new URL(location.href).searchParams.get('step') || 'metadata', false));
+  const historySearch = workspace.querySelector('[data-history-search]');
+  if (historySearch) {
+    const historyRows = [...workspace.querySelectorAll('[data-history-row]')];
+    const historyCount = workspace.querySelector('[data-history-count]');
+    const historyEmpty = workspace.querySelector('[data-history-empty]');
+    const filterHistory = () => {
+      const query = historySearch.value.trim().toLocaleLowerCase();
+      let visible = 0;
+      historyRows.forEach(row => {
+        row.hidden = !!query && !row.textContent.toLocaleLowerCase().includes(query);
+        if (!row.hidden) visible += 1;
+      });
+      historyCount.textContent = `${visible} av ${historyRows.length} vist`;
+      historyEmpty.hidden = visible !== 0;
+    };
+    historySearch.addEventListener('input', filterHistory);
+    filterHistory();
+  }
   const draftKey = `digitization:draft:${location.pathname}`;
   const storage = {
     get: key => {try {return sessionStorage.getItem(key);} catch {return null;}},
@@ -72,8 +91,10 @@
   }
   const rows = [...workspace.querySelectorAll('[data-digitization-row]')];
   const rawRows = [...workspace.querySelectorAll('[data-raw-row]')];
+  const masterListRows = [...workspace.querySelectorAll('[data-master-list-row]')];
   const select = row => {
     rows.forEach(item => {const active = item === row; item.classList.toggle('selected', active); item.setAttribute('aria-selected', String(active)); item.tabIndex = active ? 0 : -1;});
+    masterListRows.forEach(item => item.classList.toggle('selected', item.dataset.masterListRow === row.dataset.digitizationRow));
     rawRows.forEach(item => {item.classList.remove('selected'); item.setAttribute('aria-selected', 'false'); item.tabIndex = -1;});
     workspace.querySelectorAll('[data-raw-detail]').forEach(panel => {panel.hidden = true;});
     workspace.querySelector('.digitization-empty-detail').hidden = true;
@@ -99,6 +120,16 @@
     });
   });
   rows.forEach(row => row.addEventListener('click', () => select(row)));
+  masterListRows.forEach(item => {
+    const selectMaster = () => {
+      const row = rows.find(candidate => candidate.dataset.digitizationRow === item.dataset.masterListRow);
+      if (row) select(row);
+    };
+    item.addEventListener('click', selectMaster);
+    item.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') {event.preventDefault(); selectMaster();}
+    });
+  });
   workspace.addEventListener('keydown', event => {
     if (event.target.closest('input,select,textarea,button,a,summary')) return;
     const row = event.target.closest('[data-digitization-row]');

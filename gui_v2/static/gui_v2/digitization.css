@@ -14,6 +14,18 @@
 .digitization-page .recording-object-header{display:flex;align-items:center;gap:18px;padding:18px;border:1px solid var(--line2);border-radius:8px;background:var(--surface2)}
 .digitization-page .recording-object-header>div{flex:1;min-width:0}
 .digitization-page .recording-object-header h1{margin:3px 0 5px}
+.digitization-header-note{font-size:.85rem;color:var(--muted);margin-bottom:0}
+.digitization-workflow-note{padding:12px 16px;margin:-5px 0 16px;border:1px solid var(--line2);border-left:3px solid var(--accent);border-radius:6px;background:var(--surface2)}
+.digitization-checklist-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;padding:14px 16px}
+.digitization-checklist-grid>div{display:grid;gap:5px;padding:12px;border:1px solid var(--line);border-radius:6px;background:var(--surface2)}
+.digitization-checklist-grid span{color:var(--muted)}
+.digitization-checklist-grid a,.digitization-table td a{color:var(--accent)}
+.digitization-history-filter{display:flex;align-items:end;justify-content:space-between;gap:12px;padding:0 16px 12px}
+.digitization-history-filter label{display:grid;gap:5px;flex:1;max-width:480px}
+.digitization-history-filter [data-history-count]{color:var(--muted)}
+.digitization-history [data-history-row][hidden]{display:none}
+.digitization-history td{vertical-align:top}
+.digitization-history td:last-child{max-width:320px;overflow-wrap:anywhere}
 .digitization-page .digitization-summary span{min-width:170px;flex:1}
 .digitization-page .digitization-steps{display:grid;grid-template-columns:repeat(5,minmax(0,1fr)) auto}
 .digitization-page .digitization-steps a{text-align:center;white-space:normal}
@@ -46,7 +58,7 @@
 .digitization-picker-actions{display:flex;justify-content:space-between;align-items:center;gap:12px;border-top:1px solid var(--line);padding-top:12px}
 .digitization-picker-actions p{margin:0;color:var(--muted)}
 .digitization-storage-picker[aria-busy=true] .digitization-picker-files{opacity:.6}
-@media(max-width:1000px){.digitization-page .digitization-steps{display:flex}.digitization-picker-layout{grid-template-columns:1fr}.digitization-picker-folders{border-right:0;border-bottom:1px solid var(--line)}}
-@media(max-width:600px){.digitization-page .recording-object-header{display:block}.digitization-storage-picker .digitization-picker-heading{display:block}.digitization-picker-actions{align-items:stretch;flex-direction:column}}
+@media(max-width:1000px){.digitization-page .digitization-steps{display:flex}.digitization-picker-layout{grid-template-columns:1fr}.digitization-picker-folders{border-right:0;border-bottom:1px solid var(--line)}.digitization-checklist-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.digitization-page .recording-object-header{display:block}.digitization-storage-picker .digitization-picker-heading{display:block}.digitization-picker-actions{align-items:stretch;flex-direction:column}.digitization-checklist-grid{grid-template-columns:1fr}}
 .radio-work-filters{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 14px}.radio-work-filters a{padding:7px 10px;border:1px solid var(--line2);border-radius:6px;color:var(--text);text-decoration:none;background:var(--surface2)}.radio-work-filters a[aria-current=page]{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}.radio-work-filters strong{margin-left:5px}.radio-workbench [data-radio-row]{cursor:pointer}.radio-workbench [data-radio-detail][hidden]{display:none}
 .digitization-steps{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 14px}.digitization-steps a{padding:7px 9px;border:1px solid var(--line2);border-radius:5px;background:var(--surface2);color:var(--text);text-decoration:none}.digitization-steps a:hover{color:var(--accent);border-color:var(--accent)}.digitization-storage-picker{padding:12px 16px}.digitization-storage-picker .digitization-toolbar{padding-left:0}.digitization-file-choices{display:block;max-height:380px;overflow:auto;margin:12px 0}.digitization-file-choices table{width:100%}.digitization-file-choices td:nth-child(2){min-width:230px}.digitization-file-choices td small{display:block;color:var(--muted);overflow-wrap:anywhere}.digitization-file-choices td a{color:var(--accent)}.digitization-finish{padding:14px 16px}.digitization-finish form{display:inline-block;margin-left:10px}
