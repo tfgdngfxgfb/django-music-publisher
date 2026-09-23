@@ -26,6 +26,14 @@
 .digitization-history [data-history-row][hidden]{display:none}
 .digitization-history td{vertical-align:top}
 .digitization-history td:last-child{max-width:320px;overflow-wrap:anywhere}
+.generation-readiness{margin:16px 0;padding:16px;border:1px solid var(--warn);border-radius:7px;background:var(--surface2)}
+.generation-readiness h2{margin:0 0 10px;font-size:1.05rem}
+.generation-readiness li{margin:6px 0}
+.generation-readiness p{color:var(--muted)}
+.generation-readiness form{display:grid;gap:10px;max-width:650px}
+.generation-readiness label{display:grid;gap:5px}
+.generation-readiness input{width:100%;min-width:0}
+.generation-readiness code{overflow-wrap:anywhere}
 .digitization-page .digitization-summary span{min-width:170px;flex:1}
 .digitization-page .digitization-steps{display:grid;grid-template-columns:repeat(5,minmax(0,1fr)) auto}
 .digitization-page .digitization-steps a{text-align:center;white-space:normal}

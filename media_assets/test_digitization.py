@@ -1415,6 +1415,46 @@ class DigitizationWorkflowTests(TestCase):
             workspace["masters"][0]["asset"].filename, "01 Sang en.wav"
         )
 
+    def test_generation_page_names_each_server_blocker(self):
+        recording = Recording.objects.create(title="Uten master")
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse("gui_v2:recording_generation_preview", args=[recording.pk])
+        )
+        self.assertContains(response, "P7_ALLOW_FILE_WRITES")
+        self.assertContains(response, "P7_GENERATED_MEDIA_ROOT")
+        self.assertContains(response, "Velg en autoritativ master")
+
+    def test_existing_radio_target_offers_new_name_without_overwrite(self):
+        from media_assets.mastering import build_generation_preview
+
+        _, masters = self.prepare()
+        recording = self.link(masters)[0].recording
+        self.apply("select_master", {"assets": [str(masters[0].pk)]})
+        roots = {
+            "capture": {"server_root": str(self.root)},
+            "generated_media": {
+                "server_root": str(self.root),
+                "read_only": False,
+            },
+        }
+        with self.settings(P7_STORAGE_ROOTS=roots, P7_ALLOW_FILE_WRITES=True):
+            preview = build_generation_preview(recording=recording)
+            target = self.root / preview["target_relative_path"]
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(b"existing")
+            self.client.force_login(self.user)
+            url = reverse("gui_v2:recording_generation_preview", args=[recording.pk])
+            response = self.client.get(url)
+            self.assertContains(response, "Målfilen finnes allerede")
+            self.assertNotContains(response, "Lagre plan")
+            alternate = response.context["alternate_target"]
+            self.assertNotEqual(alternate, preview["target_relative_path"])
+            response = self.client.get(url, {"target_relative_path": alternate})
+            self.assertContains(response, "Lagre plan")
+            self.assertEqual(target.read_bytes(), b"existing")
+            self.assertFalse(RadioFlacGeneration.objects.exists())
+
     def test_first_radio_full_pipeline_and_rebuild_protection(self):
         from media_assets.mastering import (
             build_generation_preview,

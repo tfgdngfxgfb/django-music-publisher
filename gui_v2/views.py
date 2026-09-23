@@ -1466,6 +1466,36 @@ def recording_generation_preview(request, recording_id):
     generation = None
     preview = None
     error_message = ""
+    can_plan = settings.GUI_V2_WRITES_ENABLED and request.user.has_perms(
+        GENERATION_CHANGE_PERMISSIONS
+    )
+    generation_blockers = []
+    if not settings.GUI_V2_WRITES_ENABLED:
+        generation_blockers.append(
+            "GUI-v2-skriving er deaktivert. En administrator må aktivere GUI_V2_WRITES_ENABLED."
+        )
+    if not request.user.has_perms(GENERATION_CHANGE_PERMISSIONS):
+        generation_blockers.append(
+            "Kontoen mangler nødvendige tillatelser til å opprette og generere radiofiler."
+        )
+    if not settings.P7_ALLOW_FILE_WRITES:
+        generation_blockers.append(
+            "Fysisk filskriving er deaktivert (P7_ALLOW_FILE_WRITES). En administrator må aktivere dette før generering."
+        )
+    target_root_key = getattr(
+        settings, "P7_GENERATED_MEDIA_ROOT_KEY", "generated_media"
+    )
+    target_root = (getattr(settings, "P7_STORAGE_ROOTS", {}) or {}).get(
+        target_root_key
+    )
+    if not isinstance(target_root, dict) or not target_root.get("server_root"):
+        generation_blockers.append(
+            f"Målområdet {target_root_key} er ikke konfigurert. En administrator må angi P7_GENERATED_MEDIA_ROOT."
+        )
+    elif target_root.get("read_only", True):
+        generation_blockers.append(
+            f"Målområdet {target_root_key} er konfigurert som skrivebeskyttet."
+        )
     generation_id = request.GET.get("generation")
     if generation_id:
         generation = get_object_or_404(
@@ -1477,7 +1507,11 @@ def recording_generation_preview(request, recording_id):
         )
     else:
         try:
-            preview = build_generation_preview(recording=recording)
+            preview = build_generation_preview(
+                recording=recording,
+                target_relative_path=request.GET.get("target_relative_path") or None,
+                allow_existing_target=True,
+            )
         except (ImproperlyConfigured, OSError, ValidationError) as error:
             error_message = "; ".join(getattr(error, "messages", [str(error)]))
     if request.method == "POST":
@@ -1503,6 +1537,12 @@ def recording_generation_preview(request, recording_id):
                 f"?generation={generation.pk}"
                 f"&return={quote(_safe_return(request, reverse('gui_v2:recording_files', args=[recording.pk])), safe='')}"
             )
+    alternate_target = ""
+    if preview and preview["target_exists"]:
+        target = PurePosixPath(preview["target_relative_path"])
+        alternate_target = str(
+            target.with_name(f"{target.stem}-ny{target.suffix}")
+        )
     return render(
         request,
         "gui_v2/recording_generation_preview.html",
@@ -1513,10 +1553,11 @@ def recording_generation_preview(request, recording_id):
             "preview": preview,
             "generation": generation,
             "error_message": error_message,
+            "generation_blockers": generation_blockers,
+            "alternate_target": alternate_target,
             "writes_enabled": settings.GUI_V2_WRITES_ENABLED,
             "file_writes_enabled": settings.P7_ALLOW_FILE_WRITES,
-            "can_generate": settings.GUI_V2_WRITES_ENABLED
-            and request.user.has_perms(GENERATION_CHANGE_PERMISSIONS),
+            "can_generate": can_plan,
             "return_url": _safe_return(
                 request,
                 reverse("gui_v2:recording_files", args=[recording.pk]),
