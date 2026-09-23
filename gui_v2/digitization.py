@@ -15,7 +15,7 @@ from django.core.exceptions import (
 )
 from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
-from django.db.models import Count, Q
+from django.db.models import Count, Prefetch, Q, prefetch_related_objects
 from django.http import HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -23,7 +23,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 from urllib.parse import quote
 
-from catalogue.models import Label, Release, ReleaseTrack
+from catalogue.models import Label, RecordingContribution, Release, ReleaseTrack
 from catalogue.metadata_providers import provider_availability
 from managed_music.models import ManagedRelease
 from media_assets.digitization import (
@@ -63,6 +63,7 @@ from media_assets.digitization_storage import (
 from .forms import MasterRegistrationForm, ReleaseMetadataForm
 from .home_state import remember_object
 from .recording_files import _location_data, _technical, _size
+from .recording_overview import release_cover_assets_queryset, select_release_cover
 
 logger = logging.getLogger(__name__)
 VIEW_PERMS = (
@@ -101,6 +102,10 @@ class DigitizationReleaseForm(ReleaseMetadataForm):
             "catalogue_number",
             "notes",
         )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["release_type"].required = True
 
 
 class FolderForm(MasterRegistrationForm):
@@ -620,7 +625,13 @@ def release_matrix(request, release_id):
 def start(request):
     """Choose a Release first; the batch is an internal work context."""
     query = request.GET.get("q", "").strip()[:100]
-    releases = Release.objects.select_related("label").order_by("title")
+    release_type = request.GET.get("format", "")
+    if release_type not in Release.Type.values:
+        release_type = ""
+    year = request.GET.get("year", "").strip()
+    if not (year.isascii() and year.isdigit() and 1800 <= int(year or 0) <= 2200):
+        year = ""
+    releases = Release.objects.select_related("label").order_by("title", "id")
     if query:
         releases = releases.filter(
             Q(title__icontains=query)
@@ -631,6 +642,12 @@ def start(request):
                 tracks__recording__contributions__artist_identity__display_name__icontains=query
             )
         ).distinct()
+    if release_type:
+        releases = releases.filter(release_type=release_type)
+    if year:
+        releases = releases.filter(
+            Q(release_year=int(year)) | Q(release_date__year=int(year))
+        )
     release_form = DigitizationReleaseForm(
         request.POST if request.POST.get("mode") == "new" else None,
         prefix="release",
@@ -652,6 +669,10 @@ def start(request):
         elif mode == "new":
             if not request.user.has_perm("catalogue.add_release"):
                 raise PermissionDenied
+            if (
+                request.POST.get("release-barcode") or ""
+            ).strip() and not request.user.has_perm("catalogue.add_externalidentifier"):
+                raise PermissionDenied
             if not release_form.is_valid():
                 error = "Kontroller feltene for den nye utgivelsen."
         else:
@@ -672,13 +693,63 @@ def start(request):
             return redirect(
                 f"{reverse('gui_v2:digitization_detail', args=[batch.pk])}?step=metadata"
             )
+    page = Paginator(releases, 5).get_page(request.GET.get("page"))
+    page.object_list = list(page.object_list)
+    release_ids = [release.pk for release in page.object_list]
+    artist_names = {}
+    if release_ids:
+        for release_id, credited_as, display_name in (
+            RecordingContribution.objects.filter(
+                recording__release_tracks__release_id__in=release_ids,
+                role=RecordingContribution.Role.PRIMARY,
+            )
+            .order_by("recording__release_tracks__release_id", "display_order", "id")
+            .values_list(
+                "recording__release_tracks__release_id",
+                "credited_as",
+                "artist_identity__display_name",
+            )
+        ):
+            name = credited_as or display_name
+            if name:
+                artist_names.setdefault(release_id, set()).add(name)
+    show_covers = request.user.is_staff and request.user.has_perms(
+        (
+            "media_assets.view_fileasset",
+            "media_assets.view_filelocation",
+            "music_library.view_musiclibraryentry",
+        )
+    )
+    if show_covers and release_ids:
+        prefetch_related_objects(
+            page.object_list,
+            Prefetch(
+                "file_assets",
+                queryset=release_cover_assets_queryset(),
+                to_attr="cover_assets",
+            ),
+        )
+    for release in page.object_list:
+        names = artist_names.get(release.pk, set())
+        release.artist_text = (
+            next(iter(names))
+            if len(names) == 1
+            else ("Flere artister" if names else "Artist ikke registrert")
+        )
+        release.display_year = release.release_year or (
+            release.release_date.year if release.release_date else None
+        )
+        release.cover = select_release_cover(release) if show_covers else None
     return render(
         request,
         "gui_v2/digitization_start.html",
         {
             "section": "digitization",
             "query": query,
-            "releases": releases[:50],
+            "page": page,
+            "release_type": release_type,
+            "release_type_choices": Release.Type.choices,
+            "year": year,
             "release_form": release_form,
             "error": error,
             "writes_enabled": settings.GUI_V2_WRITES_ENABLED,
