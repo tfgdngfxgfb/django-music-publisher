@@ -100,7 +100,9 @@ from .recording_overview import (
     build_recording_overview,
     recording_overview_queryset,
     recording_release_tracks_with_covers_queryset,
+    release_cover_assets_queryset,
     select_recording_cover,
+    select_release_cover,
 )
 from .recording_files import build_recording_files
 from .services import save_release_track_rows
@@ -1998,6 +2000,24 @@ def release_list(request):
     page = Paginator(releases.order_by(*sort_fields[sort]), 40).get_page(
         request.GET.get("page")
     )
+    if request.user.is_staff and request.user.has_perms(
+        (
+            "media_assets.view_fileasset",
+            "media_assets.view_filelocation",
+            "music_library.view_musiclibraryentry",
+        )
+    ):
+        page.object_list = list(page.object_list)
+        prefetch_related_objects(
+            page.object_list,
+            Prefetch(
+                "file_assets",
+                queryset=release_cover_assets_queryset(),
+                to_attr="cover_assets",
+            ),
+        )
+        for release in page.object_list:
+            release.cover = select_release_cover(release)
     return render(
         request,
         "gui_v2/release_list.html",
@@ -2285,16 +2305,7 @@ def release_detail(request, release_id):
             "music_library.view_musiclibraryentry",
         )
     ):
-        release_cover = (
-            release.file_assets.filter(
-                role=FileAsset.Role.COVER_IMAGE,
-                locations__storage_type=FileLocation.StorageType.NAS,
-                locations__is_current=True,
-                locations__status=FileLocation.Status.ACTIVE,
-            )
-            .distinct()
-            .first()
-        )
+        release_cover = select_release_cover(release)
     release_files = (
         list(
             release.file_assets.prefetch_related("locations").order_by(

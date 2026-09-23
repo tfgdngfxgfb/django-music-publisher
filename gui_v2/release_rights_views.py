@@ -12,11 +12,11 @@ from django.views.decorators.http import require_GET, require_http_methods
 from catalogue.models import Recording, Release
 from managed_music.models import ManagedRelease, ManagedRecording
 from music_library.models import MusicLibraryEntry
-from media_assets.models import FileAsset, FileLocation
 from rights import workflows
 from rights.workflow_forms import process_release_form
 from gui_v2.release_rights import release_tracks, build_matrix
 from gui_v2.release_rights_forms import BulkRightsForm
+from gui_v2.recording_overview import select_release_cover
 
 
 def can_onboard(user):
@@ -74,17 +74,7 @@ def overview(request, release_id):
             "music_library.view_musiclibraryentry",
         )
     ):
-        context["release_cover"] = (
-            release.file_assets.filter(
-                role=FileAsset.Role.COVER_IMAGE,
-                locations__storage_type=FileLocation.StorageType.NAS,
-                locations__is_current=True,
-                locations__status=FileLocation.Status.ACTIVE,
-            )
-            .distinct()
-            .order_by("pk")
-            .first()
-        )
+        context["release_cover"] = select_release_cover(release)
     if request.user.has_perm("rights.view_rightsclaim"):
         context.update(build_matrix(release, tracks))
         target = reverse("gui_v2:release_detail", args=[release.pk])

@@ -30,33 +30,50 @@ def recording_release_tracks_with_covers_queryset():
         .prefetch_related(
             Prefetch(
                 "release__file_assets",
-                queryset=FileAsset.objects.filter(
-                    role=FileAsset.Role.COVER_IMAGE
-                )
-                .prefetch_related("locations")
-                .order_by("filename", "id"),
+                queryset=release_cover_assets_queryset(),
+                to_attr="cover_assets",
             )
         )
         .order_by("release__release_year", "release__title", "sequence_number")
     )
 
 
+def release_cover_assets_queryset():
+    """One ordered set of eligible cover candidates for every GUI surface."""
+    return (
+        FileAsset.objects.filter(role=FileAsset.Role.COVER_IMAGE)
+        .prefetch_related("locations")
+        .order_by("filename", "id")
+    )
+
+
+def select_release_cover(release):
+    """Select the first cover with an active current NAS location."""
+    assets = getattr(release, "cover_assets", None)
+    if assets is None:
+        assets = release_cover_assets_queryset().filter(release=release)
+    for asset in assets:
+        if any(
+            location.is_current
+            and location.status == FileLocation.Status.ACTIVE
+            and location.storage_type == FileLocation.StorageType.NAS
+            for location in asset.locations.all()
+        ):
+            return asset
+    return None
+
+
 def select_recording_cover(releases):
     """Select the first usable release cover without relying on database order."""
     cover = None
+    by_release = {}
     for track in releases:
-        track.cover_asset = None
-        for asset in track.release.file_assets.all():
-            if any(
-                location.is_current
-                and location.status == FileLocation.Status.ACTIVE
-                and location.storage_type == FileLocation.StorageType.NAS
-                for location in asset.locations.all()
-            ):
-                track.cover_asset = asset
-                if cover is None:
-                    cover = {"asset": asset, "release": track.release}
-                break
+        release_id = track.release_id
+        if release_id not in by_release:
+            by_release[release_id] = select_release_cover(track.release)
+        track.cover_asset = by_release[release_id]
+        if cover is None and track.cover_asset is not None:
+            cover = {"asset": track.cover_asset, "release": track.release}
     return cover
 
 

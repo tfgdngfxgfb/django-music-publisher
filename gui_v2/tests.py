@@ -894,6 +894,52 @@ class GuiV2WorkspaceTests(TestCase):
         self.assertContains(second, "Serie 40")
         self.assertNotContains(second, "Serie 00")
 
+    def test_release_list_uses_shared_deterministic_cover_selection(self):
+        self._superuser()
+        later = FileAsset.objects.create(
+            release=self.release,
+            filename="z-cover.png",
+            role=FileAsset.Role.COVER_IMAGE,
+        )
+        chosen = FileAsset.objects.create(
+            release=self.release,
+            filename="a-cover.png",
+            role=FileAsset.Role.COVER_IMAGE,
+        )
+        for asset in (later, chosen):
+            FileLocation.objects.create(
+                asset=asset,
+                storage_type=FileLocation.StorageType.NAS,
+                relative_path=f"covers/{asset.filename}",
+                status=FileLocation.Status.ACTIVE,
+                is_current=True,
+            )
+        response = self.client.get(reverse("gui_v2:release_list"))
+        self.assertEqual(response.context["page"].object_list[0].cover, chosen)
+        self.assertContains(
+            response,
+            f'{reverse("workbench:cover_image", args=[chosen.pk])}?size=64',
+        )
+        self.assertNotContains(
+            response,
+            reverse("workbench:cover_image", args=[later.pk]),
+        )
+        self.user.is_staff = False
+        self.user.is_superuser = False
+        self.user.save()
+        self.user.user_permissions.add(
+            Permission.objects.get(
+                content_type__app_label="catalogue",
+                codename="view_release",
+            )
+        )
+        self.client.force_login(self.user)
+        limited = self.client.get(reverse("gui_v2:release_list"))
+        self.assertNotContains(
+            limited,
+            reverse("workbench:cover_image", args=[chosen.pk]),
+        )
+
     @override_settings(GUI_V2_WRITES_ENABLED=False)
     def test_release_creation_is_blocked_in_read_only_mode(self):
         self._superuser()
