@@ -486,6 +486,141 @@ class DigitizationWorkflowTests(TestCase):
             "Tilknyttet – ikke valgt",
         )
 
+    def test_corrections_unlink_without_deleting_history_and_reopen_batch(self):
+        raws, masters = self.prepare()
+        track = ReleaseTrack.objects.create(
+            release=self.release,
+            recording=Recording.objects.create(title="Feilkoblet sang"),
+            sequence_number=1,
+        )
+        self.apply(
+            "recording_link",
+            {"rows": [{"asset": str(masters[0].pk), "track": str(track.pk)}]},
+        )
+        self.apply(
+            "raw_link",
+            {"source": str(raws[0].pk), "assets": [str(masters[0].pk)]},
+        )
+        self.batch.status = DigitizationBatch.Status.COMPLETE
+        self.batch.save()
+
+        self.apply(
+            "unlink_raw",
+            {
+                "assets": [str(masters[0].pk)],
+                "note": "Feil side ble valgt",
+            },
+        )
+        relation = DigitizationDerivation.objects.get(
+            derived_asset=masters[0]
+        )
+        self.assertFalse(relation.is_active)
+        self.assertEqual(relation.source_asset, raws[0])
+        self.batch.refresh_from_db()
+        self.assertEqual(self.batch.status, DigitizationBatch.Status.OPEN)
+
+        self.apply(
+            "clear_master_selection",
+            {
+                "assets": [str(masters[0].pk)],
+                "note": "Feil masterversjon",
+            },
+        )
+        self.assertIsNone(
+            RecordingMediaSelection.objects.get(
+                recording=track.recording
+            ).selected_master_id
+        )
+        self.apply(
+            "unlink_recording",
+            {
+                "assets": [str(masters[0].pk)],
+                "note": "Masteren tilhører et annet spor",
+            },
+        )
+        masters[0].refresh_from_db()
+        self.assertIsNone(masters[0].recording_id)
+        self.assertIsNone(masters[0].release_track_id)
+        self.assertEqual(masters[0].release_id, self.release.pk)
+        self.assertTrue(Recording.objects.filter(pk=track.recording_id).exists())
+        self.assertTrue(ReleaseTrack.objects.filter(pk=track.pk).exists())
+        self.assertTrue(
+            {
+                MediaAssetEvent.EventType.RECORDING_LINKED,
+                MediaAssetEvent.EventType.MASTER_SELECTED,
+                MediaAssetEvent.EventType.RAW_LINKED,
+                MediaAssetEvent.EventType.RAW_UNLINKED,
+                MediaAssetEvent.EventType.MASTER_SELECTION_CLEARED,
+                MediaAssetEvent.EventType.RECORDING_UNLINKED,
+            }.issubset(
+                set(
+                    MediaAssetEvent.objects.filter(
+                        asset=masters[0]
+                    ).values_list("event_type", flat=True)
+                )
+            )
+        )
+
+    def test_corrections_require_note_and_protect_generated_lineage(self):
+        _, masters = self.prepare()
+        track = ReleaseTrack.objects.create(
+            release=self.release,
+            recording=Recording.objects.create(title="Beskyttet sang"),
+            sequence_number=1,
+        )
+        self.apply(
+            "recording_link",
+            {"rows": [{"asset": str(masters[0].pk), "track": str(track.pk)}]},
+        )
+        with self.assertRaisesMessage(ValidationError, "Oppgi hvorfor"):
+            self.preview(
+                "clear_master_selection",
+                {"assets": [str(masters[0].pk)], "note": ""},
+            )
+        self.apply(
+            "clear_master_selection",
+            {"assets": [str(masters[0].pk)], "note": "Skal korrigeres"},
+        )
+        masters[0].refresh_from_db()
+        radio = FileAsset.objects.create(
+            recording=track.recording,
+            filename="historisk.flac",
+            role=FileAsset.Role.RADIO_FLAC,
+        )
+        FileDerivation.objects.create(
+            source_asset=masters[0],
+            derived_asset=radio,
+            created_by=self.user,
+            tool_name="test",
+        )
+        with self.assertRaisesMessage(ValidationError, "avledningshistorikk"):
+            self.preview(
+                "unlink_recording",
+                {
+                    "assets": [str(masters[0].pk)],
+                    "note": "Forsøk på farlig frakobling",
+                },
+            )
+
+    def test_correction_actions_are_visible_for_linked_master(self):
+        _, masters = self.prepare()
+        track = ReleaseTrack.objects.create(
+            release=self.release,
+            recording=Recording.objects.create(title="Sang en"),
+            sequence_number=1,
+        )
+        self.apply(
+            "recording_link",
+            {"rows": [{"asset": str(masters[0].pk), "track": str(track.pk)}]},
+        )
+        self.client.force_login(self.user)
+        response = self.client.get(
+            reverse("gui_v2:digitization_detail", args=[self.batch.pk])
+        )
+        self.assertContains(response, "Korriger koblinger")
+        self.assertContains(response, "Fjern mastervalg")
+        self.assertContains(response, "Fjern innspillingskobling")
+
     def test_recording_link_rolls_back_new_recordings_and_assignments(self):
         _, masters = self.prepare()
         plan = self.preview(

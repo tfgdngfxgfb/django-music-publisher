@@ -31,6 +31,8 @@ from .models import (
     FileChecksum,
     FileLocation,
     MediaAssetEvent,
+    FileDerivation,
+    RadioFlacGeneration,
     RecordingMediaSelection,
 )
 from .storage import resolve_storage_path
@@ -258,8 +260,26 @@ def inspect_folder(*, root_key, relative_path, role, selected_names=None):
 
 def _validate(batch, operation, payload):
     changes = []
-    if batch.status != DigitizationBatch.Status.OPEN:
+    correction_operations = {
+        "unlink_raw",
+        "clear_master_selection",
+        "unlink_recording",
+    }
+    if (
+        batch.status != DigitizationBatch.Status.OPEN
+        and operation not in correction_operations
+    ):
         raise ValidationError("Digitaliseringen er avsluttet.")
+    if operation in correction_operations:
+        note = payload.get("note", "").strip()
+        if not note:
+            raise ValidationError(
+                "Oppgi hvorfor koblingen fjernes. Begrunnelsen lagres i historikken."
+            )
+        if batch.status == DigitizationBatch.Status.COMPLETE:
+            changes.append(
+                "Digitaliseringen åpnes igjen fordi en ferdigstilt kobling korrigeres."
+            )
     if operation == "link_masters":
         rows = payload.get("rows", [])
         _assets(batch, [row["asset"] for row in rows])
@@ -421,6 +441,64 @@ def _validate(batch, operation, payload):
                 f"{asset.recording.title} → valgt master {asset.filename} · "
                 f"gjelder innspillingen globalt · forekommer på "
                 f"{release_counts.get(asset.recording_id, 0)} utgivelser"
+            )
+    elif operation == "unlink_raw":
+        for asset in _assets(batch, payload.get("assets", [])):
+            if asset.role != FileAsset.Role.EDITED_WAV_MASTER:
+                raise ValidationError(
+                    "Bare redigerte mastere kan frakobles råkilde."
+                )
+            relation = asset.digitization_sources.filter(is_active=True).first()
+            if not relation:
+                raise ValidationError(
+                    f"{asset.filename} har ingen aktiv råkobling."
+                )
+            changes.append(
+                f"Fjern aktiv RAW-kobling: {relation.source_asset.filename} "
+                f"→ {asset.filename}. Historikken beholdes."
+            )
+    elif operation == "clear_master_selection":
+        for asset in _assets(batch, payload.get("assets", [])):
+            if not asset.recording_id:
+                raise ValidationError(
+                    f"{asset.filename} er ikke koblet til en innspilling."
+                )
+            selection = RecordingMediaSelection.objects.filter(
+                recording_id=asset.recording_id
+            ).first()
+            if not selection or selection.selected_master_id != asset.pk:
+                raise ValidationError(f"{asset.filename} er ikke valgt master.")
+            changes.append(
+                f"Fjern mastervalget for {asset.recording.title}. "
+                "Masterfilen og historikken beholdes."
+            )
+    elif operation == "unlink_recording":
+        for asset in _assets(batch, payload.get("assets", [])):
+            if (
+                asset.role != FileAsset.Role.EDITED_WAV_MASTER
+                or not asset.recording_id
+            ):
+                raise ValidationError(
+                    "Velg en master som er koblet til en innspilling."
+                )
+            selection = RecordingMediaSelection.objects.filter(
+                recording_id=asset.recording_id
+            ).first()
+            if selection and selection.selected_master_id == asset.pk:
+                raise ValidationError(
+                    "Fjern mastervalget før koblingen til innspillingen fjernes."
+                )
+            if (
+                RadioFlacGeneration.objects.filter(master_asset=asset).exists()
+                or FileDerivation.objects.filter(source_asset=asset).exists()
+            ):
+                raise ValidationError(
+                    "Masteren har Radio-FLAC-/filavledningshistorikk og kan ikke frakobles. "
+                    "Behold koblingen og korriger med en ny master."
+                )
+            changes.append(
+                f"Fjern koblingen {asset.filename} → {asset.recording.title}. "
+                "Innspillingen, sporforekomsten, filen og historikken beholdes."
             )
     else:
         raise ValidationError("Ukjent digitaliseringshandling.")
@@ -622,10 +700,77 @@ def apply_plan(*, plan, user):
                 select_master(
                     recording=asset.recording, asset=asset, user=user
                 )
+        elif plan.operation == "unlink_raw":
+            _apply_unlink_raw(batch, plan.payload, user)
+        elif plan.operation == "clear_master_selection":
+            _apply_clear_master_selection(batch, plan.payload, user)
+        elif plan.operation == "unlink_recording":
+            _apply_unlink_recording(batch, plan.payload, user)
+        if plan.operation in {
+            "unlink_raw",
+            "clear_master_selection",
+            "unlink_recording",
+        } and batch.status == DigitizationBatch.Status.COMPLETE:
+            batch.status = DigitizationBatch.Status.OPEN
         batch.save()  # Invalidate every older preview from this batch.
         plan.applied_at = timezone.now()
         plan.save()
         return plan
+
+
+def _apply_unlink_raw(batch, payload, user):
+    for asset in _assets(batch, payload["assets"]):
+        relation = asset.digitization_sources.get(is_active=True)
+        relation.is_active = False
+        relation.save()
+        _event(
+            batch,
+            asset,
+            user,
+            MediaAssetEvent.EventType.RAW_UNLINKED,
+            related=relation.source_asset,
+            details={"note": payload["note"].strip()},
+        )
+
+
+def _apply_clear_master_selection(batch, payload, user):
+    for asset in _assets(batch, payload["assets"]):
+        selection = RecordingMediaSelection.objects.select_for_update().get(
+            recording_id=asset.recording_id,
+            selected_master_id=asset.pk,
+        )
+        _event(
+            batch,
+            asset,
+            user,
+            MediaAssetEvent.EventType.MASTER_SELECTION_CLEARED,
+            details={"note": payload["note"].strip()},
+        )
+        selection.selected_master = None
+        selection.selected_master_by = None
+        selection.selected_master_at = None
+        selection.save()
+
+
+def _apply_unlink_recording(batch, payload, user):
+    for asset in _assets(batch, payload["assets"]):
+        _event(
+            batch,
+            asset,
+            user,
+            MediaAssetEvent.EventType.RECORDING_UNLINKED,
+            details={
+                "recording": str(asset.recording_id),
+                "track": str(asset.release_track_id)
+                if asset.release_track_id
+                else None,
+                "note": payload["note"].strip(),
+            },
+        )
+        asset.recording = None
+        asset.release = batch.release
+        asset.release_track = None
+        asset.save()
 
 
 def _apply_raw_links(batch, payload, user):

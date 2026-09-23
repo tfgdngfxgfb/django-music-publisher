@@ -1068,7 +1068,16 @@ def detail(request, batch_id):
                             if plan.operation == "register"
                             and plan.payload["files"][0]["role"]
                             == FileAsset.Role.RAW_DIGITIZATION
-                            else "links"
+                            else (
+                                "history"
+                                if plan.operation
+                                in {
+                                    "unlink_raw",
+                                    "clear_master_selection",
+                                    "unlink_recording",
+                                }
+                                else "links"
+                            )
                         )
                     )
                 )
@@ -1091,6 +1100,12 @@ def detail(request, batch_id):
             else:
                 assets = request.POST.getlist("assets")
                 payload = {"assets": assets}
+                if operation in {
+                    "unlink_raw",
+                    "clear_master_selection",
+                    "unlink_recording",
+                }:
+                    payload["note"] = request.POST.get("note", "")
                 if operation == "raw_link":
                     payload.update(
                         source=request.POST.get("source", ""),

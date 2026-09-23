@@ -479,7 +479,16 @@ class MediaAssetEvent(CanonicalModel):
             "Digitaliseringsfil registrert",
         )
         RAW_LINKED = "raw_linked", "Råkilde koblet"
+        RAW_UNLINKED = "raw_unlinked", "Råkildekobling fjernet"
         RECORDING_LINKED = "recording_linked", "Master koblet til innspilling"
+        RECORDING_UNLINKED = (
+            "recording_unlinked",
+            "Masterkobling til innspilling fjernet",
+        )
+        MASTER_SELECTION_CLEARED = (
+            "master_selection_cleared",
+            "Mastervalg fjernet",
+        )
 
     recording = models.ForeignKey(
         Recording,
@@ -527,7 +536,10 @@ class MediaAssetEvent(CanonicalModel):
         digitization_event = self.event_type in {
             self.EventType.DIGITIZATION_REGISTERED,
             self.EventType.RAW_LINKED,
+            self.EventType.RAW_UNLINKED,
             self.EventType.RECORDING_LINKED,
+            self.EventType.RECORDING_UNLINKED,
+            self.EventType.MASTER_SELECTION_CLEARED,
         }
         if digitization_event:
             if not self.digitization_batch_id:
