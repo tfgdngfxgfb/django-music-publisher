@@ -166,8 +166,10 @@ def onboard(request):
         else:
             messages.success(
                 request,
-                "Forvaltning er registrert under vurdering. Det lokale rettighetskravet er uverifisert.",
+                f"«{managed.recording.title}» er registrert i Forvaltet musikk under vurdering. Rettighetsgrunnlaget er uverifisert.",
             )
+            if data["return_url"] != reverse("gui_v2:managed_music"):
+                return redirect(data["return_url"])
             return redirect(
                 reverse("gui_v2:managed_music")
                 + "?"
@@ -211,6 +213,12 @@ def onboard(request):
             (
                 "relationship_type",
                 "ownership_share",
+                "notes",
+            ),
+        ),
+        (
+            "Område, periode og utgivelsesavgrensning",
+            (
                 "grantor",
                 "territory_mode",
                 "territories",
@@ -220,13 +228,12 @@ def onboard(request):
             ),
         ),
         (
-            "3. Dokumentasjon",
+            "Kilde og dokumentasjon",
             (
                 "source_system",
                 "source_record",
                 "agreement",
                 "evidence_strength",
-                "notes",
             ),
         ),
     )

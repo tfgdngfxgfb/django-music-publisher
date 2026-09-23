@@ -1,0 +1,1 @@
+{% if management.url %}<div class="management-entry-action"><a class="button {% if not management.registered %}primary{% endif %}" href="{{ management.url }}" {% if not management.registered %}data-management-register{% endif %}>{{ management.label }} →</a></div>{% endif %}

@@ -14,6 +14,7 @@ from django.utils import timezone
 
 from catalogue.models import Recording, Release, ReleaseTrack
 from managed_music.models import ManagedRecording, ManagedRelease
+from media_assets.models import DigitizationBatch, DigitizationFile, FileAsset
 from music_library.models import MusicLibraryEntry
 from parties.models import Party
 from provenance.models import MetadataAssertion, SourceRecord, SourceSystem
@@ -26,6 +27,7 @@ from rights.models import (
 )
 from rights_core.models import VerificationStatus as S
 from gui_v2.managed_music import filtered_rows, memberships, present_batch
+from gui_v2.management_links import management_links
 
 
 @override_settings(GUI_V2_WRITES_ENABLED=True)
@@ -82,6 +84,89 @@ class ManagedMusicTests(TestCase):
 
     def rows(self, **filters):
         return list(filtered_rows(filters, can_view_rights=True))
+
+    def test_digitization_onboarding_returns_to_step_four_with_provenance(self):
+        source = self.catalogue_source("Digitaliseringens opprinnelse")
+        release = Release.objects.create(title="Ny digitalisering")
+        track = ReleaseTrack.objects.create(
+            release=release, recording=self.recording, sequence_number=1
+        )
+        batch = DigitizationBatch.objects.create(
+            release=release, title="Arbeidsbatch", created_by=self.user
+        )
+        master = FileAsset.objects.create(
+            recording=self.recording,
+            release_track=track,
+            role=FileAsset.Role.EDITED_WAV_MASTER,
+            filename="A1.wav",
+        )
+        DigitizationFile.objects.create(batch=batch, asset=master)
+        return_url = (
+            reverse("gui_v2:digitization_detail", args=[batch.pk]) + "?step=links"
+        )
+        response = self.client.get(return_url)
+        row = response.context["workspace"]["masters"][0]
+        self.assertFalse(row["management"]["registered"])
+        self.assertContains(response, "Registrer forvaltning")
+        selected = self.client.get(row["management"]["url"])
+        self.assertEqual(selected.context["chosen"], self.recording)
+        self.assertEqual(selected.context["form"]["ownership_share"].value(), 100)
+        self.assertEqual(selected.context["form"].default_source, source)
+        self.assertFalse(ManagedRecording.objects.exists())
+        files = self.client.get(
+            reverse("gui_v2:recording_files", args=[self.recording.pk])
+        )
+        self.assertContains(files, "Skal P7 forvalte denne innspillingen?")
+        saved = self.client.post(
+            row["management"]["url"],
+            self.payload(
+                relationship_type="master_ownership",
+                ownership_share="100",
+                **{"return": return_url},
+            ),
+        )
+        self.assertRedirects(saved, return_url)
+        self.assertEqual(ManagedRecording.objects.get().status, "pending")
+        claim = RightsClaim.objects.get()
+        self.assertEqual(claim.status, S.UNVERIFIED)
+        self.assertEqual(claim.source_record, source)
+        self.assertEqual(SourceRecord.objects.count(), 1)
+        row = self.client.get(return_url).context["workspace"]["masters"][0]
+        self.assertTrue(row["management"]["registered"])
+        self.assertEqual(row["management"]["label"], "Se forvaltning")
+
+    def test_management_entry_points_respect_permissions_and_write_switch(self):
+        reader = get_user_model().objects.create_user("management-link-reader")
+        self.assertEqual(
+            management_links(reader, [self.recording.pk], return_url="/"), {}
+        )
+        reader.user_permissions.add(
+            *Permission.objects.filter(
+                codename__in=("view_managedrecording", "view_recording")
+            )
+        )
+        reader = get_user_model().objects.get(pk=reader.pk)
+        link = management_links(reader, [self.recording.pk], return_url="/")[
+            self.recording.pk
+        ]
+        self.assertEqual(link["url"], "")
+        with self.settings(GUI_V2_WRITES_ENABLED=False):
+            link = management_links(self.user, [self.recording.pk], return_url="/")[
+                self.recording.pk
+            ]
+            self.assertEqual(link["url"], "")
+        self.member()
+        link = management_links(reader, [self.recording.pk], return_url="/")[
+            self.recording.pk
+        ]
+        self.assertTrue(link["registered"])
+        self.assertIn("status=all", link["url"])
+
+    def test_onboarding_rejects_external_return_destination(self):
+        response = self.client.post(
+            self.url("onboard"), self.payload(**{"return": "//example.com/outside"})
+        )
+        self.assertTrue(response.url.startswith(self.url() + "?"))
 
     def test_empty_native_shell_and_home_navigation(self):
         response = self.client.get(self.url())

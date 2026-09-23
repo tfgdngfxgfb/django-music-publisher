@@ -27,6 +27,11 @@
       const url = new URL(location.href); url.searchParams.set('step', step); url.hash = '';
       history.pushState(null, '', url);
     }
+    workspace.querySelectorAll('[data-management-register]').forEach(link => {
+      const url = new URL(link.href);
+      url.searchParams.set('return', `${location.pathname}?step=${step}`);
+      link.href = url.toString();
+    });
     document.dispatchEvent(new Event('digitization:step'));
   };
   workspace.querySelectorAll('[data-step-link]').forEach(link => link.addEventListener('click', event => {event.preventDefault(); showStep(link.dataset.stepLink);}));

@@ -123,6 +123,10 @@ class OnboardingForm(ManagedRecordingCreationForm):
                         self.default_source.source_system_id
                     )
         self.initial.setdefault("ownership_share", 100)
+        self.fields["relationship_type"].choices = [
+            ("", "Velg forvaltningsgrunnlag"),
+            *self.fields["relationship_type"].choices,
+        ]
         self.fields["ownership_share"].help_text = (
             "Forhåndsutfylt 100 %. Endre andelen dersom P7 eier mindre. Brukes bare ved mastereierskap."
         )

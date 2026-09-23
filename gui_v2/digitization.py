@@ -64,6 +64,7 @@ from .forms import MasterRegistrationForm, ReleaseMetadataForm
 from .home_state import remember_object
 from .recording_files import _location_data, _technical, _size
 from .recording_overview import release_cover_assets_queryset, select_release_cover
+from .management_links import management_links
 
 logger = logging.getLogger(__name__)
 VIEW_PERMS = (
@@ -1257,6 +1258,20 @@ def detail(request, batch_id):
     step = request.POST.get("step") or request.GET.get("step", default_step)
     if step not in {"metadata", "raw", "masters", "links", "radio", "history"}:
         step = default_step
+    # The step is also submitted by preview/apply; retain it after onboarding.
+    management_return = (
+        reverse("gui_v2:digitization_detail", args=[batch.pk]) + f"?step={step}"
+    )
+    links = management_links(
+        request.user,
+        {row["asset"].recording_id for row in workspace["masters"]}
+        | {track.recording_id for track in workspace["tracks"]},
+        return_url=management_return,
+    )
+    for row in workspace["masters"]:
+        row["management"] = links.get(row["asset"].recording_id)
+    for row in workspace["pipeline"]:
+        row["management"] = links.get(row["track"].recording_id)
     return render(
         request,
         "gui_v2/digitization_detail.html",

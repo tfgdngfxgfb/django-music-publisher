@@ -1117,6 +1117,8 @@ def recording_detail(request, recording_id):
 )
 def recording_files(request, recording_id):
     """Render the read-only GUI v2 media inventory for one Recording."""
+    from .management_links import management_links
+
     recording = get_object_or_404(
         recording_overview_queryset(), pk=recording_id
     )
@@ -1144,6 +1146,9 @@ def recording_files(request, recording_id):
             **workspace,
             "overview": overview,
             "file_view": file_view,
+            "management": management_links(
+                request.user, [recording.pk], return_url=request.get_full_path()
+            ).get(recording.pk),
             "radio_playback": _playback_context(
                 recording, request.user, radio_only=True
             ),
