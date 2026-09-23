@@ -1975,7 +1975,27 @@ def release_list(request):
             | Q(catalogue_number__icontains=q)
             | Q(label__name__icontains=q)
         )
-    page = Paginator(releases.order_by("title", "id"), 40).get_page(
+    release_type = request.GET.get("format", "")
+    if release_type not in Release.Type.values:
+        release_type = ""
+    if release_type:
+        releases = releases.filter(release_type=release_type)
+    metadata = request.GET.get("metadata", "")
+    if metadata == "missing":
+        releases = releases.filter(
+            Q(label__isnull=True) | Q(catalogue_number="")
+        )
+    elif metadata != "all":
+        metadata = "all"
+    sort = request.GET.get("sort", "title")
+    sort_fields = {
+        "title": ("title", "id"),
+        "year_newest": (F("release_year").desc(nulls_last=True), "title", "id"),
+        "recent": ("-created_at", "id"),
+    }
+    if sort not in sort_fields:
+        sort = "title"
+    page = Paginator(releases.order_by(*sort_fields[sort]), 40).get_page(
         request.GET.get("page")
     )
     return render(
@@ -1985,6 +2005,10 @@ def release_list(request):
             "section": "releases",
             "page": page,
             "q": q,
+            "release_type": release_type,
+            "release_type_choices": Release.Type.choices,
+            "metadata_filter": metadata,
+            "sort": sort,
             "create_form": create_form,
             "writes_enabled": settings.GUI_V2_WRITES_ENABLED,
         },

@@ -876,6 +876,24 @@ class GuiV2WorkspaceTests(TestCase):
         )
         self.assertFalse(created.tracks.exists())
 
+    def test_release_list_keeps_filters_across_pages(self):
+        self._superuser()
+        for number in range(41):
+            Release.objects.create(
+                title=f"Serie {number:02d}",
+                release_type=Release.Type.CASSETTE,
+            )
+        url = reverse("gui_v2:release_list")
+        filters = {"q": "Serie", "format": "cassette", "metadata": "missing"}
+        first = self.client.get(url, filters)
+        self.assertContains(first, "Viser 1–40 av 41")
+        self.assertContains(first, "Neste →")
+        second = self.client.get(url, {**filters, "page": "2"})
+        self.assertContains(second, "Viser 41–41 av 41")
+        self.assertContains(second, "Forrige")
+        self.assertContains(second, "Serie 40")
+        self.assertNotContains(second, "Serie 00")
+
     @override_settings(GUI_V2_WRITES_ENABLED=False)
     def test_release_creation_is_blocked_in_read_only_mode(self):
         self._superuser()

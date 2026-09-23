@@ -2,10 +2,18 @@
 {% block title %}Utgivelser{% endblock %}
 {% block content %}
 <section class="release-index">
-  <header class="list-heading">
-    <div><span class="eyebrow">Katalog</span><h1>Utgivelser</h1><p>Velg en utgivelse for å arbeide med sporlisten.</p></div>
-    <form method="get" class="inline-search"><input type="search" name="q" value="{{ q }}" placeholder="Tittel, label eller katalognummer"><button class="primary">Søk</button></form>
+  <header class="list-heading release-index-heading">
+    <div><span class="eyebrow">Katalog</span><h1>Utgivelser</h1><p>Finn en utgivelse og åpne spor, metadata, filer eller rettigheter.</p></div>
+    <span class="release-index-count">{{ page.paginator.count }} utgivelser{% if q or release_type or metadata_filter == 'missing' %} i utvalget{% endif %}</span>
   </header>
+  <form method="get" class="release-index-filters" role="search">
+    <label class="release-index-search">Søk i utgivelser<input type="search" name="q" value="{{ q }}" placeholder="Tittel, label eller katalognummer" autocomplete="off"></label>
+    <label>Format<select name="format"><option value="">Alle format</option>{% for value, label in release_type_choices %}<option value="{{ value }}" {% if release_type == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <label>Metadata<select name="metadata"><option value="all" {% if metadata_filter == 'all' %}selected{% endif %}>Alle</option><option value="missing" {% if metadata_filter == 'missing' %}selected{% endif %}>Mangler label eller katalognummer</option></select></label>
+    <label>Sorter<select name="sort"><option value="title" {% if sort == 'title' %}selected{% endif %}>Tittel A–Å</option><option value="year_newest" {% if sort == 'year_newest' %}selected{% endif %}>Nyeste utgivelsesår</option><option value="recent" {% if sort == 'recent' %}selected{% endif %}>Sist opprettet</option></select></label>
+    <button class="primary" type="submit">Vis utgivelser</button>
+    {% if q or release_type or metadata_filter == 'missing' or sort != 'title' %}<a class="button" href="{% url 'gui_v2:release_list' %}">Nullstill</a>{% endif %}
+  </form>
   {% if perms.catalogue.add_release %}
   <details class="release-create-panel"{% if create_form.errors %} open{% endif %}>
     <summary>＋ Ny utgivelse</summary>
@@ -18,6 +26,8 @@
     </form>
   </details>
   {% endif %}
-  <div class="release-cards">{% for release in page.object_list %}<a href="{% url 'gui_v2:release_detail' release.pk %}"><span class="cover">▣</span><div><strong>{{ release.title }}</strong><p>{{ release.label|default:"Label ukjent" }} · {{ release.catalogue_number|default:"Katalognummer ukjent" }}</p></div><b>{{ release.track_count }} spor →</b></a>{% empty %}<p class="empty-state">Ingen utgivelser funnet.</p>{% endfor %}</div>
+  <div class="release-list-head" aria-hidden="true"><span>Utgivelse</span><span>Format / år</span><span>Label</span><span>Katalognummer</span><span>Spor</span></div>
+  <div class="release-cards">{% for release in page.object_list %}<a href="{% url 'gui_v2:release_detail' release.pk %}"><span class="cover" aria-hidden="true">▣</span><div class="release-list-title"><strong>{{ release.title }}</strong><small>{% if not release.label or not release.catalogue_number %}Metadata mangler{% else %}Åpne utgivelse{% endif %}</small></div><span class="release-list-format">{{ release.get_release_type_display|default:"Format ikke registrert" }}<small>{% if release.release_year %}{{ release.release_year }}{% elif release.release_date %}{{ release.release_date|date:'Y' }}{% else %}År ikke registrert{% endif %}</small></span><span class="release-list-label">{{ release.label|default:"Label ikke registrert" }}</span><span class="release-list-catalogue">{{ release.catalogue_number|default:"Ikke registrert" }}</span><b>{{ release.track_count }} spor →</b></a>{% empty %}<p class="empty-state">Ingen utgivelser passer filtrene. <a href="{% url 'gui_v2:release_list' %}">Vis alle utgivelser</a></p>{% endfor %}</div>
+  {% if page.paginator.count %}<nav class="release-list-pagination" aria-label="Sider i utgivelser"><span>Viser {{ page.start_index }}–{{ page.end_index }} av {{ page.paginator.count }}</span><div>{% if page.has_previous %}<a class="button" href="?q={{ q|urlencode }}&amp;format={{ release_type|urlencode }}&amp;metadata={{ metadata_filter|urlencode }}&amp;sort={{ sort|urlencode }}&amp;page={{ page.previous_page_number }}">← Forrige</a>{% endif %}<span>Side {{ page.number }} av {{ page.paginator.num_pages }}</span>{% if page.has_next %}<a class="button" href="?q={{ q|urlencode }}&amp;format={{ release_type|urlencode }}&amp;metadata={{ metadata_filter|urlencode }}&amp;sort={{ sort|urlencode }}&amp;page={{ page.next_page_number }}">Neste →</a>{% endif %}</div></nav>{% endif %}
 </section>
 {% endblock %}
