@@ -2,9 +2,10 @@ from django.contrib import admin
 from django.urls import include, path
 from gui_v2.views import home
 from workbench.views import help_page
+from .branding import APP_NAME
 
-admin.site.site_header = "P7 Arkiv og rettigheter"
-admin.site.site_title = "P7 Arkiv og rettigheter"
+admin.site.site_header = APP_NAME
+admin.site.site_title = APP_NAME
 admin.site.site_url = "/"
 
 urlpatterns = [

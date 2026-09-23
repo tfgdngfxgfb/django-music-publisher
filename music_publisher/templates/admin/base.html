@@ -144,7 +144,7 @@
 
     {% if not is_popup %}
         <div>
-            <a href="/"><img src="{% static 'android-chrome-192x192.png' %}" alt="P7" class="logo"></a>
+            {% block application_logo %}<a href="/"><img src="{% static 'android-chrome-192x192.png' %}" alt="P7" class="logo"></a>{% endblock %}
             <!-- Header -->
             {% block header %}
             <div id="header">

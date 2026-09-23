@@ -271,7 +271,7 @@ class CatalogueAdminTests(TransactionTestCase):
     def test_admin_models_and_pages(self):
         admin_index = self.client.get(reverse("admin:index"))
         for text in (
-            "P7 Arkiv og rettigheter",
+            "KRN DMA",
             "Katalog",
             "Innspillinger",
             "Personer og organisasjoner",
@@ -344,7 +344,7 @@ class CatalogueAdminTests(TransactionTestCase):
         self.assertEqual(Recording.objects.count(), 0)
 
     def test_landing_dmp_and_login(self):
-        self.assertContains(self.client.get("/"), "P7 Arkiv og rettigheter")
+        self.assertContains(self.client.get("/"), "KRN DMA")
         help_response = self.client.get("/hjelp/")
         self.assertContains(
             help_response, "Work ≠ Recording ≠ Release ≠ Track ≠ lydfil"

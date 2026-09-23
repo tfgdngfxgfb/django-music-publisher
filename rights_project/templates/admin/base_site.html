@@ -1,9 +1,15 @@
 {% extends "admin/base.html" %}
+{% load static %}
 
-{% block title %}{{ title }} | P7 Arkiv og rettigheter{% endblock %}
+{% block title %}{{ title }} | {{ app_identity.name }}{% endblock %}
+
+{% block extrahead %}{{ block.super }}<meta name="application-name" content="{{ app_identity.name }}"><link rel="icon" type="image/svg+xml" href="{% static 'gui_v2/krn-dma.svg' %}"><style>.krn-app-description{display:block;font-size:13px;line-height:1.5;margin:4px 0 12px;color:var(--body-fg)}.login #header{padding-left:20px}</style>{% endblock %}
+
+{% block application_logo %}{% endblock %}
 
 {% block branding %}
-<div id="site-name"><a href="{% url 'home' %}">P7 Arkiv og rettigheter</a></div>
+<div id="site-name"><a href="{% url 'home' %}" title="{{ app_identity.full_name }}">{{ app_identity.name }}</a></div>
+<span class="krn-app-description">{{ app_identity.organization }}:<br>{{ app_identity.description }}</span>
 {% endblock %}
 
 {% block nav-global %}

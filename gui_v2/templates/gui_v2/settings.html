@@ -2,7 +2,7 @@
 {% block title %}Innstillinger{% endblock %}
 {% block content %}
 <div class="settings-page">
-  <header class="settings-heading"><div><span class="eyebrow">P7 Arkiv og rettigheter</span><h1>Innstillinger</h1><p>Tilpass arbeidsflaten og avspillingen{% if is_settings_admin %}, og administrer programmets felles oppsett{% endif %}.</p></div><span class="settings-scope">{% if is_settings_admin %}Administrator{% else %}Min arbeidsflate{% endif %}</span></header>
+  <header class="settings-heading"><div><span class="eyebrow">{{ app_identity.name }} · {{ app_identity.full_name }}</span><h1>Innstillinger</h1><p>Tilpass arbeidsflaten og avspillingen{% if is_settings_admin %}, og administrer programmets felles oppsett{% endif %}.</p></div><span class="settings-scope">{% if is_settings_admin %}Administrator{% else %}Min arbeidsflate{% endif %}</span></header>
   <div class="settings-layout">
     <nav class="settings-nav" aria-label="Innstillingsområder">
       <a href="?tab=personal" {% if settings_tab == 'personal' %}aria-current="page"{% endif %}><span>◐</span><div>Min arbeidsflate<small>Utseende og avspilling</small></div></a>

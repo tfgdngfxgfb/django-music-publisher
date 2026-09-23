@@ -50,6 +50,9 @@ LANGUAGE_CODE = "nb"
 TEMPLATES[0]["DIRS"] = [
     PROJECT_DIR / "rights_project" / "templates"
 ]  # noqa: F405
+TEMPLATES[0]["OPTIONS"]["context_processors"].append(  # noqa: F405
+    "rights_project.branding.application_identity"
+)
 TEMPLATES[0].setdefault("OPTIONS", {}).setdefault(
     "libraries", {}
 )[  # noqa: F405

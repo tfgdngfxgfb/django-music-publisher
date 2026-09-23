@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="12" fill="#091c28"/>
+  <text x="32" y="29" text-anchor="middle" fill="#f0f7fb" font-family="Arial,sans-serif" font-size="23" font-weight="700">KRN</text>
+  <text x="32" y="50" text-anchor="middle" fill="#18c2df" font-family="Arial,sans-serif" font-size="19" font-weight="700">DMA</text>
+</svg>

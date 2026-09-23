@@ -2,7 +2,9 @@
 <html lang="nb" data-v2-theme="dark">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>{% block title %}GUI v2{% endblock %} · P7 Arkiv og rettigheter</title>
+  <title>{% block title %}GUI v2{% endblock %} · {{ app_identity.name }}</title>
+  <meta name="application-name" content="{{ app_identity.name }}">
+  <link rel="icon" type="image/svg+xml" href="{% static 'gui_v2/krn-dma.svg' %}">
   <script>document.documentElement.dataset.v2Theme=localStorage.getItem("p7-v2-theme")||"dark";</script>
   <link rel="stylesheet" href="{% static 'gui_v2/prototype.css' %}">
   <link rel="stylesheet" href="{% static 'gui_v2/player.css' %}">
@@ -16,7 +18,7 @@
 <body class="{% block body_class %}{% endblock %}" data-p7-shell="gui-v2">
   <a class="skip-link" href="#v2-main">Hopp til innhold</a>
   <header class="app-header">
-    <a class="brand" href="{% url 'home' %}" aria-label="P7 Arkiv og rettigheter, GUI v2"><span>P7</span><strong>Arkiv og rettigheter</strong></a>
+    <a class="brand krn-brand" href="{% url 'home' %}" aria-label="{{ app_identity.name }}, GUI v2" title="{{ app_identity.full_name }}"><span aria-hidden="true">KRN</span><strong>DMA<small>{{ app_identity.description }}</small></strong></a>
     <nav class="main-nav" aria-label="Hovedmeny">
       <a {% if section == 'home' %}aria-current="page"{% endif %} href="{% url 'home' %}">Hjem</a>
       {% if perms.music_library.view_musiclibraryentry %}<a {% if section == 'music_library' %}aria-current="page"{% endif %} href="{% url 'gui_v2:music_library' %}">Musikkarkiv</a>{% endif %}

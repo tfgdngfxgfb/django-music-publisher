@@ -3,7 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>{{ title }} · P7 Arkiv og rettigheter</title>
+  <title>{{ title }} · {{ app_identity.name }}</title>
+  <meta name="application-name" content="{{ app_identity.name }}">
+  <link rel="icon" type="image/svg+xml" href="{% static 'gui_v2/krn-dma.svg' %}">
   <script>document.documentElement.dataset.theme=localStorage.getItem("p7-theme")||"dark";</script>
   <link rel="stylesheet" href="{% static 'workbench/workbench.css' %}">
   <link rel="stylesheet" href="{% static 'workbench/sol-foundation.css' %}">
@@ -29,9 +31,9 @@
   <a class="skip-link" href="#main">Hopp til innhold</a>
   <div class="app-shell">
     <aside class="sidebar" id="app-navigation">
-      <a class="brand" href="{% url 'workbench:home' %}">
-        <span class="brand-mark">P7</span>
-        <span class="brand-copy"><strong>P7 Arkiv</strong><small>og rettigheter</small></span>
+      <a class="brand" href="{% url 'workbench:home' %}" aria-label="{{ app_identity.name }}, GUI v1" title="{{ app_identity.full_name }}">
+        <span class="brand-mark" aria-hidden="true">KRN</span>
+        <span class="brand-copy"><strong>DMA</strong><small>{{ app_identity.description }}</small></span>
       </a>
       <nav class="side-nav" aria-label="Hovedmeny">
         <a href="{% url 'home' %}"><svg><use href="#i-home"></use></svg><span>GUI v2 · hovedflate</span></a>
@@ -64,7 +66,7 @@
           <input id="global-search" name="q" type="search" placeholder="Søk i katalogen" autocomplete="off">
           <span class="key-hint">Ctrl + K</span>
         </form>
-        {% else %}<div class="workspace-context"><span>{{ section_label }}</span><strong>P7 Arkiv og rettigheter</strong></div>{% endif %}
+        {% else %}<div class="workspace-context"><span>{{ section_label }}</span><strong>{{ app_identity.name }}</strong></div>{% endif %}
         <div class="top-actions">
           <button class="theme-button" type="button" id="theme-toggle" aria-label="Bytt lyst eller mørkt tema"><svg><use href="#i-sun"></use></svg><span class="visually-hidden">Bytt tema</span></button>
           <div class="top-user"><span class="user-avatar">{{ request.user.get_username|slice:":1"|upper }}</span><span><strong>{{ request.user.get_full_name|default:request.user.get_username }}</strong><small>{% if request.user.is_superuser %}Administrator{% elif perms.rights.decide_rightsclaim %}Rettighetsansvarlig{% else %}Katalogbruker{% endif %}</small></span></div>
