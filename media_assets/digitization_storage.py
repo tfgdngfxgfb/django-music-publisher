@@ -6,8 +6,11 @@ from pathlib import PurePosixPath
 
 from django.core.exceptions import ValidationError
 
-from .digitization_configuration import picker_defaults
-from .storage import resolve_storage_path
+from .digitization_configuration import (
+    picker_defaults,
+    validate_folder_template,
+)
+from .storage import _logical_path, resolve_storage_path
 
 
 def _component(value):
@@ -27,7 +30,10 @@ def suggested_folder(release, role, root_key):
     base = defaults.base_path if defaults.root_key == root_key else "."
     template = defaults.folder_template
     try:
-        fields = [field for _, field, _, _ in Formatter().parse(template) if field]
+        validate_folder_template(template)
+        fields = [
+            field for _, field, _, _ in Formatter().parse(template) if field
+        ]
         if any(not values[field] for field in fields):
             return {
                 "expected": "",
@@ -35,7 +41,9 @@ def suggested_folder(release, role, root_key):
                 "matched": False,
                 "missing": True,
             }
-        expected = str(PurePosixPath(base) / template.format_map(values))
+        expected = str(
+            _logical_path(base) / _logical_path(template.format_map(values))
+        )
     except (KeyError, ValueError) as exc:
         raise ValidationError(
             "Mappekonvensjonen i systemoppsettet er ugyldig."

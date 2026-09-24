@@ -1,4 +1,6 @@
 (() => {
+  const localStorage = window.P7_V2.storage.local;
+  const sessionStorage = window.P7_V2.storage.session;
   const root = document.documentElement;
   document.addEventListener("click", async event => {
     if (event.target.closest("#v2-theme-toggle")) {

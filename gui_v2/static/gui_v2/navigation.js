@@ -16,6 +16,7 @@
 
   const runPageScripts = async main => {
     for (const script of main.querySelectorAll("script[src]")) {
+      if (!main.isConnected) return;
       if (!eligible(script.src)) continue;
       const replacement = document.createElement("script");
       replacement.src = script.src;
@@ -57,7 +58,9 @@
         location.assign(url.href);
         return;
       }
-      const page = new DOMParser().parseFromString(await response.text(), "text/html");
+      const html = await response.text();
+      if (currentRequest !== requestNumber) return;
+      const page = new DOMParser().parseFromString(html, "text/html");
       const main = page.querySelector("#v2-main");
       const header = page.querySelector(".app-header");
       const strip = page.querySelector(".prototype-strip");
@@ -83,6 +86,7 @@
       window.P7_V2.initPage();
       window.P7_V2.initGrid();
       await runPageScripts(main);
+      if (currentRequest !== requestNumber) return;
       document.dispatchEvent(new Event("p7:page-changed"));
       scrollTo(0, options.popstate ? options.scroll || 0 : 0);
       main.focus({preventScroll: true});

@@ -9,7 +9,11 @@ from django.urls import reverse
 from catalogue.models import Release
 from media_assets.digitization_configuration import picker_defaults
 from media_assets.digitization_storage import suggested_folder
-from media_assets.models import DigitizationBatch, DigitizationConfiguration, FileAsset
+from media_assets.models import (
+    DigitizationBatch,
+    DigitizationConfiguration,
+    FileAsset,
+)
 from parties.models import Party
 from rights.models import RightsConfiguration
 
@@ -57,13 +61,17 @@ class SettingsPageTests(TestCase):
     def test_login_and_admin_boundary(self):
         self.client.logout()
         self.assertEqual(self.client.get(self.url).status_code, 302)
-        reader = get_user_model().objects.create_user("settings-reader", is_staff=True)
+        reader = get_user_model().objects.create_user(
+            "settings-reader", is_staff=True
+        )
         self.client.force_login(reader)
         response = self.client.get(self.url, {"tab": "digitization"})
         self.assertContains(response, "Min arbeidsflate")
         self.assertNotContains(response, str(self.root))
         self.assertNotContains(response, "Lagring og digitalisering")
-        self.assertEqual(self.client.post(self.url, self.payload()).status_code, 403)
+        self.assertEqual(
+            self.client.post(self.url, self.payload()).status_code, 403
+        )
 
     def test_save_defaults_used_by_source_picker_and_folder_hint(self):
         response = self.client.post(self.url, self.payload())
@@ -72,7 +80,9 @@ class SettingsPageTests(TestCase):
         self.assertEqual(config.updated_by, self.admin)
         defaults = picker_defaults(FileAsset.Role.EDITED_WAV_MASTER)
         self.assertEqual(defaults.base_path, "Master")
-        release = Release.objects.create(title="Min sang", catalogue_number="FMC 102")
+        release = Release.objects.create(
+            title="Min sang", catalogue_number="FMC 102"
+        )
         (self.root / "Master" / "FMC 102 - Min sang").mkdir()
         hint = suggested_folder(
             release, FileAsset.Role.EDITED_WAV_MASTER, "music_library"
@@ -91,6 +101,52 @@ class SettingsPageTests(TestCase):
         self.assertTrue(hint["missing"])
         self.assertEqual(hint["path"], "RAW")
 
+    def test_windows_folder_template_falls_back_to_nearest_existing_parent(
+        self,
+    ):
+        self.client.post(
+            self.url,
+            self.payload(master_folder_template=r"{catalogue_number}\{title}"),
+        )
+        release = Release.objects.create(
+            title="Min sang", catalogue_number="FMC 102"
+        )
+        (self.root / "Master" / "FMC 102").mkdir()
+        hint = suggested_folder(
+            release, FileAsset.Role.EDITED_WAV_MASTER, "music_library"
+        )
+        self.assertEqual(hint["path"], "Master/FMC 102")
+        self.assertEqual(hint["expected"], "Master/FMC 102/Min sang")
+        self.assertFalse(hint["matched"])
+
+    def test_invalid_deployment_template_returns_error_without_listing(self):
+        release = Release.objects.create(title="Min sang")
+        batch = DigitizationBatch.objects.create(
+            release=release, title="Digitalisering", created_by=self.admin
+        )
+        for template in (
+            "{title:>1000000000}",
+            "{title.__class__}",
+            "../outside",
+        ):
+            with self.subTest(template=template), self.settings(
+                P7_MASTER_FOLDER_TEMPLATE=template
+            ):
+                response = self.client.get(
+                    reverse(
+                        "gui_v2:digitization_browse_files", args=[batch.pk]
+                    ),
+                    {
+                        "role": "edited_wav_master",
+                        "root_key": "music_library",
+                        "browse": "1",
+                        "suggest": "1",
+                    },
+                )
+                self.assertEqual(response.status_code, 200)
+                self.assertTrue(response.context["browse_error"])
+                self.assertEqual(response.context["storage_entries"], [])
+
     def test_digitization_uses_saved_root_instead_of_deployment_default(self):
         with self.settings(
             P7_STORAGE_ROOTS={"raw_sources": {"server_root": str(self.root)}}
@@ -103,7 +159,9 @@ class SettingsPageTests(TestCase):
             response = self.client.get(
                 reverse("gui_v2:digitization_detail", args=[batch.pk])
             )
-            self.assertEqual(response.context["raw_default_root"], "music_library")
+            self.assertEqual(
+                response.context["raw_default_root"], "music_library"
+            )
             response = self.client.get(
                 reverse("gui_v2:digitization_browse_files", args=[batch.pk]),
                 {
@@ -115,7 +173,8 @@ class SettingsPageTests(TestCase):
             )
             self.assertEqual(response.status_code, 200)
             self.assertEqual(
-                response.context["browse_form"].cleaned_data["relative_path"], "RAW"
+                response.context["browse_form"].cleaned_data["relative_path"],
+                "RAW",
             )
 
     def test_unsafe_paths_unknown_roots_and_templates_are_rejected(self):
@@ -158,17 +217,23 @@ class SettingsPageTests(TestCase):
 
     def test_organization_change_requires_confirmation_and_is_audited(self):
         local = Party.objects.create(name="P7", kind="organization")
-        other = Party.objects.create(name="Annen organisasjon", kind="organization")
+        other = Party.objects.create(
+            name="Annen organisasjon", kind="organization"
+        )
         response = self.client.post(
-            self.url, {"action": "organization", "local_organization": local.pk}
+            self.url,
+            {"action": "organization", "local_organization": local.pk},
         )
         self.assertRedirects(response, self.url + "?tab=organization")
         response = self.client.post(
-            self.url, {"action": "organization", "local_organization": other.pk}
+            self.url,
+            {"action": "organization", "local_organization": other.pk},
         )
         self.assertContains(response, "Bekreft konsekvensen")
         self.assertEqual(response.context["organization_name"], "P7")
-        self.assertEqual(RightsConfiguration.objects.get().local_organization, local)
+        self.assertEqual(
+            RightsConfiguration.objects.get().local_organization, local
+        )
         response = self.client.post(
             self.url,
             {
@@ -178,13 +243,16 @@ class SettingsPageTests(TestCase):
             },
         )
         self.assertRedirects(response, self.url + "?tab=organization")
-        self.assertEqual(RightsConfiguration.objects.get().local_organization, other)
+        self.assertEqual(
+            RightsConfiguration.objects.get().local_organization, other
+        )
         self.assertEqual(LogEntry.objects.count(), 2)
 
     def test_person_cannot_be_selected_as_local_organization(self):
         person = Party.objects.create(name="Person", kind="person")
         response = self.client.post(
-            self.url, {"action": "organization", "local_organization": person.pk}
+            self.url,
+            {"action": "organization", "local_organization": person.pk},
         )
         self.assertTrue(response.context["organization_form"].errors)
         self.assertFalse(RightsConfiguration.objects.exists())

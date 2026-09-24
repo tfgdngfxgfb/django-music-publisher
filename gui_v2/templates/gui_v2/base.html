@@ -5,7 +5,8 @@
   <title>{% block title %}GUI v2{% endblock %} · {{ app_identity.name }}</title>
   <meta name="application-name" content="{{ app_identity.name }}">
   <link rel="icon" type="image/svg+xml" href="{% static 'gui_v2/krn-dma.svg' %}">
-  <script>document.documentElement.dataset.v2Theme=localStorage.getItem("p7-v2-theme")||"dark";</script>
+  <script src="{% static 'gui_v2/browser_storage.js' %}"></script>
+  <script>document.documentElement.dataset.v2Theme=window.P7_V2.storage.local.getItem("p7-v2-theme")==="light"?"light":"dark";</script>
   <link rel="stylesheet" href="{% static 'gui_v2/prototype.css' %}">
   <link rel="stylesheet" href="{% static 'gui_v2/player.css' %}">
   <link rel="stylesheet" href="{% static 'gui_v2/recording-workspaces.css' %}">
@@ -38,7 +39,7 @@
   {% if messages %}<div class="messages" aria-live="polite">{% for message in messages %}<p class="message {{ message.tags }}">{{ message }}</p>{% endfor %}</div>{% endif %}
   <main id="v2-main" tabindex="-1">{% block content %}{% endblock %}</main>
   <footer class="player-footer" data-p7-player-footer>{% include "gui_v2/includes/player.html" with player_class="global-player" %}</footer>
-  <script>window.P7_V2={recordingSearch:"{% url 'gui_v2:recording_search' %}"};</script>
+  <script>window.P7_V2.recordingSearch="{% url 'gui_v2:recording_search' %}";</script>
   <script src="{% static 'gui_v2/prototype.js' %}"></script>
   <script src="{% static 'gui_v2/grid.js' %}"></script>
   <script src="{% static 'gui_v2/navigation.js' %}"></script>

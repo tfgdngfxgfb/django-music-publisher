@@ -1196,14 +1196,22 @@ def recording_detail(request, pk):
         library_entry and getattr(library_entry, "managed_recording", None)
     )
     tab = request.GET.get("fane", "overview")
+    can_view_sources = request.user.has_perms(
+        ("provenance.view_metadataassertion", "provenance.view_sourcerecord")
+    )
+    can_view_files = request.user.has_perms(
+        ("media_assets.view_fileasset", "media_assets.view_filelocation")
+    )
     allowed_tabs = {
         "overview",
         "radio",
         "releases",
         "contributors",
-        "files",
-        "sources",
     }
+    if can_view_files:
+        allowed_tabs.add("files")
+    if can_view_sources:
+        allowed_tabs.add("sources")
     if is_managed and request.user.has_perm("rights.view_rightsclaim"):
         allowed_tabs.add("rights")
     if tab not in allowed_tabs:
@@ -1222,6 +1230,9 @@ def recording_detail(request, pk):
         entity_type=MetadataAssertion.EntityType.RECORDING,
         entity_uuid=recording.pk,
     ).select_related("assertion__source_record__source_system", "changed_by")
+    if not can_view_sources:
+        assertions = assertions.none()
+        changes = changes.none()
     rights_claims = []
     local_organization = None
     ownership_summary = None
@@ -1251,6 +1262,8 @@ def recording_detail(request, pk):
             tab=tab,
             assertions=assertions,
             applied_changes=changes,
+            can_view_sources=can_view_sources,
+            can_view_files=can_view_files,
             ownership_claims=[
                 claim
                 for claim in rights_claims

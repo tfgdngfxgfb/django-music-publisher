@@ -1,4 +1,6 @@
 (() => {
+  const localStorage = window.P7_V2.storage.local;
+  const sessionStorage = window.P7_V2.storage.session;
   let gridController;
   const initGrid = () => {
   gridController?.abort();
@@ -52,7 +54,8 @@
     };
   };
   const persistDraft = () => {
-    if (body.querySelector(".changed-cell")) localStorage.setItem(draftKey, JSON.stringify({state: serialize(), savedAt: new Date().toISOString()}));
+    if (body.querySelector(".changed-cell")) return localStorage.setItem(draftKey, JSON.stringify({state: serialize(), savedAt: new Date().toISOString()}));
+    return true;
   };
   const saveDraft = () => {
     clearTimeout(draftTimer);
@@ -466,11 +469,12 @@
   document.querySelector("[data-discard-draft]")?.addEventListener("click", () => { localStorage.removeItem(draftKey); draftBanner.hidden = true; });
   tableWrap?.addEventListener("scroll", () => sessionStorage.setItem(scrollKey, JSON.stringify([tableWrap.scrollLeft, tableWrap.scrollTop])), {passive: true});
   document.querySelectorAll(".release-layout a[href]").forEach(link => link.addEventListener("click", () => {
-    if (dirty()) persistDraft();
-    form.dataset.internalNavigation = "true";
+    form.dataset.internalNavigation = !dirty() || persistDraft() ? "true" : "";
   }));
   addEventListener("beforeunload", event => { if (dirty() && !form.dataset.submitting && !form.dataset.internalNavigation) { event.preventDefault(); event.returnValue = ""; } }, {signal: gridSignal});
-  document.addEventListener("p7:before-navigation", () => { if (dirty()) persistDraft(); }, {signal: gridSignal});
+  document.addEventListener("p7:before-navigation", event => {
+    if (dirty() && !persistDraft() && !confirm("Nettleseren kan ikke lagre utkastet. Forlate siden og forkaste ulagrede endringer?")) event.preventDefault();
+  }, {signal: gridSignal});
   document.addEventListener("keydown", event => { if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "n") { event.preventDefault(); focusCell(rowCells(addRow())[0]); } }, {signal: gridSignal});
   form.addEventListener("submit", event => {
     if (form.dataset.submitting) { event.preventDefault(); return; }

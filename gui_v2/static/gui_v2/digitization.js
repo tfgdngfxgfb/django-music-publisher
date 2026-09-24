@@ -1,6 +1,12 @@
 (() => {
   const workspace = document.querySelector('[data-digitization]');
-  if (!workspace) return;
+  if (!workspace || workspace.dataset.digitizationInitialized) return;
+  workspace.dataset.digitizationInitialized = 'true';
+  window.P7_V2 ||= {};
+  window.P7_V2.digitizationController?.abort();
+  const controller = new AbortController();
+  window.P7_V2.digitizationController = controller;
+  const workspacePath = location.pathname;
   const steps = ['metadata', 'raw', 'masters', 'links', 'radio', 'history'];
   let activeStep = steps.includes(workspace.dataset.step) ? workspace.dataset.step : 'metadata';
   const showStep = (step, updateUrl = true) => {
@@ -37,7 +43,12 @@
   workspace.querySelectorAll('[data-step-link]').forEach(link => link.addEventListener('click', event => {event.preventDefault(); showStep(link.dataset.stepLink);}));
   workspace.querySelector('[data-step-next]').addEventListener('click', () => showStep(steps[steps.indexOf(activeStep) + 1]));
   workspace.querySelector('[data-step-previous]').addEventListener('click', () => showStep(steps[steps.indexOf(activeStep) - 1]));
-  window.addEventListener('popstate', () => showStep(new URL(location.href).searchParams.get('step') || 'metadata', false));
+  window.addEventListener('popstate', () => {
+    if (workspace.isConnected && location.pathname === workspacePath) showStep(new URL(location.href).searchParams.get('step') || 'metadata', false);
+  }, {signal: controller.signal});
+  document.addEventListener('p7:page-changed', () => {
+    if (!workspace.isConnected) controller.abort();
+  }, {signal: controller.signal});
   const historySearch = workspace.querySelector('[data-history-search]');
   if (historySearch) {
     const historyRows = [...workspace.querySelectorAll('[data-history-row]')];
@@ -116,6 +127,7 @@
   rawRows.forEach(row => {
     row.addEventListener('click', () => selectRaw(row));
     row.addEventListener('keydown', event => {
+      if (event.target.closest('input,select,textarea,button,a,summary')) return;
       if (event.key === 'Enter' || event.key === ' ') {event.preventDefault(); selectRaw(row); return;}
       if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
       event.preventDefault();
@@ -132,6 +144,7 @@
     };
     item.addEventListener('click', selectMaster);
     item.addEventListener('keydown', event => {
+      if (event.target.closest('input,select,textarea,button,a,summary')) return;
       if (event.key === 'Enter' || event.key === ' ') {event.preventDefault(); selectMaster();}
     });
   });

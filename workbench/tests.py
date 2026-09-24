@@ -403,6 +403,135 @@ class AuthenticationAndPermissionTests(WorkbenchTestCase):
         )
 
 
+class RecordingNestedPermissionTests(WorkbenchTestCase):
+    def setUp(self):
+        self.recording = Recording.objects.create(title="Lesbar innspilling")
+        self.url = reverse("workbench:recording", args=[self.recording.pk])
+
+    def test_source_history_requires_both_assertion_and_source_access(self):
+        self.assertion(
+            self.recording, field_name="title", value="Skjermet kildeverdi"
+        )
+        for permissions in (
+            (),
+            ("provenance.view_metadataassertion",),
+            ("provenance.view_sourcerecord",),
+            (
+                "provenance.view_metadataassertion",
+                "provenance.view_sourcerecord",
+            ),
+        ):
+            with self.subTest(permissions=permissions):
+                reader = self.create_user(
+                    username="reader-"
+                    + str(len(permissions))
+                    + "-"
+                    + str(permissions),
+                    permissions=("catalogue.view_recording", *permissions),
+                )
+                self.login(reader)
+                response = self.client.get(self.url, {"fane": "sources"})
+                self.assertEqual(response.status_code, 200)
+                if len(permissions) == 2:
+                    self.assertContains(response, "Skjermet kildeverdi")
+                    self.assertContains(response, "Coverets bakside")
+                else:
+                    self.assertNotContains(response, "Skjermet kildeverdi")
+                    self.assertNotContains(response, "Coverets bakside")
+                    self.assertNotContains(response, "fane=sources")
+                    self.assertFalse(response.context["assertions"].exists())
+
+    def test_file_paths_require_asset_and_location_access(self):
+        asset = FileAsset.objects.create(
+            recording=self.recording,
+            filename="skjermet.wav",
+            role="edited_wav_master",
+        )
+        FileLocation.objects.create(
+            asset=asset,
+            storage_type="nas",
+            relative_path="internt/skjermet.wav",
+        )
+        for index, permissions in enumerate(
+            (
+                (),
+                ("media_assets.view_fileasset",),
+                ("media_assets.view_filelocation",),
+                (
+                    "media_assets.view_fileasset",
+                    "media_assets.view_filelocation",
+                ),
+            )
+        ):
+            with self.subTest(permissions=permissions):
+                self.login(
+                    self.create_user(
+                        username=f"files-{index}",
+                        permissions=("catalogue.view_recording", *permissions),
+                    )
+                )
+                response = self.client.get(self.url, {"fane": "files"})
+                if len(permissions) == 2:
+                    self.assertContains(response, "internt/skjermet.wav")
+                else:
+                    self.assertNotContains(response, "skjermet.wav")
+                    self.assertNotContains(response, "fane=files")
+
+    def test_rights_summary_keeps_claims_visible_but_hides_restricted_details(
+        self,
+    ):
+        local = self.configure_local_organization()
+        create_managed_recording(
+            recording=self.recording,
+            relationship_type=RightsClaim.RightType.ADMINISTRATION,
+        )
+        source = self.assertion(
+            self.recording, field_name="title", value="Kildeverdi"
+        ).source_record
+        source.source_system.name = "Skjermet rettighetskilde"
+        source.source_system.save()
+        agreement = Agreement.objects.create(
+            title="Skjermet avtale", agreement_type=Agreement.Type.LICENSE
+        )
+        RightsClaim.objects.create(
+            recording=self.recording,
+            rights_holder=local,
+            right_type=RightsClaim.RightType.OWNERSHIP,
+            status=VerificationStatus.CONFIRMED,
+            share=100,
+            agreement=agreement,
+            source_record=source,
+        )
+        for index, permission in enumerate(
+            (None, "rights.view_agreement", "provenance.view_sourcerecord")
+        ):
+            with self.subTest(permission=permission):
+                self.login(
+                    self.create_user(
+                        username=f"rights-reader-{index}",
+                        permissions=(
+                            "catalogue.view_recording",
+                            "rights.view_rightsclaim",
+                            *((permission,) if permission else ()),
+                        ),
+                    )
+                )
+                response = self.client.get(self.url, {"fane": "rights"})
+                self.assertContains(response, local.name)
+                self.assertContains(response, "Heleid")
+                for value, required in (
+                    (agreement.title, "rights.view_agreement"),
+                    (
+                        source.source_system.name,
+                        "provenance.view_sourcerecord",
+                    ),
+                ):
+                    if permission == required:
+                        self.assertContains(response, value)
+                    else:
+                        self.assertNotContains(response, value)
+
+
 class ManagedRightsOverviewTests(WorkbenchTestCase):
     def setUp(self):
         self.local = Party.objects.create(

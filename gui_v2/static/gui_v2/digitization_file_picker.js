@@ -1,9 +1,15 @@
 (() => {
+  window.P7_V2 ||= {};
+  if (window.P7_V2.initFilePickers) {
+    window.P7_V2.initFilePickers();
+    return;
+  }
   const selections = new Map();
+  const pending = new Set();
   const folderKey = (section) => {
     if (section.dataset.folderKey) return section.dataset.folderKey;
     const form = section.querySelector("form[method='get']");
-    return [section.id, form.elements.root_key.value, form.elements.relative_path.value].join(":");
+    return JSON.stringify([section.dataset.browseUrl, section.id, form.elements.root_key.value, form.elements.relative_path.value]);
   };
   const syncSelection = (section) => {
     const key = folderKey(section);
@@ -15,6 +21,14 @@
       else selected.delete(input.value);
     });
     selections.set(key, [...selected]);
+    const choices = [...section.querySelectorAll('input[type=checkbox][name=filenames]:not(:disabled)')];
+    const selectAll = section.querySelector('[data-picker-select-all]');
+    if (selectAll) {
+      const checked = choices.filter(input => input.checked).length;
+      selectAll.checked = choices.length > 0 && checked === choices.length;
+      selectAll.indeterminate = checked > 0 && checked < choices.length;
+      selectAll.disabled = choices.length === 0;
+    }
     const form = section.querySelector('form[method=post]');
     if (!form) return;
     form.querySelectorAll('[data-picker-kept]').forEach(input => input.remove());
@@ -29,10 +43,13 @@
     if (register) register.disabled = selected.size === 0;
   };
   async function browse(section, params) {
+    clearTimeout(section.searchTimer);
+    if (!section.isConnected) return;
     syncSelection(section);
     section.browseController?.abort();
     const controller = new AbortController();
     section.browseController = controller;
+    pending.add(section);
     const url = new URL(section.dataset.browseUrl, location.origin);
     url.search = params.toString();
     section.setAttribute("aria-busy", "true");
@@ -43,7 +60,9 @@
         signal: controller.signal,
       });
       if (!response.ok) throw new Error("Mappen kunne ikke åpnes.");
-      const doc = new DOMParser().parseFromString(await response.text(), "text/html");
+      const html = await response.text();
+      if (controller.signal.aborted || !section.isConnected) return;
+      const doc = new DOMParser().parseFromString(html, "text/html");
       const replacement = doc.querySelector("[data-file-picker]");
       if (!replacement || replacement.id !== section.id) {
         throw new Error("Filvisningen kunne ikke oppdateres.");
@@ -60,7 +79,7 @@
         search?.setSelectionRange(search.value.length, search.value.length);
       }
     } catch (error) {
-      if (error.name === "AbortError") return;
+      if (error.name === "AbortError" || controller.signal.aborted || !section.isConnected) return;
       let notice = section.querySelector("[data-picker-error]");
       if (!notice) {
         notice = document.createElement("p");
@@ -72,6 +91,7 @@
       notice.textContent = error.message;
     } finally {
       if (section.browseController === controller) {
+        pending.delete(section);
         section.removeAttribute("aria-busy");
       }
     }
@@ -84,7 +104,7 @@
     const params = new URLSearchParams(new FormData(form));
     if (event.submitter?.name) params.set(event.submitter.name, event.submitter.value);
     browse(form.closest("[data-file-picker]"), params);
-  });
+  }, {capture: true});
 
   document.addEventListener("input", (event) => {
     if (!event.target.matches("[data-file-picker] [data-picker-search]")) return;
@@ -94,15 +114,17 @@
     section.browseController?.abort();
     const params = new URLSearchParams(new FormData(form));
     section.searchTimer = setTimeout(() => browse(section, params), 250);
+    pending.add(section);
   });
 
   document.addEventListener("click", (event) => {
+    if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     const link = event.target.closest("[data-file-picker] [data-picker-folder]");
     if (!link) return;
     event.preventDefault();
     const section = link.closest("[data-file-picker]");
     browse(section, new URL(link.href).searchParams);
-  });
+  }, {capture: true});
   document.addEventListener("change", (event) => {
     const section = event.target.closest("[data-file-picker]");
     if (!section) return;
@@ -126,6 +148,22 @@
     browse(section, params);
   });
   document.addEventListener("digitization:step", loadVisible);
-  loadVisible();
-  document.querySelectorAll('[data-file-picker]:not([data-picker-auto="true"])').forEach(syncSelection);
+  const init = () => {
+    for (const section of pending) {
+      if (section.isConnected) continue;
+      clearTimeout(section.searchTimer);
+      section.browseController?.abort();
+      pending.delete(section);
+    }
+    // Keep selection only in the current workspace, never in another batch.
+    const urls = new Set([...document.querySelectorAll('[data-file-picker]')].map(section => section.dataset.browseUrl));
+    for (const key of selections.keys()) {
+      if (!urls.has(JSON.parse(key)[0])) selections.delete(key);
+    }
+    loadVisible();
+    document.querySelectorAll('[data-file-picker]:not([data-picker-auto="true"])').forEach(syncSelection);
+  };
+  window.P7_V2.initFilePickers = init;
+  document.addEventListener('p7:page-changed', init);
+  init();
 })();

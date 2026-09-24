@@ -11,7 +11,8 @@
   theme.value = document.documentElement.dataset.v2Theme || 'dark';
   try {
     const saved = localStorage.getItem('p7-v2-player-volume');
-    volume.value = saved === null ? 100 : Math.max(0, Math.min(100, Number(saved) * 100));
+    const numeric = saved === null ? 1 : Number(saved);
+    volume.value = Number.isFinite(numeric) && numeric >= 0 && numeric <= 1 ? numeric * 100 : 100;
     autoNext.checked = localStorage.getItem(autoNextKey) !== 'false';
   } catch { /* Defaults remain usable without browser storage. */ }
   const updateVolume = () => { output.value = `${volume.value} %`; };
