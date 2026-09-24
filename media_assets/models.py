@@ -13,7 +13,9 @@ from .digitization_configuration import validate_folder_template
 class DigitizationConfiguration(models.Model):
     """Picker defaults only; FileLocation roots and paths remain unchanged."""
 
-    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+    id = models.PositiveSmallIntegerField(
+        primary_key=True, default=1, editable=False
+    )
     raw_root_key = models.CharField(max_length=50)
     raw_base_path = models.CharField(max_length=1000, default=".")
     raw_folder_template = models.CharField(

@@ -33,7 +33,11 @@ def management_links(user, recording_ids, *, return_url):
                 reverse("gui_v2:managed_music")
                 + "?"
                 + urlencode(
-                    {"q": recording_id, "selected": managed_id, "status": "all"}
+                    {
+                        "q": recording_id,
+                        "selected": managed_id,
+                        "status": "all",
+                    }
                 )
             )
         elif can_register:
@@ -47,6 +51,8 @@ def management_links(user, recording_ids, *, return_url):
         result[recording_id] = {
             "registered": bool(managed_id),
             "url": url,
-            "label": "Se forvaltning" if managed_id else "Registrer forvaltning",
+            "label": (
+                "Se forvaltning" if managed_id else "Registrer forvaltning"
+            ),
         }
     return result

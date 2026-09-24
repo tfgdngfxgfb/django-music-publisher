@@ -448,7 +448,9 @@ def _validate(batch, operation, payload):
                 raise ValidationError(
                     "Bare redigerte mastere kan frakobles råkilde."
                 )
-            relation = asset.digitization_sources.filter(is_active=True).first()
+            relation = asset.digitization_sources.filter(
+                is_active=True
+            ).first()
             if not relation:
                 raise ValidationError(
                     f"{asset.filename} har ingen aktiv råkobling."
@@ -467,7 +469,9 @@ def _validate(batch, operation, payload):
                 recording_id=asset.recording_id
             ).first()
             if not selection or selection.selected_master_id != asset.pk:
-                raise ValidationError(f"{asset.filename} er ikke valgt master.")
+                raise ValidationError(
+                    f"{asset.filename} er ikke valgt master."
+                )
             changes.append(
                 f"Fjern mastervalget for {asset.recording.title}. "
                 "Masterfilen og historikken beholdes."
@@ -706,11 +710,15 @@ def apply_plan(*, plan, user):
             _apply_clear_master_selection(batch, plan.payload, user)
         elif plan.operation == "unlink_recording":
             _apply_unlink_recording(batch, plan.payload, user)
-        if plan.operation in {
-            "unlink_raw",
-            "clear_master_selection",
-            "unlink_recording",
-        } and batch.status == DigitizationBatch.Status.COMPLETE:
+        if (
+            plan.operation
+            in {
+                "unlink_raw",
+                "clear_master_selection",
+                "unlink_recording",
+            }
+            and batch.status == DigitizationBatch.Status.COMPLETE
+        ):
             batch.status = DigitizationBatch.Status.OPEN
         batch.save()  # Invalidate every older preview from this batch.
         plan.applied_at = timezone.now()
@@ -761,9 +769,11 @@ def _apply_unlink_recording(batch, payload, user):
             MediaAssetEvent.EventType.RECORDING_UNLINKED,
             details={
                 "recording": str(asset.recording_id),
-                "track": str(asset.release_track_id)
-                if asset.release_track_id
-                else None,
+                "track": (
+                    str(asset.release_track_id)
+                    if asset.release_track_id
+                    else None
+                ),
                 "note": payload["note"].strip(),
             },
         )

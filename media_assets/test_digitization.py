@@ -491,7 +491,9 @@ class DigitizationWorkflowTests(TestCase):
             "Tilknyttet – ikke valgt",
         )
 
-    def test_corrections_unlink_without_deleting_history_and_reopen_batch(self):
+    def test_corrections_unlink_without_deleting_history_and_reopen_batch(
+        self,
+    ):
         raws, masters = self.prepare()
         track = ReleaseTrack.objects.create(
             release=self.release,
@@ -516,9 +518,7 @@ class DigitizationWorkflowTests(TestCase):
                 "note": "Feil side ble valgt",
             },
         )
-        relation = DigitizationDerivation.objects.get(
-            derived_asset=masters[0]
-        )
+        relation = DigitizationDerivation.objects.get(derived_asset=masters[0])
         self.assertFalse(relation.is_active)
         self.assertEqual(relation.source_asset, raws[0])
         self.batch.refresh_from_db()
@@ -547,7 +547,9 @@ class DigitizationWorkflowTests(TestCase):
         self.assertIsNone(masters[0].recording_id)
         self.assertIsNone(masters[0].release_track_id)
         self.assertEqual(masters[0].release_id, self.release.pk)
-        self.assertTrue(Recording.objects.filter(pk=track.recording_id).exists())
+        self.assertTrue(
+            Recording.objects.filter(pk=track.recording_id).exists()
+        )
         self.assertTrue(ReleaseTrack.objects.filter(pk=track.pk).exists())
         self.assertTrue(
             {
@@ -1444,13 +1446,17 @@ class DigitizationWorkflowTests(TestCase):
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(b"existing")
             self.client.force_login(self.user)
-            url = reverse("gui_v2:recording_generation_preview", args=[recording.pk])
+            url = reverse(
+                "gui_v2:recording_generation_preview", args=[recording.pk]
+            )
             response = self.client.get(url)
             self.assertContains(response, "Målfilen finnes allerede")
             self.assertNotContains(response, "Lagre plan")
             alternate = response.context["alternate_target"]
             self.assertNotEqual(alternate, preview["target_relative_path"])
-            response = self.client.get(url, {"target_relative_path": alternate})
+            response = self.client.get(
+                url, {"target_relative_path": alternate}
+            )
             self.assertContains(response, "Lagre plan")
             self.assertEqual(target.read_bytes(), b"existing")
             self.assertFalse(RadioFlacGeneration.objects.exists())

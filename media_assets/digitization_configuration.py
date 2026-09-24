@@ -37,7 +37,9 @@ def validate_folder_template(value):
             ):
                 raise ValueError
         sample = value.format_map(
-            dict.fromkeys(("label", "series", "catalogue_number", "title"), "Eksempel")
+            dict.fromkeys(
+                ("label", "series", "catalogue_number", "title"), "Eksempel"
+            )
         )
         _logical_path(sample)
         if any(ord(char) < 32 for char in value):
@@ -75,8 +77,16 @@ def picker_defaults(role, configuration=None):
             if configuration is not None
             else getattr(
                 settings,
-                "P7_RAW_FOLDER_TEMPLATE" if raw else "P7_MASTER_FOLDER_TEMPLATE",
-                "{label}/{series}" if raw else "{label}/{catalogue_number} - {title}",
+                (
+                    "P7_RAW_FOLDER_TEMPLATE"
+                    if raw
+                    else "P7_MASTER_FOLDER_TEMPLATE"
+                ),
+                (
+                    "{label}/{series}"
+                    if raw
+                    else "{label}/{catalogue_number} - {title}"
+                ),
             )
         ),
     )
@@ -87,5 +97,7 @@ def validate_source_folder(root_key, path):
         raise ValidationError("Velg et konfigurert kildeområde.")
     resolved = resolve_storage_path(path, root_key=root_key, require_root=True)
     if not resolved.server_path.is_dir():
-        raise ValidationError("Startmappen finnes ikke i det valgte lagringsområdet.")
+        raise ValidationError(
+            "Startmappen finnes ikke i det valgte lagringsområdet."
+        )
     return str(resolved.logical_path)

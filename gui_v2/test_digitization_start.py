@@ -5,7 +5,12 @@ from django.contrib.auth.models import Permission
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from catalogue.models import Recording, RecordingContribution, Release, ReleaseTrack
+from catalogue.models import (
+    Recording,
+    RecordingContribution,
+    Release,
+    ReleaseTrack,
+)
 from media_assets.models import DigitizationBatch
 
 
@@ -56,10 +61,13 @@ class DigitizationStartTests(TestCase):
         self.assertContains(response, "K. Hansen")
         self.assertContains(response, "Neste →")
         filtered = self.client.get(
-            self.url, {"q": "Hansen", "format": Release.Type.CASSETTE, "year": "1980"}
+            self.url,
+            {"q": "Hansen", "format": Release.Type.CASSETTE, "year": "1980"},
         )
         self.assertEqual(filtered.context["page"].paginator.count, 1)
-        self.assertEqual(filtered.context["page"].object_list[0].pk, releases[0].pk)
+        self.assertEqual(
+            filtered.context["page"].object_list[0].pk, releases[0].pk
+        )
 
     def test_new_release_requires_type_and_barcode_permission(self):
         payload = {"mode": "new", "release-title": "Ny utgivelse"}
@@ -68,7 +76,10 @@ class DigitizationStartTests(TestCase):
         self.assertContains(response, "Kontroller feltene")
         self.assertFalse(Release.objects.filter(title="Ny utgivelse").exists())
         payload.update(
-            {"release-release_type": Release.Type.CD, "release-barcode": "12345670"}
+            {
+                "release-release_type": Release.Type.CD,
+                "release-barcode": "12345670",
+            }
         )
         self.assertEqual(self.client.post(self.url, payload).status_code, 403)
         self.assertFalse(Release.objects.filter(title="Ny utgivelse").exists())
@@ -76,5 +87,7 @@ class DigitizationStartTests(TestCase):
         response = self.client.post(self.url, payload)
         self.assertEqual(response.status_code, 302)
         self.assertTrue(
-            DigitizationBatch.objects.filter(release__title="Ny utgivelse").exists()
+            DigitizationBatch.objects.filter(
+                release__title="Ny utgivelse"
+            ).exists()
         )

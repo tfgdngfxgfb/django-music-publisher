@@ -1147,7 +1147,9 @@ def recording_files(request, recording_id):
             "overview": overview,
             "file_view": file_view,
             "management": management_links(
-                request.user, [recording.pk], return_url=request.get_full_path()
+                request.user,
+                [recording.pk],
+                return_url=request.get_full_path(),
             ).get(recording.pk),
             "radio_playback": _playback_context(
                 recording, request.user, radio_only=True
@@ -1516,7 +1518,8 @@ def recording_generation_preview(request, recording_id):
         try:
             preview = build_generation_preview(
                 recording=recording,
-                target_relative_path=request.GET.get("target_relative_path") or None,
+                target_relative_path=request.GET.get("target_relative_path")
+                or None,
                 allow_existing_target=True,
             )
         except (ImproperlyConfigured, OSError, ValidationError) as error:
@@ -1997,7 +2000,11 @@ def release_list(request):
     sort = request.GET.get("sort", "title")
     sort_fields = {
         "title": ("title", "id"),
-        "year_newest": (F("release_year").desc(nulls_last=True), "title", "id"),
+        "year_newest": (
+            F("release_year").desc(nulls_last=True),
+            "title",
+            "id",
+        ),
         "recent": ("-created_at", "id"),
     }
     if sort not in sort_fields:

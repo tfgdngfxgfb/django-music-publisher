@@ -20,11 +20,17 @@ class Migration(migrations.Migration):
                 (
                     "id",
                     models.PositiveSmallIntegerField(
-                        default=1, editable=False, primary_key=True, serialize=False
+                        default=1,
+                        editable=False,
+                        primary_key=True,
+                        serialize=False,
                     ),
                 ),
                 ("raw_root_key", models.CharField(max_length=50)),
-                ("raw_base_path", models.CharField(default=".", max_length=1000)),
+                (
+                    "raw_base_path",
+                    models.CharField(default=".", max_length=1000),
+                ),
                 (
                     "raw_folder_template",
                     models.CharField(
@@ -36,7 +42,10 @@ class Migration(migrations.Migration):
                     ),
                 ),
                 ("master_root_key", models.CharField(max_length=50)),
-                ("master_base_path", models.CharField(default=".", max_length=1000)),
+                (
+                    "master_base_path",
+                    models.CharField(default=".", max_length=1000),
+                ),
                 (
                     "master_folder_template",
                     models.CharField(

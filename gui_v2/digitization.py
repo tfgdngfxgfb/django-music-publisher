@@ -23,7 +23,12 @@ from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 from urllib.parse import quote
 
-from catalogue.models import Label, RecordingContribution, Release, ReleaseTrack
+from catalogue.models import (
+    Label,
+    RecordingContribution,
+    Release,
+    ReleaseTrack,
+)
 from catalogue.metadata_providers import provider_availability
 from managed_music.models import ManagedRelease
 from media_assets.digitization import (
@@ -56,7 +61,10 @@ from media_assets.pipeline_status import (
     radio_work_state,
 )
 from media_assets.digitization_matching import suggest_master_links
-from media_assets.digitization_configuration import picker_defaults, source_root_choices
+from media_assets.digitization_configuration import (
+    picker_defaults,
+    source_root_choices,
+)
 from media_assets.digitization_storage import (
     suggested_folder,
     folder_breadcrumbs,
@@ -64,7 +72,10 @@ from media_assets.digitization_storage import (
 from .forms import MasterRegistrationForm, ReleaseMetadataForm
 from .home_state import remember_object
 from .recording_files import _location_data, _technical, _size
-from .recording_overview import release_cover_assets_queryset, select_release_cover
+from .recording_overview import (
+    release_cover_assets_queryset,
+    select_release_cover,
+)
 from .management_links import management_links
 
 logger = logging.getLogger(__name__)
@@ -620,7 +631,9 @@ def start(request):
     if release_type not in Release.Type.values:
         release_type = ""
     year = request.GET.get("year", "").strip()
-    if not (year.isascii() and year.isdigit() and 1800 <= int(year or 0) <= 2200):
+    if not (
+        year.isascii() and year.isdigit() and 1800 <= int(year or 0) <= 2200
+    ):
         year = ""
     releases = Release.objects.select_related("label").order_by("title", "id")
     if query:
@@ -662,7 +675,9 @@ def start(request):
                 raise PermissionDenied
             if (
                 request.POST.get("release-barcode") or ""
-            ).strip() and not request.user.has_perm("catalogue.add_externalidentifier"):
+            ).strip() and not request.user.has_perm(
+                "catalogue.add_externalidentifier"
+            ):
                 raise PermissionDenied
             if not release_form.is_valid():
                 error = "Kontroller feltene for den nye utgivelsen."
@@ -694,7 +709,9 @@ def start(request):
                 recording__release_tracks__release_id__in=release_ids,
                 role=RecordingContribution.Role.PRIMARY,
             )
-            .order_by("recording__release_tracks__release_id", "display_order", "id")
+            .order_by(
+                "recording__release_tracks__release_id", "display_order", "id"
+            )
             .values_list(
                 "recording__release_tracks__release_id",
                 "credited_as",
@@ -1025,8 +1042,12 @@ def browse_files(request, batch_id):
             "batch": batch,
             "picker_id": "raw-picker" if raw else "master-picker",
             "picker_role": role,
-            "picker_heading": ("Finn RAW-filer" if raw else "Finn redigerte mastere"),
-            "picker_step": ("Rå digitalisering" if raw else "Redigerte mastere"),
+            "picker_heading": (
+                "Finn RAW-filer" if raw else "Finn redigerte mastere"
+            ),
+            "picker_step": (
+                "Rå digitalisering" if raw else "Redigerte mastere"
+            ),
             "picker_description": (
                 "Velg filer i RAW-området. Filene leses og registreres her; de flyttes eller endres ikke."
                 if raw
@@ -1234,7 +1255,8 @@ def detail(request, batch_id):
         step = default_step
     # The step is also submitted by preview/apply; retain it after onboarding.
     management_return = (
-        reverse("gui_v2:digitization_detail", args=[batch.pk]) + f"?step={step}"
+        reverse("gui_v2:digitization_detail", args=[batch.pk])
+        + f"?step={step}"
     )
     links = management_links(
         request.user,
@@ -1267,7 +1289,9 @@ def detail(request, batch_id):
             "active_role": active_role,
             "storage_browsed": bool(request.GET.get("browse")),
             "storage_entries": storage_entries,
-            "storage_file_count": sum(not item["folder"] for item in storage_entries),
+            "storage_file_count": sum(
+                not item["folder"] for item in storage_entries
+            ),
             "browse_error": browse_error,
             "plan": plan,
             "error": error,

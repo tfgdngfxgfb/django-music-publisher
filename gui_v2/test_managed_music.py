@@ -85,7 +85,9 @@ class ManagedMusicTests(TestCase):
     def rows(self, **filters):
         return list(filtered_rows(filters, can_view_rights=True))
 
-    def test_digitization_onboarding_returns_to_step_four_with_provenance(self):
+    def test_digitization_onboarding_returns_to_step_four_with_provenance(
+        self,
+    ):
         source = self.catalogue_source("Digitaliseringens opprinnelse")
         release = Release.objects.create(title="Ny digitalisering")
         track = ReleaseTrack.objects.create(
@@ -102,7 +104,8 @@ class ManagedMusicTests(TestCase):
         )
         DigitizationFile.objects.create(batch=batch, asset=master)
         return_url = (
-            reverse("gui_v2:digitization_detail", args=[batch.pk]) + "?step=links"
+            reverse("gui_v2:digitization_detail", args=[batch.pk])
+            + "?step=links"
         )
         response = self.client.get(return_url)
         row = response.context["workspace"]["masters"][0]
@@ -110,7 +113,9 @@ class ManagedMusicTests(TestCase):
         self.assertContains(response, "Registrer forvaltning")
         selected = self.client.get(row["management"]["url"])
         self.assertEqual(selected.context["chosen"], self.recording)
-        self.assertEqual(selected.context["form"]["ownership_share"].value(), 100)
+        self.assertEqual(
+            selected.context["form"]["ownership_share"].value(), 100
+        )
         self.assertEqual(selected.context["form"].default_source, source)
         self.assertFalse(ManagedRecording.objects.exists())
         files = self.client.get(
@@ -135,7 +140,9 @@ class ManagedMusicTests(TestCase):
         self.assertTrue(row["management"]["registered"])
         self.assertEqual(row["management"]["label"], "Se forvaltning")
 
-    def test_management_entry_points_respect_permissions_and_write_switch(self):
+    def test_management_entry_points_respect_permissions_and_write_switch(
+        self,
+    ):
         reader = get_user_model().objects.create_user("management-link-reader")
         self.assertEqual(
             management_links(reader, [self.recording.pk], return_url="/"), {}
@@ -151,9 +158,9 @@ class ManagedMusicTests(TestCase):
         ]
         self.assertEqual(link["url"], "")
         with self.settings(GUI_V2_WRITES_ENABLED=False):
-            link = management_links(self.user, [self.recording.pk], return_url="/")[
-                self.recording.pk
-            ]
+            link = management_links(
+                self.user, [self.recording.pk], return_url="/"
+            )[self.recording.pk]
             self.assertEqual(link["url"], "")
         self.member()
         link = management_links(reader, [self.recording.pk], return_url="/")[
@@ -164,7 +171,8 @@ class ManagedMusicTests(TestCase):
 
     def test_onboarding_rejects_external_return_destination(self):
         response = self.client.post(
-            self.url("onboard"), self.payload(**{"return": "//example.com/outside"})
+            self.url("onboard"),
+            self.payload(**{"return": "//example.com/outside"}),
         )
         self.assertTrue(response.url.startswith(self.url() + "?"))
 

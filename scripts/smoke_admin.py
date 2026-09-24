@@ -137,18 +137,29 @@ def main():
                 )
                 require(
                     urllib.parse.urlparse(url).path == "/"
-                    and "<h1>Start</h1>" in html
+                    and 'data-p7-shell="gui-v2"' in html
+                    and 'class="home-workspace"' in html
+                    and "KRN DMA" in html
                     and all(
                         label in html
                         for label in (
                             "Musikkarkiv",
                             "Forvaltet musikk",
                             "Utgivelser",
+                            "Digitalisering",
+                            "Radio-FLAC",
                             "Kontroll",
-                            "Hjelp",
+                            "Innstillinger",
+                            "GUI v1 · eldre arbeidsflate",
                         )
                     ),
-                    "Innlogging returnerte ikke til den integrerte startsiden",
+                    "Innlogging returnerte ikke til GUI v2-startsiden",
+                )
+                legacy_html, legacy_url = request("/arbeid/")
+                require(
+                    urllib.parse.urlparse(legacy_url).path == "/arbeid/"
+                    and "<h1>Start</h1>" in legacy_html,
+                    "Den eldre arbeidsflaten er ikke tilgjengelig",
                 )
                 help_html, _ = request("/hjelp/")
                 require(
@@ -282,8 +293,9 @@ def main():
                                 "migrate",
                                 "system check",
                                 "start redirects to login with next",
-                                "CSRF login returns to integrated home",
-                                "permission-aware integrated navigation",
+                                "CSRF login returns to primary GUI v2 home",
+                                "GUI v2 navigation and KRN DMA identity",
+                                "secondary GUI v1 remains available",
                                 "workbench library and release lists",
                                 "admin",
                                 "title-only save",

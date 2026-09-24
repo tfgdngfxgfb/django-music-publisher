@@ -64,10 +64,14 @@ class DigitizationSettingsForm(forms.ModelForm):
     def clean(self):
         data = super().clean()
         for prefix in ("raw", "master"):
-            key, path = data.get(f"{prefix}_root_key"), data.get(f"{prefix}_base_path")
+            key, path = data.get(f"{prefix}_root_key"), data.get(
+                f"{prefix}_base_path"
+            )
             if key and path:
                 try:
-                    data[f"{prefix}_base_path"] = validate_source_folder(key, path)
+                    data[f"{prefix}_base_path"] = validate_source_folder(
+                        key, path
+                    )
                 except (ValidationError, ImproperlyConfigured, OSError) as exc:
                     self.add_error(
                         f"{prefix}_base_path",
@@ -128,7 +132,9 @@ def _storage_overview():
         ("raw_sources", "Rå digitalisering"),
         ("edited_masters", "Redigerte mastere"),
         (
-            getattr(settings, "P7_GENERATED_MEDIA_ROOT_KEY", "generated_media"),
+            getattr(
+                settings, "P7_GENERATED_MEDIA_ROOT_KEY", "generated_media"
+            ),
             "Generert Radio-FLAC",
         ),
     ):
@@ -153,7 +159,12 @@ def _storage_overview():
 @require_http_methods(["GET", "POST"])
 def index(request):
     section = request.GET.get("tab", "personal")
-    if section not in {"personal", "digitization", "organization", "operation"}:
+    if section not in {
+        "personal",
+        "digitization",
+        "organization",
+        "operation",
+    }:
         section = "personal"
     is_admin = request.user.is_superuser
     if not is_admin:
@@ -167,7 +178,9 @@ def index(request):
     if request.method == "POST" and (
         not is_admin or not settings.GUI_V2_WRITES_ENABLED
     ):
-        raise PermissionDenied("Du har ikke tilgang til å endre fellesinnstillingene.")
+        raise PermissionDenied(
+            "Du har ikke tilgang til å endre fellesinnstillingene."
+        )
     if is_admin:
         configuration = DigitizationConfiguration.objects.filter(pk=1).first()
         initial = {}
@@ -183,8 +196,13 @@ def index(request):
                     f"{prefix}_folder_template": defaults.folder_template,
                 }
             )
-        action = request.POST.get("action") if request.method == "POST" else None
-        if request.method == "POST" and action not in {"digitization", "organization"}:
+        action = (
+            request.POST.get("action") if request.method == "POST" else None
+        )
+        if request.method == "POST" and action not in {
+            "digitization",
+            "organization",
+        }:
             raise PermissionDenied("Ukjent innstillingshandling.")
         digitization_form = DigitizationSettingsForm(
             request.POST if action == "digitization" else None,
@@ -194,12 +212,19 @@ def index(request):
         organization = RightsConfiguration.objects.select_related(
             "local_organization"
         ).first()
-        organization_name = str(organization.local_organization) if organization else ""
+        organization_name = (
+            str(organization.local_organization) if organization else ""
+        )
         organization_form = OrganizationForm(
-            request.POST if action == "organization" else None, instance=organization
+            request.POST if action == "organization" else None,
+            instance=organization,
         )
         if action:
-            form = digitization_form if action == "digitization" else organization_form
+            form = (
+                digitization_form
+                if action == "digitization"
+                else organization_form
+            )
             data["settings_tab"] = action
             if form.is_valid():
                 with transaction.atomic():
