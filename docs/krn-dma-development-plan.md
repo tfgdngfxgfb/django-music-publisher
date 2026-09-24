@@ -103,6 +103,9 @@ er gjenopprettet i et isolert miljø.
 
 ### 4. Fase 7 – Party og ArtistIdentity
 
+Detaljert forslag til omfang, del-leveranser og akseptanse finnes i
+[fase-7-planen](phase-7-plan.md).
+
 - Skill person/organisasjon, artistidentitet og fysisk oppgitt kreditering.
 - Tilby menneskelig avklaring av kandidater, navnevarianter og identifikatorer.
 - Bevar `credited_as`, stabile UUID-er, provenance og referanser ved en
