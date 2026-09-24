@@ -120,7 +120,7 @@ Optional PostgreSQL development
 -------------------------------
 
 PostgreSQL is the intended deployment database. If Docker Desktop is available,
-the supplied Compose file starts a local PostgreSQL 17 instance automatically:
+the supplied Compose file starts PostgreSQL 18.6 locally:
 
 .. code-block:: powershell
 
@@ -135,6 +135,12 @@ database: switching backends does not transfer records. Remove the environment
 variable with ``Remove-Item Env:DATABASE_URL`` and comment it out in ``.env``
 to return to SQLite. Compose credentials are local development values only.
 ``docker compose stop`` preserves the database volume.
+
+The Compose database volume stores files in the server's on-disk format. If
+``rights_db`` was created with PostgreSQL 17, changing the image to 18.6 does
+not upgrade that volume. Preserve the volume and perform a supported major
+version upgrade before starting it with PostgreSQL 18.6. CI always uses a
+fresh database.
 
 Verification
 ------------
